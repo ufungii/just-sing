@@ -192,6 +192,16 @@
 .ui-notice .ui-kao { font-size: 20px; }
 .ui-notice__body { flex: 1 1 260px; }
 
+/* ---------- menu music switch ---------- */
+
+.ui-music-toggle {
+  /* Top-right sits clear of the menu cards and footer on every screen that plays music. */
+  position: fixed;
+  right: 34px;
+  top: 32px;
+  z-index: 20;
+}
+
 @media (max-width: 1180px) {
   .ui-screen { padding: 36px 40px 40px; }
   .ui-title { font-size: 36px; }

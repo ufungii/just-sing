@@ -13,6 +13,9 @@ import './styles/global.css';
 
 import { App } from './App';
 import { AuthProvider } from './lib/auth';
+import { initMenuMusic } from './lib/menuMusic';
+
+initMenuMusic();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
