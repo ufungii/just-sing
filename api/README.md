@@ -1,8 +1,8 @@
 # API
 
 FastAPI backend for the karaoke app: song catalog, guest and Auth0 sessions, solo / local / online matches,
-spoken-practice uploads, and online rooms. It never touches the singing clock: pitch tracking and phrase
-ratings happen in the client, which submits the finished phrase results once.
+spoken-practice uploads, and online rooms. The server schedules continuous multiplayer starts; each browser
+uses its WebAudio clock for playback, pitch tracking and phrase ratings, then submits only its assigned phrases.
 
 Data shapes (song manifest, score, practice result, error) are defined in [`../contracts/`](../contracts/).
 The Pydantic models in `models.py` mirror them, and `tests/test_contracts.py` fails if they drift.
@@ -101,10 +101,10 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | 401 | `not_authenticated`, `invalid_token` |
 | 403 | `host_only`, `not_your_seat` |
 | 404 | `clip_not_found`, `phrase_not_found`, `match_not_found`, `attempt_not_found`, `room_not_found`, `audio_missing` |
-| 409 | `not_your_turn`, `attempt_not_started`, `attempt_closed`, `attempt_invalidated`, `already_submitted`, `cannot_retry`, `use_room_rematch`, `room_full`, `room_started`, `not_ready`, `not_finished` |
+| 409 | `not_your_turn`, `attempt_not_started`, `attempt_closed`, `attempt_invalidated`, `already_submitted`, `cannot_retry`, `use_room_rematch`, `room_full`, `room_started`, `not_ready`, `not_finished`, `use_duet_ready`, `duet_closed`, `missed_start`, `restart_duet`, `duet_not_started` |
 | 410 | `room_expired` |
 | 411 | `length_required` (practice uploads must send a `Content-Length`; browsers do this for `FormData`) |
-| 413 / 422 | `audio_too_large`, `audio_too_long`, `unsupported_audio`, `phrase_mismatch`, `invalid_result`, `invalid_register`, `invalid_request` |
+| 413 / 422 | `audio_too_large`, `audio_too_long`, `unsupported_audio`, `phrase_mismatch`, `invalid_result`, `invalid_register`, `invalid_request`, `invalid_duet`, `invalid_duet_range` |
 | 429 | `pronunciation_busy` (retryable), `too_many_joins` (retryable) |
 | 503 | `catalog_not_seeded`, `auth_unavailable`, `room_code_unavailable` |
 
@@ -117,7 +117,10 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | GET | `/api/clips/{id}/audio` | Instrumental only, supports `Range` |
 | POST | `/api/guests` | Create guest `{display_name}`; sets the cookie |
 | POST | `/api/auth/claim` | After login, send bearer token + guest cookie to move guest history to the account |
-| POST | `/api/matches` | `{clip_id}` for solo, plus `players: ["A","B"]` for local battle |
+| POST | `/api/matches` | `{clip_id}` for solo; add `players: ["A","B"], duet: true` for continuous local multiplayer |
+| GET | `/api/time` | Current server epoch seconds, for monotonic client clock estimation |
+| POST | `/api/matches/{id}/duet/ready` | Loaded microphone/audio barrier; `{players: [{slot, register, calibration_offset?}]}` |
+| POST | `/api/matches/{id}/duet/stop` | Stop the shared duet; restart the whole match together |
 | POST | `/api/turns/{attempt_id}/begin` | `{register, calibration_offset?, range?: {start,end}}` |
 | POST | `/api/turns/{attempt_id}/result` | Final phrase results; needs an `Idempotency-Key` header |
 | GET | `/api/matches/{id}` | Match, players, attempts, scores, `winner_slot` |
@@ -126,7 +129,7 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | GET | `/api/history`, `/api/leaderboard?clip_id=` | One row per match: `total` is your own score (null in a local battle; see `players`). Leaderboard: best solo totals of logged-in players on the current clip version |
 | POST | `/api/turns/{attempt_id}/coach` | Coaching blurb for a finished turn: `{status: ok\|unavailable, coach_blurb}`. Generated once, then cached. |
 | POST | `/api/practice` | Multipart: `clip_id`, `phrase_id`, `audio` (WAV/MP3/WebM/Ogg, max 5 MB and 15 s) |
-| POST | `/api/rooms`, `/api/rooms/join` | Create `{clip_id}`; join `{code}` |
+| POST | `/api/rooms`, `/api/rooms/join` | Create `{clip_id, duet: true}`; join `{code}` |
 | GET | `/api/rooms/{id}` | Snapshot (members only) |
 | POST | `/api/rooms/{id}/ready`, `/clip`, `/range`, `/start`, `/rematch`, `/abort` | Lobby and lifecycle (`clip`, `range`, `start`, `rematch`, `abort` are host-only) |
 | WS | `/ws/rooms/{id}` | Presence, snapshots, provisional progress |
@@ -171,43 +174,57 @@ Rules worth knowing:
   migration: the flag is stored on each saved phrase dict inside `phrase_results`. Winners in battle/online are unchanged.
 - Sending the **same** `Idempotency-Key` again returns the same result and changes nothing, so retry freely after a
   lost response. A **different** key on a finished attempt gets `already_submitted`.
-- Local battle (`players` with two names): the second player's attempt appears in `GET /api/matches/{id}` after the
-  first result is saved. `winner_slot` is the higher total at one decimal, or `null` for a tie.
+- Continuous local multiplayer (`players` with two names and `duet: true`) creates both attempts immediately. Each
+  score aggregates only that player's assigned phrases. `winner_slot` compares totals at one decimal, or is `null` for a tie.
+  Legacy API clients omitting `duet` retain sequential full-song turns; the current web UI always requests continuous duets.
 
-## Example: an online room
+## Continuous multiplayer: local or online
 
-1. Host `POST /api/rooms {clip_id}` and shares the returned `code`; the friend `POST /api/rooms/join {code}`.
-2. The host can first select `POST /api/rooms/{id}/range {range: {start,end}}` (or `{range: null}` to reset).
-   A range/clip change clears both ready flags. Each calls `POST /api/rooms/{id}/ready {ready: true}`; the host calls `/start` (returns `match_id`, `attempt_id`).
-3. Both open `ws://host/ws/rooms/{id}` (guest cookie, or for Auth0 the WebSocket subprotocols `bearer, <token>`; never a query string, which would reach access logs). The server sends `room_snapshot`
-   immediately and after every durable change.
-4. The singer runs `begin` then `result` exactly as in solo. Only the active seat may call them (`not_your_seat` otherwise).
-5. The other player sees `result_saved`, then their own turn opens; after the last result, `match_finished`. Both read the
-   same winner from `GET /api/rooms/{id}` (`match.winner_slot`).
+The web UI plays the song once, with automatic singer changes. Authored `duet_sections` contain section IDs,
+explicit slots `0|1`, and existing phrase IDs. Timings and lyrics come from the original phrases/lines. See
+[`../contracts/duet-sections.md`](../contracts/duet-sections.md) for validation and the three-line legacy fallback.
 
-Room snapshots include `range: {start,end} | null`, including in the lobby and after reconnects. The range is immutable
-once the match starts, applies to both singers automatically when `/begin` omits it, and is retained on retries and
-rematches. A client-supplied different section is rejected. Guests cannot edit it.
+1. Local: create `/api/matches` with `{clip_id, players: ["A","B"], duet: true}`. Online: create `/api/rooms`
+   with `{clip_id, duet: true}`, join by code, ready in the lobby, then let the host call `/start`.
+2. Both attempts exist in a `preparing` match. Load instrumental/vocals and open microphones before calling
+   `/api/matches/{id}/duet/ready`. Online each browser sends only its own slot; local sends both players with
+   their chosen registers, using the same microphone and one playback.
+3. After **both** loaded acknowledgments, the server freezes `duet.start_at` to a future epoch time (five-second
+   scheduling lead, including the three-second count-in). Repeated ready calls preserve it and the voice settings.
+   Clients sample `/api/time`, choose the shortest round trip, and estimate server time from the midpoint and
+   monotonic `performance.now()`. The local wall-clock setting does not control synchronization.
+4. Schedule one WebAudio playback at the shared timestamp, with instrumental/guide offsets aligned to the full
+   clip or selected practice range. Singer cues change on the clip clock; the music and microphone never restart
+   at a handoff. Each client rates only assigned phrases (local rates both players with their separate targets).
+5. Submit `/api/turns/{id}/result` with exactly the slot's frozen phrase IDs and a stable idempotency key. Either
+   player may finish first; the match becomes `finished` only when both results are accepted. There is no second
+   full-song turn. Both clients read the same winner from the match/room snapshot.
 
-No migration is required: editing a lobby section creates a draft match (`state: lobby`) with a pending host attempt.
-Its `phrase_results` holds the range object. Starting activates that same match and adds the guest player. Drafts are
-hidden from the lobby's public `match` field and never appear in history (no accepted scores). The original host attempt
-is kept across retries; after acceptance its phrase IDs preserve the selection. Changing the clip clears the draft range.
+`GET /api/matches/{id}` returns `duet: {sections, range, start_at}` with derived section times and `server_time`.
+`Score` and history carry `duet: true`; their `range` is the shared practice range, **not** the bounds of a player's
+assigned subset. Full-song duets have `range: null`. Multiplayer stays off the solo leaderboard.
 
-WebSocket messages (all JSON with a `type` and an `id`):
+Online host `/api/rooms/{id}/range` edits clear both lobby ready flags, persist across reconnects/rematches, and
+retain the authored slot of each phrase. Reject a range without scoreable assigned phrases for either player
+with `422 invalid_duet_range`. Local multiplayer stays on the full clip.
 
-| Direction | Types |
-|---|---|
-| Client → server | `heartbeat`, `progress` (`data`), `phrase_rating` (`data`). Progress and ratings are accepted only from the active singer. |
-| Server → client | `room_snapshot` (includes `state_version`; ignore older versions), `heartbeat_ack`, `turn_progress`, `phrase_rating`, `result_saved`, `match_finished`, `error` |
+No migration: lobby/loaded attempts freeze arrangement, range and schedule inside JSON `phrase_results.duet`.
+Accepted rows retain that metadata under `_duet` on their first phrase. This keeps history independent of later
+manifest timing changes. Draft matches remain hidden from lobby `match` and from history until results exist.
 
-Limits: messages over 2 KB or more than 30 per second get an `error`; a socket silent for 45 s is closed (send a
-`heartbeat` every ~15 s); browsers sending a foreign `Origin` are refused. **Live progress and badges are provisional;
-only a committed `result` counts.** After a reconnect, trust the fresh snapshot, not what you buffered.
+**Recovery:** an existing page can continue scheduled WebAudio through a temporary network outage and retry a
+failed save using the same key. Reloading after the shared start must never replay the song for just that player:
+it shows `missed_start`. A stopped mic/audio context or explicit `/duet/stop` marks the shared match
+`retry_required`. Individual `/retry` returns `restart_duet`. Local rematch or host room `/rematch` creates a
+fresh, unscheduled duet and requires both loaded acknowledgments again. Accepted results are never overwritten.
 
-**Lost turns:** a started turn that is not finished within the clip length + grace period is invalidated and the match
-becomes `retry_required`. Call `POST /api/matches/{id}/retry` for a fresh `attempt_id`. A tab that is still open after a
-network blip can submit the same attempt with the same `Idempotency-Key` as long as the deadline has not passed.
+Legacy clients without `duet: true` keep the original `/begin` and sequential turn API. The public smoke script
+still exercises that compatibility path. New multiplayer clients use the shared barrier, not `/begin`.
+
+WebSocket snapshots retain `state_version` ordering and presence. `heartbeat`, `progress` and `phrase_rating`
+remain supported; duet participants may both relay provisional updates while active. Only committed results
+count. Send a heartbeat every ~15 seconds; foreign origins, messages over 2 KB, and more than 30 messages per
+second are refused. After reconnecting, trust the fresh durable snapshot.
 
 ## Where things live
 
@@ -216,6 +233,7 @@ network blip can submit the same attempt with the same `Idempotency-Key` as long
 | `main.py` | App, health/ready, catalog and audio routes, error handlers |
 | `play.py` | Guests, Auth0 identity, matches, turns, history, leaderboard, claim |
 | `rooms.py` | Rooms, WebSocket hub, snapshots |
+| `duets.py`, `duet_play.py` | Authored/fallback ownership, loaded barrier, shared schedule and stop |
 | `practice.py` | Spoken-practice upload and the pluggable scorer |
 | `models.py`, `tables.py` | Pydantic contracts; SQLAlchemy tables |
 | `retention.py` | Hourly guest cleanup; lost-turn recovery every 15 s |

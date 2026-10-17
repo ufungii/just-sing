@@ -120,3 +120,49 @@ def test_range_keeps_authored_slots_rejects_empty_singer_and_restarts_only_toget
     assert snapshot['range'] == rng
     assert snapshot['match']['duet']['start_at'] is None and snapshot['match']['state'] == 'preparing'
     assert new['match_id'] != mid
+
+
+def test_reload_after_scheduled_start_is_refused_without_moving_the_schedule(world, monkeypatch):
+    from api import duet_play
+    c, guest = world
+    host, rival = guest('host'), guest('rival')
+    room = online(c, host, rival)
+    mid = start(c, room, host, rival)
+    loaded(c, mid, host, 0)
+    frozen = loaded(c, mid, rival, 1).json()['duet']['start_at']
+    class Later(datetime):
+        @classmethod
+        def now(cls, tz=None): return datetime.now(tz) + timedelta(seconds=10)
+    monkeypatch.setattr(duet_play, 'datetime', Later)
+    response = loaded(c, mid, rival, 1)
+    assert response.status_code == 409 and response.json()['error']['code'] == 'missed_start'
+    view = c.get(f'/api/matches/{mid}', headers=host).json()
+    assert view['duet']['start_at'] == frozen and len(view['attempts']) == 2
+
+
+def test_concurrent_loaded_barrier_follows_authored_non_alternating_ownership(world, monkeypatch):
+    c, guest = world
+    song = play.CATALOG['duet-demo']
+    authored = song.model_copy(update={'duet_sections': [
+        section.model_copy(update={'slot': 1 if index < 2 else 0})
+        for index, section in enumerate(song.duet_sections)]})
+    monkeypatch.setitem(play.CATALOG, song.id, authored)
+    host, rival = guest('host'), guest('rival')
+    room = online(c, host, rival)
+    mid = start(c, room, host, rival)
+    with ThreadPoolExecutor(2) as pool:
+        responses = list(pool.map(lambda pair: loaded(c, mid, pair[0], pair[1]), [(host, 0), (rival, 1)]))
+    assert all(r.status_code == 200 for r in responses)
+    current = c.get(f'/api/matches/{mid}', headers=host).json()
+    assert current['state'] == 'active' and all(a['state'] == 'started' for a in current['attempts'])
+    assert [s['slot'] for s in current['duet']['sections']] == [1, 1, 0]
+    for response in responses:
+        returned = response.json()['duet']['start_at']
+        assert returned is None or returned == current['duet']['start_at']
+    advance(monkeypatch)
+    for slot, (headers, ids) in enumerate([(host, ['d7', 'd8', 'd9']), (rival, ['d1', 'd2', 'd3', 'd4', 'd5', 'd6'])]):
+        aid = next(a['id'] for a in current['attempts'] if a['slot'] == slot)
+        response = c.post(f'/api/turns/{aid}/result', json=ph(*ids), headers={**headers, 'Idempotency-Key': str(slot)})
+        assert response.status_code == 200 and response.json()['range'] is None
+        assert [p['phrase_id'] for p in response.json()['phrases']] == ids
+    assert c.get(f'/api/matches/{mid}', headers=host).json()['state'] == 'finished'

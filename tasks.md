@@ -1,20 +1,20 @@
 # Tasks
 
-Updated 2026-10-17. This is the current work list; completed implementation details are in Git history and [PR #14](https://github.com/ufungii/just-sing/pull/14).
+Updated 2026-10-17. This is the current work list; completed implementation details are in Git history, [PR #14](https://github.com/ufungii/just-sing/pull/14), and [PR #15](https://github.com/ufungii/just-sing/pull/15). The old overnight notes have been consolidated here.
 
 ## Working rules
 
 - Treat `CLAUDE.md` as repository instructions for Codex too. Current explicit user instructions take precedence where they conflict.
-- PR #14 uses `overnight-extra` and targets `main`. The user authorized its push and PR; leave it unmerged. It includes the earlier overnight work, task 1, the teammate handoff, and the continuous multiplayer implementation requested by the user. Leave the PR unmerged.
+- PR #14 (earlier overnight work, task 1, teammate handoff) and PR #15 (continuous multiplayer) are merged into `main`. The verification follow-up on `overnight-extra` targets `main` through a new PR; leave it unmerged for review.
 - The user authorized moving continuous multiplayer onto `overnight-extra`, committing/pushing it, and deleting the temporary `multiplayer/sections` branch. Do not modify local `main`.
 - No co-author trailers or generated-by footers.
 - Never commit secrets, `.env`, copyrighted lyrics/audio, or model weights. Song assets and review outputs stay in gitignored `ml/data/`.
 - `.env` is the dev database. Never test against production or delete rows the agent did not create; use disposable databases/schemas for tests with cleanup.
 - Report verification limits honestly. Keep the Cloudflare tunnel stopped when unattended.
 
-## Active: continuous multiplayer — Codex
+## Completed: continuous multiplayer and verification — Codex
 
-**Implementation moved onto `overnight-extra` at the user’s request; browser validation is still pending.** The user confirmed both local 1P vs 2P and online rooms should play the song once, continuously, with automatic singer handoffs.
+**Implementation merged into `main` through PR #15; all eight browser tests now pass.** The user confirmed both local 1P vs 2P and online rooms should play the song once, continuously, with automatic singer handoffs.
 
 - Use one count-in, clear current/next singer cues, and per-player scoring of assigned phrases. Local uses one shared microphone/playback with each player's chosen register. Solo behavior stays unchanged.
 - Support authored `duet_sections` containing section IDs, explicit player slots, and phrase IDs. Preserve whole lyric lines; validate exact ownership and chronological sections. Legacy songs fall back to alternating blocks of three scored lines. Authored consecutive same-player sections are allowed.
@@ -22,7 +22,7 @@ Updated 2026-10-17. This is the current work list; completed implementation deta
 - Online practice ranges retain authored ownership and must contain scoreable phrases for both singers. Local stays full clip. Assigned subsets must not be mislabeled as practice ranges.
 - Freeze arrangement/range/schedule durably; prefer no new migration. Complete model/API ownership, start/concurrency/recovery, and local/online fake-mic browser tests before calling this done.
 - Coordinate the arrangement/corrections schema with the teammate building task 2. The optional manifest field is now implemented in the runtime; the author tool’s correction/rebuild integration remains task 2 work.
-- Latest implementation checks passed: **118 API tests, 26 Vitest tests, typecheck, and build**. Continuous local/online browser tests still need updating and running. The older browser results below predate this redesign and are not verification of it.
+- Latest checks passed: **120 API tests, 27 Vitest tests, typecheck, build, and all 8 browser tests**. Browser coverage includes local/online handoffs, shared scheduling (including a one-hour client wall-clock skew), same-key save retry, missed-start/shared restart, solo/online practice ranges, and solo good/wrong/silence regressions (98.2 / 56.1 / 0). Database checks used disposable local schemas, which were removed afterward. The follow-up publishes these tests, updated documentation, and small singer-cue/score-layout fixes. The older browser results below predate this redesign.
 
 ## Task 2: song author tool — teammate
 
@@ -34,12 +34,13 @@ The runtime now supports the optional duet manifest field; the handoff describes
 
 ## Remaining bugs and maintenance
 
-- Online: quitting mid-turn leaves a started attempt until timeout. Retry lacks UI e2e coverage; a failed score save has no save-retry button.
+- Verify explicit quitting mid-performance closes the shared duet promptly. Save retry and missed-start/shared-restart now have browser coverage in the verification follow-up.
 - Online: an existing guest name overrides a newly typed name; the singing title omits the online player name.
-- Local battle: handoff may choose an invalidated slot-1 attempt. Reassess when continuous multiplayer replaces that flow.
 - API `_weights` uses reference Hz while TypeScript can fall back to notes; stub contours can disagree. No current prepared clip is known to trigger this.
 - Vocals/instrumental endpoints serve installed stems without auth. Public deployments must use permitted assets; copyrighted clips stay on the team machine.
 - Unify scoring configuration with the local demo; `ml/scoring/api_integration.patch` and `API_INTEGRATION.md` are stale.
+- Pipeline: remove the hardcoded Windows separation-environment path in `ml/pipeline/run.py`; supplying prepared stems bypasses that path today.
+- Pronunciation: the optional scorer hook was tested with fake scorers; real model warm-up, scores, and the practice screen still need end-to-end verification. The older `live_scoring.json` fixtures cover the legacy live engine, not the current TypeScript SPEC port.
 - ML B: add an exact-half rounding fixture to `contracts/fixtures`; TypeScript's half-even behavior currently has only its local rounding test.
 - `CLAUDE.md` current-status text is stale. Refresh after user confirmation, in its own small PR.
 - Ask DrewV2 what still needs porting from `origin/ml/pipeline` before deleting it. The earlier assessment found stale/conflicting code plus possible `/catalog` and `reference_unavailable` changes; recheck before acting. Do not send a message without authorization.
@@ -47,6 +48,7 @@ The runtime now supports the optional duet manifest field; the handoff describes
 ## User checks and deployment
 
 - Listen to/review `russian-roulette` and `how-sweet`; both were last recorded as unreviewed. For `how-sweet`, check the line 8/9 split near 21–22 s, the 18–34 s stretch, phrase p8's end, and p7's long hold.
+- For `russian-roulette`, recheck the draft lyrics/alignment, missing translations, phrase endings/held notes, exclusions, octave choices, and stem quality. The old overnight report did not establish review by ear; keep review corrections alongside local assets.
 - Test with a real mic/headphones and two physical computers. Current browser verification uses fake microphones and two contexts on one computer.
 - Keep Auth0 callback, logout, and web-origin URLs aligned with the actual app URL; live Auth0 login was not retested in this work.
 - Before deployment, verify production migration status. It was last reported two revisions behind (`3e6c60a577fd`, `2822a2cbf379`). Run `alembic -c api/alembic.ini upgrade head` with production `DATABASE_URL` supplied only as an environment variable, then `python -m api.seed`. Never put production credentials in `.env`.
@@ -55,11 +57,11 @@ The runtime now supports the optional duet manifest field; the handoff describes
 
 ## Completed: task 1 and pre-redesign karaoke work
 
-**Pushed in PR #14; unmerged.** Solo/online practice-section editing has a reusable phrase-snapping timeline, lyric positions, preview with synchronized instrumental/vocals, full reset, aligned count-in/playback/scoring, and practice labels in results/history. Hosts choose room ranges; guest views are read-only. Ranges survive retries/rematches without a migration; failed edits restore server state. Empty-score sections are rejected early. Local battle stays full clip.
+**Merged into `main` through PR #14.** Solo/online practice-section editing has a reusable phrase-snapping timeline, lyric positions, preview with synchronized instrumental/vocals, full reset, aligned count-in/playback/scoring, and practice labels in results/history. Hosts choose room ranges; guest views are read-only. Ranges survive retries/rematches without a migration; failed edits restore server state. Empty-score sections are rejected early. Local battle stays full clip.
 
-The PR also includes earlier reference-engine scoring/TypeScript parity, Auth0 identity/history, template coaching fallback, guide vocals, optional local pronunciation, local battle, and online lobbies. Those historical browser checks used sequential full-song multiplayer. The new continuous section-handoff code is included at the user’s request, with its pending browser validation tracked above.
+PR #14 also includes earlier reference-engine scoring/TypeScript parity, Auth0 identity/history, template coaching fallback, guide vocals, optional local pronunciation, local battle, and online lobbies. Those historical browser checks used sequential full-song multiplayer. PR #15 replaces that flow with continuous section handoffs; its verification is tracked above.
 
-Verification of the published gameplay:
+Historical verification before the continuous multiplayer redesign:
 
 - Typecheck, production build, and **24 Vitest tests passed**; the build retains its existing large-chunk warning.
 - Complete API suite: **104 passed**, with 3 existing warnings.
