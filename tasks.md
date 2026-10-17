@@ -14,6 +14,14 @@ Live task list. Last cleaned 2026-10-17. Older material (the finished backend ha
 
 ## Open tasks
 
+### Continuous multiplayer sections (current, Codex, 2026-10-17)
+
+Status: **in progress** after completed task 1 (`bc32107`, PR #14). Both local 1P vs 2P and online rooms must play the song **once**, with one count-in, automatic singer handoffs, current/next singer cues, and per-player scoring of assigned phrases only. Solo stays unchanged.
+- Optional manifest `duet_sections: [{id, slot: 0|1, phrase_ids: [...]}]` explicitly assigns whole lyric lines. Validate exact unique known phrase coverage, ordered sections and no line split between sections/players. Legacy fallback groups every three scored lyric lines and alternates slots; authored consecutive same-slot sections are allowed. No duplicated lyric/timing fields or player names.
+- Local: one shared mic/playback, two register targets and two saved scores. Online: both load audio/open mic before a shared ready barrier; server freezes a future playback timestamp, clients estimate server clock offset, both play on the same timeline and score only their own assignments. Concurrent saves finish only after both results. Reconnects never silently replay an individual's full song; missed starts require an explicit whole-match restart.
+- Online ranges retain authored slots, rejecting a section with no scoreable phrases for either singer. Local stays full clip. Freeze sections/range/schedule in attempt JSON without a migration; assigned subsets must never be mislabeled as practice ranges in results/history.
+- Add model/contract/assignment/ownership/concurrency tests and local/online fake-mic continuous-handoff browser checks. No real mic, second physical computer or live Auth0 claim. No copyrighted lyric/audio output or tracked assets. No author-app implementation; teammate owns task 2. Root agent handles review/publication; this implementation agent does not commit/push/open/merge a PR.
+
 ### 1. Clip-range editor (practice section) for solo and online lobbies
 
 Status: **implemented and verified (Codex, 2026-10-17).** Shared timeline and solo/online range wiring are complete on `overnight-extra`. The author tool (task 2) can import `web/src/components/timeline/ClipTimeline.tsx`.
@@ -54,12 +62,18 @@ Verification and implementation notes:
 
 ### 2. Song author tool, review-only v1 (queued after task 1)
 
+**Teammate handoff:** include duet part assignment and show original plus romanized lyrics together (user confirmed 2026-10-17). The continuous multiplayer work establishes the manifest fields; the author tool edits that same arrangement.
+
 Decided: a **standalone app** in `author/` with its own build and its own small local Python server bound to `127.0.0.1` only (nothing in `api/` changes, a tunnel can never reach it). It imports the timeline component straight from `web/src/`. Review only; adding songs (YouTube link, Demucs, alignment as a job) is a teammate's later task.
 - Shows the vocals waveform with the reference pitch contour drawn over it, lyric lines as draggable blocks, and playback of vocals, instrumental or both with a playhead; click a line to jump to it.
+- Shows each line's **original text and romanization together**, including in the line list, timeline blocks and selected-line details. Keep the existing translation box available.
+- **Duet part assignment:** select one or more lyric lines and assign them to **Player 1** or **Player 2**. Use visible player labels and colors; do not rely on color alone. All scored phrases belonging to a selected line move together. Show the resulting distribution before playback, and support auditioning transitions between singers.
+- Authored assignments override the default alternating blocks of three lines. Assignments may use any sequence of Player 1/Player 2, including consecutive sections for the same player. Store ownership using stable phrase IDs and player slots, without copying lyrics or timing into the assignment data. Each scored phrase must have exactly one owner; reject missing, duplicate or conflicting assignments when rebuilding a reviewed arrangement.
 - Edits lyric text, line times, phrase boundaries (including held-note ends), excluded regions and a translation box per line. Octave and note editing are later.
 - Syncing: tap-to-sync (play the vocals, press a key at each line start) plus drag to fine-tune with snapping to voiced onsets in the reference contour.
 - Saving: explicit Save writes `corrections.json` and `song.review.json` next to the song (a `.bak` of the previous file each time); in-memory undo and redo; no autosave; never edits `song.json` directly. A Rebuild button reruns the manifest step; Mark reviewed flips the flag.
-- Tests: unit tests for reading and writing corrections, a check that a saved correction survives a pipeline rebuild, one Playwright smoke test (load a song, drag a line, save). No test claims anything about sync accuracy; that is judged by ear.
+- Part assignments use the same explicit Save, backup and undo/redo flow: save them in `corrections.json`, then emit the arrangement into `song.json` through Rebuild. Rebuilding must preserve the saved player assignments.
+- Tests: unit tests for reading/writing corrections and validating phrase ownership, a check that saved timing and part assignments survive a pipeline rebuild, and one Playwright smoke test (load a song, verify original/romanized text, select lines, assign a player, drag a line, save). No test claims anything about sync accuracy; that is judged by ear.
 
 ### 3. Known rough edges (from the lobby work and the Opus review)
 
