@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse
 
 from .errors import ApiError, error_response
 from .models import ClipSummary, Song
@@ -61,6 +62,17 @@ def manifest(clip_id: str):
     if clip_id not in CATALOG:
         raise ApiError(404, "clip_not_found", f"No clip with id '{clip_id}'.")
     return CATALOG[clip_id]
+
+
+@app.get("/api/clips/{clip_id}/audio")
+def instrumental(clip_id: str):
+    """Instrumental only (vocals stay offline). Path comes from the validated manifest, never the URL.
+    FileResponse handles Range requests, which browsers use for seeking."""
+    song = manifest(clip_id)
+    path = (CATALOG_DIR / song.id / song.audio.instrumental).resolve()
+    if not path.is_relative_to((CATALOG_DIR / song.id).resolve()) or not path.is_file():
+        raise ApiError(404, "audio_missing", f"Instrumental for '{clip_id}' is not installed on this server.")
+    return FileResponse(path)
 
 
 from .play import router  # noqa: E402  (play.py imports CATALOG from this module)
