@@ -15,6 +15,7 @@ from sqlalchemy import and_, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+from . import auth
 from .auth import verify_bearer
 from .db import get_engine
 from .errors import ApiError
@@ -83,7 +84,8 @@ def _cookie_guest(request: Request, s: Session) -> GuestSession | None:
 def current_guest(request: Request, s: Session = Depends(get_db)) -> GuestSession:
     """A valid Auth0 bearer token wins; otherwise the guest cookie."""
     bearer = request.headers.get("authorization", "")
-    if bearer.lower().startswith("bearer "):
+    # With Auth0 unconfigured a bearer header cannot be honoured, so fall through to the guest cookie.
+    if bearer.lower().startswith("bearer ") and auth.configured():
         return _account_for(s, verify_bearer(bearer[7:]))
     guest = _cookie_guest(request, s)
     if not guest:
