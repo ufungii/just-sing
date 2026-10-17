@@ -59,21 +59,22 @@ def _pitch(frame: np.ndarray, sr: int) -> tuple[float, float]:
 def mpm_track(
     audio: np.ndarray, sr: int, clarity_threshold: float = 0.9,
     frame_length: int = 2048, hop_seconds: float = HOP_SECONDS, silence_gate_rms: float = 1e-3,
+    analysis_sr: int = EXTRACTION_SR,
 ) -> np.ndarray:
     """Hz track (NaN = unvoiced) on the scoring hop, frames centered like librosa."""
     import librosa
 
     y = np.asarray(audio, dtype=np.float64)
-    if sr != EXTRACTION_SR:
-        y = librosa.resample(y, orig_sr=sr, target_sr=EXTRACTION_SR)
-    hop = int(round(hop_seconds * EXTRACTION_SR))
+    if sr != analysis_sr:
+        y = librosa.resample(y, orig_sr=sr, target_sr=analysis_sr)
+    hop = int(round(hop_seconds * analysis_sr))
     pad = np.pad(y, frame_length // 2)
     out = np.full(1 + len(y) // hop, np.nan)
     for k in range(len(out)):
         frame = pad[k * hop: k * hop + frame_length]
         if len(frame) < frame_length or np.sqrt(np.mean(frame ** 2)) < silence_gate_rms:  # silence gate
             continue
-        hz, clarity = _pitch(frame, EXTRACTION_SR)
+        hz, clarity = _pitch(frame, analysis_sr)
         if clarity >= clarity_threshold and FMIN_HZ <= hz <= FMAX_HZ:
             out[k] = hz
     return out
