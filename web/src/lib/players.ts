@@ -5,6 +5,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import { savedName } from './api';
+import { blockedPlayerNameReason } from './playerNamePolicy';
 
 export type AvatarId = 'bunny' | 'kitty' | 'froggy' | 'strawberry' | 'mochi' | 'chick';
 export const AVATAR_IDS: AvatarId[] = ['bunny', 'kitty', 'froggy', 'strawberry', 'mochi', 'chick'];
@@ -72,18 +73,25 @@ export function getPlayer(id: string | null): Player | null {
 export function nameProblem(name: string, exceptId?: string): string | null {
   const n = name.trim();
   if (!n) return 'Give them a name first.';
+  if (blockedPlayerNameReason(n)) return 'Choose a different player name.';
   if (n.length > PLAYER_NAME_MAX) return `Keep it under ${PLAYER_NAME_MAX} characters.`;
   if (state.players.some((p) => p.id !== exceptId && p.name.toLowerCase() === n.toLowerCase())) return 'That name is taken.';
   return null;
 }
 
 export function addPlayer(name: string, avatar: AvatarId): Player {
+  const problem = nameProblem(name);
+  if (problem) throw new Error(problem);
   const player = { id: crypto.randomUUID(), name: name.trim(), avatar };
   save({ players: [...state.players, player], lastId: player.id });
   return player;
 }
 
 export function updatePlayer(id: string, change: Partial<Pick<Player, 'name' | 'avatar'>>) {
+  if (change.name !== undefined) {
+    const problem = nameProblem(change.name, id);
+    if (problem) throw new Error(problem);
+  }
   save({
     ...state,
     players: state.players.map((p) => (p.id === id ? { ...p, ...change, name: (change.name ?? p.name).trim() } : p)),

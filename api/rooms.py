@@ -159,6 +159,7 @@ def _draft(s: Session, room: Room, guest: GuestSession) -> Match:
 
 @router.post("/api/rooms")
 def create_room(body: RoomIn, guest=Depends(current_guest), s: Session = Depends(get_db)):
+    play.require_player_name(guest.display_name)
     song = play.require_clip(s, body.clip_id)
     for _ in range(5):  # a code collision is rare; retry
         room = Room(code="".join(secrets.choice(CODE_ALPHABET) for _ in range(5)), host_guest_id=guest.id,
@@ -184,6 +185,7 @@ _join_log: dict[uuid.UUID, deque] = defaultdict(deque)
 
 @router.post("/api/rooms/join")
 def join_room(body: JoinIn, guest=Depends(current_guest), s: Session = Depends(get_db)):
+    play.require_player_name(guest.display_name)
     now = time.monotonic()  # ponytail: in-memory limiter, fine for one worker
     joins = _join_log[guest.id]
     while joins and now - joins[0] > 60:
