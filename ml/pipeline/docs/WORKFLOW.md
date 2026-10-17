@@ -154,6 +154,37 @@ not specify silence durations. Corrections require matching text/audio and
 ordered, finite anchors. Neither these imported line anchors nor the intro
 have been manually verified against this karaoke recording.
 
+### Lyric fingerprints and handoff
+
+For the selected demo clips, save/rebuild the current `song.json`, then run
+ML B's fingerprint command from the repository
+root using the speech environment (`ml/pronunciation/requirements.txt`):
+
+```powershell
+ml/pronunciation/.venv/Scripts/python.exe -m ml.pronunciation.lyric_match fingerprint --manifest ml/data/next-song/song.json --vocals ml/data/next-song/vocals.mp3 --out ml/data/next-song/lyric_fingerprints.npz
+```
+
+Run on the current drafts now; line timings do not need to be frozen first.
+Prioritize listening review of the clips that will actually be demonstrated.
+Do not generate every full-song/demo pair just because it exists in the catalog.
+Use the selected vocal stem, including the original unenhanced vocal guide where
+that is the selected asset, with that clip's own manifest and clip-relative
+timestamps. Do not reuse a full-song fingerprint file for a cropped or rebased demo.
+
+Rerun after any line start/end edit or vocal-stem replacement, after rebuilding
+the manifest and before sharing the updated package. Regenerate after timing
+review even if a draft fingerprint already exists. Include
+`lyric_fingerprints.npz` beside `song.json` and the matching audio in the local
+handoff. Fingerprint generation does not mark automatic timings as reviewed.
+Keep these derived files in gitignored `ml/data/`.
+
+This step requires ML B's `ml/pronunciation/lyric_match.py`; do not substitute a
+different fingerprint format or create a placeholder if that module is missing.
+An existing environment with the required Torch, Transformers and audio libraries
+can also run the command. Read [ML B's implementation notes](../../pronunciation/LYRIC_MATCH.md)
+for model requirements and limitations; GPU timing estimates do not apply to a
+CPU-only environment. Lyric-match feedback remains separate from singing scores.
+
 ### Environment smoke tests
 
 ```powershell

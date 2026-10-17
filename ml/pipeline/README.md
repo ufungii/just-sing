@@ -87,6 +87,13 @@ Passing structural checks does not verify the correct singer, lyric entrances,
 held endings, harmonies or pitch octaves. Listen before judging singers. See
 [prepared songs and outstanding review](docs/SONGS.md).
 
+For the clips selected for the demo, generate the local
+`lyric_fingerprints.npz` with ML B's `ml.pronunciation.lyric_match fingerprint`
+command from the current rebuilt manifest, including drafts. Rerun it after
+timing review and whenever line times or selected vocals change. Include the
+output in its matching handoff; prioritize timing review of the demo clip.
+See [the fingerprint step](docs/WORKFLOW.md#lyric-fingerprints-and-handoff).
+
 ## Tests and integration
 
 ```powershell
