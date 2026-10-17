@@ -11,6 +11,7 @@ import tempfile
 from .audio import decoded_frames
 from .common import ROOT, digest, read
 from .manifest import write_manifest
+from .duet import section_plan, rebase_plan
 
 
 def rebase_lines(track, start, end):
@@ -104,6 +105,12 @@ def crop_song(song_id, destination_id, start, duration, data_dir=ROOT / "ml/data
         prepared.pop("duration", None)
         (output / "preparation.json").write_text(json.dumps(prepared, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         (output / "lyrics.supplied.txt").write_text("\n".join(line["text"] for line in lines) + "\n", encoding="utf-8")
+        # Preserve parent ownership instead of restarting alternation at the crop.
+        crop_track_path = output / 'alignment/lyrics.aligned.json'
+        crop_track = read(crop_track_path)
+        corrections = read(source / 'corrections.json') if (source / 'corrections.json').is_file() else {}
+        crop_track['duet_plan'] = rebase_plan(track, section_plan(track, corrections.get('duet')), start, end)
+        crop_track_path.write_text(json.dumps(crop_track, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
         manifest = write_manifest(output)
         review_path = output / "song.review.json"
         review = read(review_path)
