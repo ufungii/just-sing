@@ -2,3 +2,4 @@ node_modules/
 dist/
 .design-ref/
 *.tsbuildinfo
+.env.local
