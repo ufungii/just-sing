@@ -92,7 +92,20 @@ def sanity_checks() -> list[tuple[str, float, str]]:
     ]
 
 
-def to_markdown(results: dict, checks, seeds: int) -> str:
+def rating_checks(seeds: int) -> list[tuple[str, dict]]:
+    """Phrase ratings (counts over seeds x phrases) for takes that should land in known bands."""
+    from collections import Counter
+    takes = [
+        ("Reference-like take", lambda s: render_audio(NOTES, seed=s)),
+        ("Wrong notes (every note off by up to 200 cents)", lambda s: render_audio(detune_random(NOTES, 200, s), seed=s)),
+        ("Wrong notes (every note off by up to 300 cents)", lambda s: render_audio(detune_random(NOTES, 300, s), seed=s)),
+        ("Silence", lambda s: np.zeros(len(render_audio(NOTES)), np.float32)),
+    ]
+    return [(name, dict(Counter(p["rating"] for s in range(seeds) for p in score_audio(make(s))["phrases"])))
+            for name, make in takes]
+
+
+def to_markdown(results: dict, checks, seeds: int, ratings) -> str:
     out = [
         "# Singing score: degradation evals",
         "",
@@ -106,6 +119,10 @@ def to_markdown(results: dict, checks, seeds: int) -> str:
         "|---|---|---|",
     ]
     out += [f"| {n} | {v:.1f} | {e} |" for n, v, e in checks]
+    out += ["", "## Phrase ratings (count of phrases over all seeds)", "",
+            "| Take | Perfect | Great | Okay | Bad | Miss |", "|---|---|---|---|---|---|"]
+    out += [f"| {n} | " + " | ".join(str(c.get(k, 0)) for k in ("perfect", "great", "okay", "bad", "miss")) + " |"
+            for n, c in ratings]
     for name, data in results.items():
         rho = data["spearman"]
         out += ["", f"## {name}", "",
@@ -127,12 +144,14 @@ def main() -> None:
         results[name] = run_axis(levels, args.seeds)
         print(f"  spearman = {results[name]['spearman']}", flush=True)
     checks = sanity_checks()
+    ratings = rating_checks(args.seeds)
 
     RESULTS.mkdir(exist_ok=True)
-    (RESULTS / "degradation.md").write_text(to_markdown(results, checks, args.seeds))
+    (RESULTS / "degradation.md").write_text(to_markdown(results, checks, args.seeds, ratings))
     (RESULTS / "degradation.json").write_text(json.dumps(
         {"scoring_version": SCORING_VERSION, "seeds": args.seeds, "axes": results,
-         "checks": [{"name": n, "score": v, "expected": e} for n, v, e in checks]}, indent=2))
+         "checks": [{"name": n, "score": v, "expected": e} for n, v, e in checks],
+         "phrase_ratings": {n: c for n, c in ratings}}, indent=2))
     print("wrote", RESULTS / "degradation.md")
 
 
