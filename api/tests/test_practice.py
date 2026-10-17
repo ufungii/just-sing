@@ -25,6 +25,7 @@ class FakeScorer:
 
     def assess(self, wav, expected):
         assert wav.suffix == ".wav" and expected == "안녕 내 사랑"
+        self.last_overall = 66.5
         return [{"text": "안녕", "score": 90}]
 
 
@@ -49,7 +50,7 @@ def test_unavailable_without_scorer_and_temp_is_cleaned(env, tmp_path, monkeypat
     c, tmp = env
     monkeypatch.setattr(practice, "scorer", None)
     r = post(c, tone(tmp_path / "a.wav"))
-    assert r.status_code == 200 and r.json()["status"] == "unavailable" and r.json()["words"] == []
+    assert r.status_code == 200 and r.json()["status"] == "unavailable" and r.json()["words"] == [] and r.json()["overall"] is None
     assert list(tmp.glob("tmp*")) == []  # TemporaryDirectory is gone
 
 
@@ -58,14 +59,14 @@ def test_ok_error_and_busy(env, tmp_path, monkeypatch):
     audio = tone(tmp_path / "a.wav")
     monkeypatch.setattr(practice, "scorer", FakeScorer())
     r = post(c, audio).json()
-    assert r["status"] == "ok" and r["words"][0]["score"] == 90
+    assert r["status"] == "ok" and r["words"][0]["score"] == 90 and r["overall"] == 66.5
 
     class Boom(FakeScorer):
         def assess(self, wav, expected):
             raise RuntimeError("secret provider detail")
     monkeypatch.setattr(practice, "scorer", Boom())
     r = post(c, audio)
-    assert r.json()["status"] == "error" and "secret" not in r.text
+    assert r.json()["status"] == "error" and r.json()["overall"] is None and "secret" not in r.text
 
     monkeypatch.setattr(practice, "scorer", FakeScorer())
     with practice._busy:

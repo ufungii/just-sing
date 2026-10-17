@@ -25,13 +25,14 @@ pytest api                                # tests; the DB tests need DATABASE_UR
 
 Interactive docs: `http://localhost:8000/docs`. Without `DATABASE_URL`, the catalog endpoints still work and
 the database tests are skipped. Without Auth0 values, guests still work and bearer tokens get `auth_unavailable`.
-Without a pronunciation scorer, `/api/practice` answers `status: "unavailable"`.
+Without a pronunciation scorer (the default), `/api/practice` answers `status: "unavailable"`.
 
 ## Environment
 
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | `postgresql+psycopg://...` (SQLAlchemy needs that scheme, not `postgres://`). Server-side only. |
+| `PRONUNCIATION_SCORER` | `1` loads `ml.pronunciation.api_scorer.PronunciationScorer` at startup and warms it (about 30 s, needs the speech environment). Anything else: practice is `unavailable`. If loading fails, the error is logged and practice stays `unavailable`. |
 | `AUTH0_DOMAIN` | Tenant domain, no `https://`. |
 | `AUTH0_AUDIENCE` | The Auth0 API identifier. Login requests must pass the same `audience`, or Auth0 issues an opaque token we cannot verify. |
 | `COOKIE_SECURE` | `1` on public HTTPS so the guest cookie is Secure. Leave `0` on `http://localhost`. |
@@ -226,8 +227,11 @@ saved and also appears as `coach_blurb` on the attempt's score in `GET /api/matc
 
 ## Hooks for other roles
 
-- **ML A (pronunciation):** set `api.practice.scorer` to an object with a `provider` string and
-  `assess(wav_path, expected_text) -> [{"text": ..., "score": 0-100}]`. It receives 16 kHz mono WAV. Raise on failure;
+- **Pronunciation:** with `PRONUNCIATION_SCORER=1`, startup sets `api.practice.scorer` (see `practice.attach_scorer`).
+  Any scorer is an object with a `provider` string and
+  `assess(wav_path, expected_text) -> [{"text": ..., "score": 0-100}]`; it may also expose `last_overall` (0-100),
+  read right after `assess` and returned as the nullable `overall` on the practice response (automated, not validated
+  by a fluent reviewer). It receives 16 kHz mono WAV. Raise on failure;
   the API reports `status: "error"` (never a score). Only one assessment runs at a time.
 - **ML B (scoring):** `play.py` scores through `ml.scoring.score.finalize_turn`. The version, weights (80/20) and rating
   bands live only in [`ml/scoring/config.py`](../ml/scoring/config.py); the API imports them (needs `numpy`, and the
