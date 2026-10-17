@@ -1,6 +1,7 @@
-# Local editor only. Heavy ML environments are not used by the server.
+# Local editor only. Heavy ML runs in a separately configured subprocess.
 fastapi>=0.115
 uvicorn>=0.30
 korean-romanizer>=0.28
 pytest>=8
 httpx>=0.27
+python-multipart>=0.0.9
