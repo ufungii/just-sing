@@ -33,8 +33,8 @@ The singing screen is rhythm-game first: target notes and the live trace dominat
 |---|---|
 | Frontend | React + TypeScript + Vite UI, Canvas pitch lane, audio clock, mic capture, live pitch (Pitchy), **the TypeScript port of the scoring engine**, lyrics, results, practice screen, the Electron shell (a window plus the Auth0 login helper), `web/`, `desktop/` |
 | Full-stack/infra | FastAPI, Tiger Data (Postgres), Auth0, Vultr deploy, domain, FFmpeg audio normalization, practice-upload endpoint, `api/` |
-| ML A (pipeline, then pronunciation) | Offline per-song processing in `ml/pipeline/`. After the first reviewed `song.json` exists, owns the local pronunciation scorer in `ml/pronunciation/`. |
-| ML B (scoring + evals) | The Python **reference scoring engine** `ml/scoring/`, shared test fixtures, the evaluation harness `ml/evals/`, and calibration of thresholds/weights. Owns `ml/scoring/pitch.py`. |
+| ML A (pipeline) | Offline per-song processing in `ml/pipeline/`: stems, reference pitch, hand review, manifest assembly. Also backs ML B up on data prep (TTS/recordings for evals) once the first clip is done. |
+| ML B (pitch + pronunciation + evals) | The Python **reference scoring engine** `ml/scoring/`, the local pronunciation scorer `ml/pronunciation/`, shared test fixtures, the evaluation harness `ml/evals/`, and calibration of thresholds/weights. Owns `ml/scoring/pitch.py`. |
 
 Stay inside the folder of the role you are helping unless asked. Do not edit other roles' folders without saying so.
 
@@ -152,9 +152,9 @@ State as of 2026-10-17, from the merged work; most of it is not yet proven end t
 
 - **API (`api/`):** built and tested against the dev database. Catalog and manifest endpoints, instrumental audio, guest sessions and Auth0 login, solo / local-battle / online-room matches, the spoken-practice upload (FFmpeg normalization, pluggable scorer, `unavailable` until one exists), the Gemini coaching blurb, the leaderboard, and a public-URL smoke test. Totals are still recomputed with a stand-in, not the reference engine. The production Tiger Data database has not been migrated to the latest Alembic revision yet; do that before deploying.
 - **Web (`web/`) and desktop (`desktop/`):** the home, solo setup (mic and timing checks), singing, results, history and pronunciation-practice screens exist, with a typed API client. The Electron shell is started.
-- **ML A (`ml/pipeline/`):** the offline pipeline is merged (crop, separate, transcribe and align, reference contour, manifest assembly). Every prepared song is still a **draft**: lyric timing, notes and exclusions have not been reviewed by ear. The pronunciation scorer (`ml/pronunciation/`) has not been started.
-- **ML B (`ml/scoring/`, `ml/evals/`):** the pitch contour, a live-scoring preview baseline, the config and one shared fixture are in. The reference per-phrase scoring engine, the full shared fixtures and the evaluation harness are still to come.
-- **Next:** review one clip by ear and finish its `song.json`; land the reference scoring engine and have the API and the TypeScript port both pass the same fixtures; the pronunciation scorer; then the two-computer test through the tunnel and the production migration.
+- **ML A (`ml/pipeline/`):** the offline pipeline is merged (crop, separate, transcribe and align, reference contour, manifest assembly). Every prepared song is still a **draft**: lyric timing, notes and exclusions have not been reviewed by ear. Once the first clip is done, ML A backs ML B up on evaluation data (TTS speech, recordings).
+- **ML B (`ml/scoring/`, `ml/pronunciation/`, `ml/evals/`):** the reference scoring engine (pitch, timing, per-phrase and per-turn scores), shared fixtures in `contracts/fixtures/`, the local pronunciation baselines, and a set of evals are in, with tests for the scoring and pronunciation code. None of it is validated against real recordings yet, and it is not wired into the API: `api/` still recomputes totals with a stand-in until the patch described in `ml/scoring/API_INTEGRATION.md` is applied.
+- **Next:** review one clip by ear and finish its `song.json`; wire the reference scoring engine and the pronunciation scorer into the API, with the TypeScript port passing the same fixtures; validate both on real recordings; then the two-computer test through the tunnel and the production migration.
 - **First milestone (not reached yet):** one clip, one singer, a correctly synchronized pitch trace, and a good take reliably beating a bad take. Then spoken practice end to end. Battle and extras come after.
 
 ## How to work with me
