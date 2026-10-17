@@ -22,14 +22,15 @@ The "take" is the clip's own vocal, so a perfect score is the correct answer. To
   "library": "pitchy",
   "version": "<pin the exact npm version the app uses>",
   "sampleRate": 48000,
-  "windowSamples": 2048,
+  "windowSamples": 4096,
   "hopSeconds": 0.02,
   "clarityThreshold": 0.65,
   "minHz": 65,
   "maxHz": 1000,
-  "silenceGateRms": 0.001
+  "silenceGateRms": 0.005
 }
 ```
+   The starting values above are a recommendation. For reference, APR's existing live demo (`web/live/` on branch `ml/pipeline`) runs Pitchy with **`windowSamples` 4096, clarity >= 0.8, RMS gate 0.008**, and timestamps each estimate at the window *center* (the convention this spec requires). Tested against the demo clips with our emulation, that exact setting scores a perfect take **22-40**; 0.65 with a 0.005 gate scores about 47-54; 0.5 with a 0.003 gate about 63-69 (all against a CREPE-made reference). With a reference made by the same tracker these all reach about 100, which is the point of this spec.
    `clarityThreshold` is the one knob to tune (0.5-0.7 on real voices; 0.8 is too strict). `sampleRate` and `windowSamples` must be what the live `AudioContext` and detector actually use; confirm them and update this block. If the live rate varies by device, resample the mic to `sampleRate` before detecting, or the offline reference will not match.
 2. **An offline Node script** (suggested: `web/tools/extract-reference.mjs`, plain Node, no browser) that runs the *same detector function the live code calls* over a vocals file:
    `node extract-reference.mjs vocals.clip.mp3 > reference.json` → `{ "hop_seconds": 0.02, "hz": [null, 261.6, ...], "tracker": { ...config } }`.

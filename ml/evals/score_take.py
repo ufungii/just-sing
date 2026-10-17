@@ -29,14 +29,14 @@ from ml.scoring.timing import onset_times
 SR = 16_000
 
 
-def track_audio(y: np.ndarray, tracker: str, clarity: float) -> np.ndarray:
+def track_audio(y: np.ndarray, tracker: str, clarity: float, window: int = 2048, gate: float = 1e-3) -> np.ndarray:
     if tracker == "mpm":
-        return mpm_track(y, SR, clarity_threshold=clarity)
+        return mpm_track(y, SR, clarity_threshold=clarity, frame_length=window, silence_gate_rms=gate)
     return pitch_contour(y, SR, backend=tracker)
 
 
 def score_take(take, manifest: dict, *, tracker="mpm", clarity=0.65, register=0, latency_s=0.0,
-               tolerance_s=0.0, ref_audio=None, take_start=0.0, take_end=None) -> dict:
+               tolerance_s=0.0, ref_audio=None, take_start=0.0, take_end=None, window=2048, gate=1e-3) -> dict:
     """Returns {"score": score_turn dict, "diagnostics": {...}}. `take` is a path or a float array at 16 kHz."""
     if isinstance(take, np.ndarray):
         y = take
@@ -47,11 +47,11 @@ def score_take(take, manifest: dict, *, tracker="mpm", clarity=0.65, register=0,
     hop = ref_info["hop_seconds"]
     if ref_audio is not None:
         ry, _ = librosa.load(ref_audio, sr=SR, mono=True)
-        ref = track_audio(ry, tracker, clarity)
+        ref = track_audio(ry, tracker, clarity, window, gate)
         source = f"re-extracted with {tracker}"
     else:
         ref, source = to_track(ref_info["hz"]), "manifest reference.hz"
-    user = track_audio(y, tracker, clarity)
+    user = track_audio(y, tracker, clarity, window, gate)
 
     phrases = [(p["id"], p["start"], p["end"]) for p in manifest["phrases"]]
     excluded = [(e["start"], e["end"]) for e in ref_info.get("excluded", [])]
@@ -91,6 +91,8 @@ def main() -> None:
     ap.add_argument("manifest")
     ap.add_argument("--tracker", default="mpm", choices=["mpm", "crepe", "pyin"])
     ap.add_argument("--clarity", type=float, default=0.65, help="MPM clarity threshold (0.6-0.7 on real voices)")
+    ap.add_argument("--window", type=int, default=2048, help="MPM window in samples (the live demo uses 4096)")
+    ap.add_argument("--gate", type=float, default=1e-3, help="silence gate, window RMS (the live demo uses 0.008)")
     ap.add_argument("--register", type=int, default=0, choices=[-12, 0, 12])
     ap.add_argument("--latency", type=float, default=0.0, help="device latency in seconds, calibrated once")
     ap.add_argument("--tolerance", type=float, default=0.0, help="pitch time tolerance in seconds (0 = strict)")
@@ -101,7 +103,7 @@ def main() -> None:
     manifest = json.load(open(args.manifest, encoding="utf-8"))
     out = score_take(args.take, manifest, tracker=args.tracker, clarity=args.clarity, register=args.register,
                      latency_s=args.latency, tolerance_s=args.tolerance, ref_audio=args.ref_audio,
-                     take_start=args.take_start, take_end=args.take_end)
+                     take_start=args.take_start, take_end=args.take_end, window=args.window, gate=args.gate)
     d, s = out["diagnostics"], out["score"]
     print(f"take {d['take_seconds']} s vs clip {d['clip_seconds']} s | tracker {d['tracker']} | reference: {d['reference']}")
     print(f"voiced: take {d['take_voiced_share']:.0%}, reference {d['reference_voiced_share']:.0%}; "
