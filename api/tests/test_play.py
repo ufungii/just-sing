@@ -159,3 +159,161 @@ def test_turns_refuse_a_changed_clip_version(guests, monkeypatch):
     assert r.status_code == 409 and r.json()["error"]["code"] == "clip_version_changed"
     fresh = c.post("/api/matches", json={"clip_id": "synthetic-demo"})
     assert fresh.json()["error"]["code"] == "catalog_not_seeded"  # version 2 was never seeded
+
+
+def test_engine_scoring_null_timing_and_server_side_ratings(guests):
+    """The server recomputes score and rating; the client cannot choose them. timing=null is scored on pitch alone."""
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    url = f"/api/turns/{m['attempt_id']}"
+    c.post(f"{url}/begin", json={})
+    cheat = {"phrases": [{"phrase_id": "p1", "rating": "perfect", "score": 100, "pitch": 40, "timing": None, "coverage": 0.9}]}
+    r = c.post(f"{url}/result", json=cheat, headers={"Idempotency-Key": "n"})
+    assert r.status_code == 200
+    ph = r.json()["phrases"][0]
+    assert ph == {"phrase_id": "p1", "pitch": 40.0, "timing": None, "score": 40.0, "coverage": 0.9, "rating": "bad"}
+    assert r.json()["total"] == 40.0
+    assert c.get(f"/api/matches/{m['match_id']}").json()["attempts"][0]["score"]["phrases"][0]["timing"] is None
+
+
+def test_out_of_range_and_unscoreable_clip_are_422_invalid_result(guests, monkeypatch):
+    from api import play as play_module
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    url = f"/api/turns/{m['attempt_id']}"
+    c.post(f"{url}/begin", json={})
+    # the model's own 0-100 bounds catch this first (standard validation error)
+    assert c.post(f"{url}/result", json={"phrases": [{**GOOD["phrases"][0], "pitch": 120}]},
+                  headers={"Idempotency-Key": "r"}).status_code == 422
+    # a clip with nothing scoreable is a manifest problem: the engine's ValueError becomes invalid_result
+    monkeypatch.setitem(play_module._weight_cache, ("synthetic-demo", 1), [0])
+    r = c.post(f"{url}/result", json=GOOD, headers={"Idempotency-Key": "z"})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_result"
+
+
+def test_old_rows_without_score_still_read(guests):
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    url = f"/api/turns/{m['attempt_id']}"
+    c.post(f"{url}/begin", json={})
+    assert c.post(f"{url}/result", json=GOOD, headers={"Idempotency-Key": "o"}).status_code == 200
+    with get_engine().begin() as conn:  # simulate a row saved by the stand-in
+        conn.execute(text("update turn_attempt set phrase_results = cast(:j as jsonb) where id=:i"),
+                     {"i": m["attempt_id"], "j": '[{"phrase_id":"p1","rating":"great","pitch":80,"timing":60,"coverage":0.9}]'})
+    ph = c.get(f"/api/matches/{m['match_id']}").json()["attempts"][0]["score"]["phrases"][0]
+    assert ph["score"] == 80 and ph["timing"] == 60
+    assert c.get("/api/history").status_code == 200
+
+
+def four_phrase_clip(monkeypatch):
+    """synthetic-demo with 4 phrases of 5 s each (clip duration 20 s) and equal weights."""
+    from api import play as play_module
+    from api.models import Phrase
+    song = play_module.CATALOG["synthetic-demo"]
+    four = song.model_copy(update={"duration": 20.0, "phrases": [
+        Phrase(id=f"q{i}", line_index=0, start=5.0 * i, end=5.0 * i + 5.0) for i in range(4)]})
+    monkeypatch.setitem(play_module.CATALOG, "synthetic-demo", four)
+    monkeypatch.setitem(play_module._weight_cache, ("synthetic-demo", 1), [10, 10, 10, 10])
+
+
+def ph(*ids, pitch=80):
+    return {"phrases": [{"phrase_id": i, "pitch": pitch, "timing": pitch, "coverage": 1} for i in ids]}
+
+
+def test_practice_range_scores_only_included_phrases(guests, monkeypatch):
+    four_phrase_clip(monkeypatch)
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    url = f"/api/turns/{m['attempt_id']}"
+    for bad in ({"start": 7, "end": 7}, {"start": 0, "end": 25}, {"start": 1, "end": 4}, {"start": -1, "end": 5}):
+        r = c.post(f"{url}/begin", json={"range": bad})
+        assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_range", bad
+    # ragged edges snap to phrases q1-q2: 4.97..15.02 holds [5,10] and [10,15] fully
+    assert c.post(f"{url}/begin", json={"range": {"start": 4.97, "end": 15.02}}).status_code == 200
+    assert c.post(f"{url}/begin", json={"range": {"start": 5, "end": 15}}).status_code == 200  # same normalized range
+    assert c.post(f"{url}/begin", json={}).status_code == 409  # not changeable once started
+    key = {"Idempotency-Key": "r1"}
+    for wrong in (ph("q0", "q1", "q2", "q3"), ph("q1"), ph("q1", "q2", "q3")):
+        assert c.post(f"{url}/result", json=wrong, headers=key).status_code == 422
+    body = {"phrases": [*ph("q1", pitch=100)["phrases"], *ph("q2", pitch=50)["phrases"]]}
+    r = c.post(f"{url}/result", json=body, headers=key)
+    assert r.status_code == 200
+    assert r.json()["range"] == {"start": 5.0, "end": 15.0} and r.json()["pitch"] == 75.0
+    assert c.post(f"{url}/result", json=body, headers=key).json() == r.json()  # replay
+    got = c.get(f"/api/matches/{m['match_id']}").json()["attempts"][0]["score"]
+    assert got["range"] == {"start": 5.0, "end": 15.0}
+    assert c.get("/api/history").json()[0]["range"] == {"start": 5.0, "end": 15.0}
+
+
+def test_unscoreable_range_is_rejected_before_playback(guests, monkeypatch):
+    from api import play
+    four_phrase_clip(monkeypatch)
+    monkeypatch.setitem(play._weight_cache, ("synthetic-demo", 1), [10, 0, 0, 10])
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    r = c.post(f"/api/turns/{m['attempt_id']}/begin", json={"range": {"start": 5, "end": 15}})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_range"
+
+
+def test_full_clip_has_null_range_and_battle_rejects_range(guests, monkeypatch):
+    four_phrase_clip(monkeypatch)
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    url = f"/api/turns/{m['attempt_id']}"
+    c.post(f"{url}/begin", json={})
+    r = c.post(f"{url}/result", json=ph("q0", "q1", "q2", "q3"), headers={"Idempotency-Key": "f"})
+    assert r.status_code == 200 and r.json()["range"] is None
+    assert c.get("/api/history").json()[0]["range"] is None
+    b = c.post("/api/matches", json={"clip_id": "synthetic-demo", "players": ["a", "b"]}).json()
+    r = c.post(f"/api/turns/{b['attempt_id']}/begin", json={"range": {"start": 0, "end": 5}})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_range"
+
+
+def test_practice_runs_stay_off_the_leaderboard(guests, monkeypatch):
+    four_phrase_clip(monkeypatch)
+    from api import play as play_module
+    c = new_guest(guests)
+    with get_engine().begin() as conn:  # leaderboard only ranks logged-in accounts
+        conn.execute(text("update guest_session set auth0_sub=:s where id=:g"),
+                     {"s": f"test|{guests[-1]}", "g": guests[-1]})
+    def lb():
+        return [r for r in c.get("/api/leaderboard", params={"clip_id": "synthetic-demo"}).json() if r["display_name"] == "tester"]
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    c.post(f"/api/turns/{m['attempt_id']}/begin", json={"range": {"start": 0, "end": 10}})
+    assert c.post(f"/api/turns/{m['attempt_id']}/result", json=ph("q0", "q1"), headers={"Idempotency-Key": "p"}).status_code == 200
+    assert lb() == []
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    c.post(f"/api/turns/{m['attempt_id']}/begin", json={})
+    c.post(f"/api/turns/{m['attempt_id']}/result", json=ph("q0", "q1", "q2", "q3", pitch=60), headers={"Idempotency-Key": "q"})
+    assert lb() == [{"display_name": "tester", "total": 60.0}]
+
+
+def test_old_rows_read_range_null(guests):
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    c.post(f"/api/turns/{m['attempt_id']}/begin", json={})
+    c.post(f"/api/turns/{m['attempt_id']}/result", json=GOOD, headers={"Idempotency-Key": "o"})
+    assert c.get(f"/api/matches/{m['match_id']}").json()["attempts"][0]["score"]["range"] is None
+
+
+def test_guided_runs_are_flagged_and_stay_off_the_leaderboard(guests):
+    c = new_guest(guests)
+    with get_engine().begin() as conn:  # leaderboard only ranks logged-in accounts
+        conn.execute(text("update guest_session set auth0_sub=:s where id=:g"),
+                     {"s": f"test|{guests[-1]}", "g": guests[-1]})
+    lb = lambda: [r for r in c.get("/api/leaderboard", params={"clip_id": "synthetic-demo"}).json() if r["display_name"] == "tester"]
+
+    def run(key, guided):
+        m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+        c.post(f"/api/turns/{m['attempt_id']}/begin", json={})
+        body = {**GOOD, **({"guide_used": True} if guided else {})}
+        r = c.post(f"/api/turns/{m['attempt_id']}/result", json=body, headers={"Idempotency-Key": key})
+        return m, r.json()
+
+    m, score = run("g", True)
+    assert score["guided"] is True and lb() == []
+    assert c.get(f"/api/matches/{m['match_id']}").json()["attempts"][0]["score"]["guided"] is True
+    assert c.get("/api/history").json()[0]["guided"] is True
+    _, score = run("u", False)  # guide_used omitted = false
+    assert score["guided"] is False and len(lb()) == 1
+    assert c.get("/api/history").json()[0]["guided"] is False

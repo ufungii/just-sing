@@ -133,3 +133,37 @@ def test_claim_carries_the_guest_name_to_the_account():
     c.post("/api/auth/claim", headers=h)
     board = c.get("/api/leaderboard?clip_id=synthetic-demo").json()
     assert {"display_name": "claimme", "total": 61.0} in board
+
+
+def test_online_room_as_bearer_account_with_websocket_and_retry():
+    """Regression: an account (bearer token) must be a room member over HTTP and the WebSocket, and the
+    lost-turn retry must work for it."""
+    from api.retention import reconcile_attempts
+    acct = {"Authorization": f"Bearer {token('test|room1')}"}
+    with TestClient(app) as c:  # entering the context starts the loop used for broadcasts
+        room = c.post("/api/rooms", json={"clip_id": "synthetic-demo"}, headers=acct).json()
+        other = TestClient(app)
+        other.post("/api/guests", json={"display_name": "claimme"})
+        assert other.post("/api/rooms/join", json={"code": room["code"]}).status_code == 200
+        for cl, h in ((c, acct), (other, {})):
+            assert cl.post(f"/api/rooms/{room['id']}/ready", json={"ready": True}, headers=h).status_code == 200
+        start = c.post(f"/api/rooms/{room['id']}/start", headers=acct).json()
+        a = start["attempt_id"]
+
+        # the socket accepts the token as a subprotocol, and refuses a bad one or none
+        with c.websocket_connect(f"/ws/rooms/{room['id']}", subprotocols=["bearer", token("test|room1")]) as ws:
+            assert ws.receive_json()["type"] == "room_snapshot"
+        with pytest.raises(Exception):
+            with c.websocket_connect(f"/ws/rooms/{room['id']}", subprotocols=["bearer", "garbage"]):
+                pass
+
+        assert c.post(f"/api/turns/{a}/begin", json={}, headers=acct).status_code == 200
+        with get_engine().begin() as conn:  # the singer left and the deadline passed
+            conn.execute(text("update turn_attempt set deadline_at = now() - interval '1 second' where id=:i"), {"i": a})
+        assert reconcile_attempts() >= 1
+        assert c.get(f"/api/rooms/{room['id']}", headers=acct).json()["match"]["state"] == "retry_required"
+        assert other.post(f"/api/matches/{start['match_id']}/retry").status_code == 403  # not their seat
+        new = c.post(f"/api/matches/{start['match_id']}/retry", headers=acct).json()["attempt_id"]
+        c.post(f"/api/turns/{new}/begin", json={}, headers=acct)
+        r = c.post(f"/api/turns/{new}/result", json=GOOD, headers={**acct, "Idempotency-Key": "k"})
+        assert r.status_code == 200

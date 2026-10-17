@@ -1,6 +1,7 @@
 """Spoken-Korean practice upload. Audio is validated, normalized with FFmpeg, handed to a
 pluggable scorer, and deleted. Raw audio is never stored; only structured word feedback is."""
 import logging
+import os
 import subprocess
 import tempfile
 import threading
@@ -32,8 +33,23 @@ class Scorer(Protocol):
     def assess(self, wav: Path, expected_text: str) -> list[dict]: ...
 
 
-scorer: Scorer | None = None  # ponytail: set by ML A's integration; None answers "unavailable"
+scorer: Scorer | None = None  # None answers "unavailable"; attach_scorer() sets it when PRONUNCIATION_SCORER=1
 _busy = threading.Lock()  # one assessment at a time, per CLAUDE.md
+
+
+def attach_scorer() -> None:
+    """Opt-in (PRONUNCIATION_SCORER=1): import and warm the local models. Called from startup, never at
+    import, so the API starts without PyTorch. Any failure leaves the scorer unset ("unavailable")."""
+    global scorer
+    if os.getenv("PRONUNCIATION_SCORER") != "1":
+        return
+    try:
+        from ml.pronunciation.api_scorer import PronunciationScorer
+        candidate = PronunciationScorer()
+        candidate.warmup()
+        scorer = candidate
+    except Exception:
+        log.exception("pronunciation scorer could not start; practice stays unavailable")
 
 
 def _run(args: list[str], timeout: int) -> str:
@@ -77,7 +93,7 @@ def practice(clip_id: str = Form(), phrase_id: str = Form(), audio: UploadFile =
         raise ApiError(404, "phrase_not_found", "Unknown clip or phrase.")
     expected = song.lines[phrase.line_index].practice_text
 
-    provider, status, words = (scorer.provider if scorer else "none"), "unavailable", []
+    provider, status, words, overall = (scorer.provider if scorer else "none"), "unavailable", [], None
     with tempfile.TemporaryDirectory() as d:  # deleted on success, error and timeout alike
         wav = _normalize(audio, Path(d))
         if scorer:
@@ -85,9 +101,10 @@ def practice(clip_id: str = Form(), phrase_id: str = Form(), audio: UploadFile =
                 raise ApiError(429, "pronunciation_busy", "The pronunciation scorer is busy. Try again in a few seconds.", True)
             try:
                 words, status = [WordFeedback(**w) for w in scorer.assess(wav, expected)], "ok"
+                overall = getattr(scorer, "last_overall", None)
             except Exception:  # provider details stay in the server log, not the response
                 log.exception("pronunciation scorer failed")
-                words, status = [], "error"
+                words, status, overall = [], "error", None
             finally:
                 _busy.release()
 
@@ -95,4 +112,4 @@ def practice(clip_id: str = Form(), phrase_id: str = Form(), audio: UploadFile =
                           provider=provider, status=status, words=[w.model_dump() for w in words]))
     s.commit()
     return Practice(clip_id=clip_id, phrase_id=phrase_id, locale=LOCALE, provider=provider,
-                    status=status, words=words)
+                    status=status, overall=overall, words=words)

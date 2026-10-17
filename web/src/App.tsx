@@ -7,11 +7,13 @@ import { Sing } from './screens/Sing/Sing';
 import { Results } from './screens/Results/Results';
 import { Practice } from './screens/Practice/Practice';
 import { History } from './screens/History/History';
-import { ComingSoon } from './screens/ComingSoon';
+import { BattleSetup } from './screens/Battle/BattleSetup';
+import { Online } from './screens/Online/Online';
+import { BattleTurn } from './screens/Battle/BattleTurn';
 
 /** Top-level navigation: one route at a time, shared through NavContext. */
 export function App() {
-  const [route, setRoute] = useState<Route>(devStartRoute);
+  const [route, setRoute] = useState<Route>(() => (new URLSearchParams(location.search).has('room') ? { name: 'online' } : devStartRoute()));
 
   const go = useCallback((next: Route) => {
     setRoute(next);
@@ -49,7 +51,7 @@ function devStartRoute(): Route {
         name: 'results',
         result: {
           setup,
-          phrases: [{ phrase_id: 'p1', rating: 'great', pitch: 82, timing: 74, coverage: 0.9 }],
+          phrases: [{ phrase_id: 'p1', rating: 'great', pitch: 82, timing: 74, score: 80.4, coverage: 0.9 }],
           local: { total: 80.4, pitch: 82, timing: 74 },
           saved: null,
           saveError: 'Saving is off in this dev preview.',
@@ -76,7 +78,10 @@ function renderRoute(route: Route, go: (r: Route) => void) {
     case 'history':
       return <History />;
     case 'battle':
-      // Battle is deferred until solo and practice work end to end (CLAUDE.md).
-      return <ComingSoon />;
+      return <BattleSetup />;
+    case 'online':
+      return <Online room={route.room} notice={route.notice} />;
+    case 'battleturn':
+      return <BattleTurn result={route.result} />;
   }
 }

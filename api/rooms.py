@@ -21,11 +21,11 @@ from sqlalchemy.orm import Session
 
 from . import play
 from .auth import verify_bearer
-from .clip_catalog import CATALOG
 from .db import get_engine
 from .errors import ApiError
+from .models import TimeRange
 from .play import current_guest, get_db, match_view
-from .tables import Clip, GuestSession, Match, MatchPlayer, Room, RoomMember
+from .tables import GuestSession, Match, MatchPlayer, Room, RoomMember, TurnAttempt
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -50,6 +50,11 @@ class Hub:
         self.active_slot: dict[uuid.UUID, int | None] = {}  # who may relay progress right now
         self.loop: asyncio.AbstractEventLoop | None = None
 
+    def track_turn(self, room_id, snap: dict):
+        """Remember whose turn it is, so progress from anyone else is refused without a DB read."""
+        match = snap["match"]
+        self.active_slot[room_id] = match["active_slot"] if match and match["state"] == "active" else None
+
     def present(self, room_id) -> set[int]:
         return {slot for _, slot in self.sockets[room_id].values()}
 
@@ -72,22 +77,27 @@ hub = Hub()
 
 # ---- snapshots -------------------------------------------------------------------------------
 
+def _latest_match(s: Session, room: Room):
+    return s.scalars(select(Match).where(Match.room_id == room.id).order_by(Match.created_at.desc()).limit(1)).first()
+
+
 def snapshot(s: Session, room: Room) -> dict:
     members = s.scalars(select(RoomMember).where(RoomMember.room_id == room.id).order_by(RoomMember.slot)).all()
-    match = s.scalars(select(Match).where(Match.room_id == room.id).order_by(Match.created_at.desc()).limit(1)).first()
+    match = _latest_match(s, room)
     here = hub.present(room.id)
     return {"id": room.id, "code": room.code, "state": room.state, "state_version": room.state_version,
             "clip_id": room.clip_id, "host_slot": 0,
+            "range": play._match_range(s, match) if match else None,
             "members": [{"slot": m.slot, "display_name": m.display_name, "ready": m.ready,
                          "connected": m.slot in here} for m in members],
-            "match": match_view(s, match) if match else None}
+            "match": match_view(s, match) if match and match.state != "lobby" else None}
 
 
 def publish(s: Session, room: Room, *extra: dict):
     """After a durable change commits: bump nothing here, just tell everyone the new truth."""
     s.refresh(room)
     snap = snapshot(s, room)
-    hub.active_slot[room.id] = snap["match"]["active_slot"] if snap["match"] and snap["match"]["state"] == "active" else None
+    hub.track_turn(room.id, snap)
     hub.broadcast_threadsafe(room.id, _event("room_snapshot", **snap))
     for e in extra:
         hub.broadcast_threadsafe(room.id, e)
@@ -116,15 +126,6 @@ def _host_only(room: Room, guest: GuestSession):
         raise ApiError(403, "host_only", "Only the host can do that.")
 
 
-def _clip(s: Session, clip_id: str):
-    song = CATALOG.get(clip_id)
-    if not song:
-        raise ApiError(404, "clip_not_found", f"No clip with id '{clip_id}'.")
-    if not s.get(Clip, (song.id, song.version)):
-        raise ApiError(503, "catalog_not_seeded", "Clip metadata is missing; run python -m api.seed.")
-    return song
-
-
 # ---- HTTP: durable actions -------------------------------------------------------------------
 
 class RoomIn(BaseModel):
@@ -139,9 +140,25 @@ class ReadyIn(BaseModel):
     ready: bool
 
 
+class RangeIn(BaseModel):
+    range: TimeRange | None = None
+
+
+def _draft(s: Session, room: Room, guest: GuestSession) -> Match:
+    """A lobby's pending host attempt doubles as durable range settings. On start, this same
+    draft becomes the real match. Old rooms without a draft are supported lazily."""
+    match = _latest_match(s, room)
+    if match is None:
+        out = play._new_match(s, guest, room.clip_id, [guest.display_name], room_id=room.id)
+        match = s.get(Match, out["match_id"])
+        match.state = "lobby"
+        s.flush()
+    return match
+
+
 @router.post("/api/rooms")
 def create_room(body: RoomIn, guest=Depends(current_guest), s: Session = Depends(get_db)):
-    song = _clip(s, body.clip_id)
+    song = play.require_clip(s, body.clip_id)
     for _ in range(5):  # a code collision is rare; retry
         room = Room(code="".join(secrets.choice(CODE_ALPHABET) for _ in range(5)), host_guest_id=guest.id,
                     clip_id=song.id, clip_version=song.version, expires_at=datetime.now(timezone.utc) + ROOM_TTL)
@@ -155,7 +172,7 @@ def create_room(body: RoomIn, guest=Depends(current_guest), s: Session = Depends
         raise ApiError(503, "room_code_unavailable", "Could not allocate a room code. Try again.", True)
     s.add(RoomMember(room_id=room.id, slot=0, guest_id=guest.id, display_name=guest.display_name))
     s.commit()
-    return snapshot(s, room)
+    return {**snapshot(s, room), "you": 0}  # "you": the caller's seat (the shared snapshot cannot say)
 
 
 _join_log: dict[uuid.UUID, deque] = defaultdict(deque)
@@ -176,7 +193,8 @@ def join_room(body: JoinIn, guest=Depends(current_guest), s: Session = Depends(g
         raise ApiError(404, "room_not_found", "No room with that code.")
     if room.expires_at < datetime.now(timezone.utc):
         raise ApiError(410, "room_expired", "That room has expired.")
-    if s.scalar(select(RoomMember.slot).where(RoomMember.room_id == room.id, RoomMember.guest_id == guest.id)) is None:
+    mine = s.scalar(select(RoomMember.slot).where(RoomMember.room_id == room.id, RoomMember.guest_id == guest.id))
+    if mine is None:
         if room.state != "lobby":
             raise ApiError(409, "room_started", "That room already started.")
         taken = s.scalars(select(RoomMember.slot).where(RoomMember.room_id == room.id)).all()
@@ -186,14 +204,15 @@ def join_room(body: JoinIn, guest=Depends(current_guest), s: Session = Depends(g
         _bump(room)
         s.commit()
         publish(s, room)
-    return snapshot(s, room)
+        mine = 1
+    return {**snapshot(s, room), "you": mine}
 
 
 @router.get("/api/rooms/{room_id}")
 def get_room(room_id: uuid.UUID, guest=Depends(current_guest), s: Session = Depends(get_db)):
     room = _room(s, room_id)
-    _member(s, room, guest)
-    return snapshot(s, room)
+    me = _member(s, room, guest)
+    return {**snapshot(s, room), "you": me.slot}
 
 
 @router.post("/api/rooms/{room_id}/ready")
@@ -216,10 +235,38 @@ def change_clip(room_id: uuid.UUID, body: RoomIn, guest=Depends(current_guest), 
     _host_only(room, guest)
     if room.state != "lobby":
         raise ApiError(409, "room_started", "The room is no longer in the lobby.")
-    song = _clip(s, body.clip_id)
+    song = play.require_clip(s, body.clip_id)
     room.clip_id, room.clip_version = song.id, song.version
+    draft = _latest_match(s, room)
+    if draft:
+        draft.clip_id, draft.clip_version = song.id, song.version
+        first = s.scalar(select(TurnAttempt).where(TurnAttempt.match_id == draft.id, TurnAttempt.slot == 0))
+        first.phrase_results = None
     for m in s.scalars(select(RoomMember).where(RoomMember.room_id == room.id)):
         m.ready = False  # a new clip needs a fresh yes from everyone
+    _bump(room)
+    s.commit()
+    publish(s, room)
+    return snapshot(s, room)
+
+
+@router.post("/api/rooms/{room_id}/range")
+def change_range(room_id: uuid.UUID, body: RangeIn, guest=Depends(current_guest), s: Session = Depends(get_db)):
+    room = _room(s, room_id, lock=True)
+    _member(s, room, guest)
+    _host_only(room, guest)
+    if room.state != "lobby":
+        raise ApiError(409, "room_started", "The room is no longer in the lobby.")
+    song = play.require_clip(s, room.clip_id)
+    inc = play._included(song, body.range)
+    rng = play._range_of(song, [p.id for p in inc]) if body.range else None
+    if body.range and not any(w > 0 for p, w in zip(song.phrases, play._weights(song)) if p in inc):
+        raise ApiError(422, "invalid_range", "The section must contain scoreable reference notes.")
+    draft = _draft(s, room, guest)
+    first = s.scalar(select(TurnAttempt).where(TurnAttempt.match_id == draft.id, TurnAttempt.slot == 0))
+    first.phrase_results = {"range": rng.model_dump()} if rng else None
+    for m in s.scalars(select(RoomMember).where(RoomMember.room_id == room.id)):
+        m.ready = False
     _bump(room)
     s.commit()
     publish(s, room)
@@ -229,7 +276,18 @@ def change_clip(room_id: uuid.UUID, body: RoomIn, guest=Depends(current_guest), 
 def _start_match(s: Session, room: Room, host: GuestSession, previous: uuid.UUID | None = None):
     names = s.scalars(select(RoomMember.display_name).where(RoomMember.room_id == room.id)
                       .order_by(RoomMember.slot)).all()
-    out = play._new_match(s, host, room.clip_id, list(names), previous=previous, room_id=room.id)
+    draft = _latest_match(s, room)
+    if draft and draft.state == "lobby":
+        play._frozen_song(draft)
+        draft.state = "active"
+        s.add(MatchPlayer(match_id=draft.id, slot=1, display_name=names[1]))
+        first = s.scalar(select(TurnAttempt).where(TurnAttempt.match_id == draft.id, TurnAttempt.slot == 0))
+        out = {"match_id": draft.id, "attempt_id": first.id, "scoring_version": draft.scoring_version}
+    else:
+        rng = play._match_range(s, draft) if draft else None
+        out = play._new_match(s, host, room.clip_id, list(names), previous=previous, room_id=room.id)
+        first = s.get(TurnAttempt, out["attempt_id"])
+        first.phrase_results = {"range": rng.model_dump()} if rng else None
     room.state = "playing"
     _bump(room)
     s.commit()
@@ -327,7 +385,7 @@ def _snapshot_event(room_id: uuid.UUID) -> dict | None:
         if not room:
             return None
         snap = snapshot(s, room)
-        hub.active_slot[room_id] = snap["match"]["active_slot"] if snap["match"] and snap["match"]["state"] == "active" else None
+        hub.track_turn(room_id, snap)
         return _event("room_snapshot", **snap)
 
 
@@ -335,24 +393,33 @@ def _snapshot_event(room_id: uuid.UUID) -> dict | None:
 async def room_socket(ws: WebSocket, room_id: uuid.UUID):
     if not _origin_ok(ws):
         return await ws.close(code=4403)
+    # Auth0 users send the token as a subprotocol pair ["bearer", token]: browsers cannot set headers, and a
+    # query string would end up in server access logs.
+    protos = [p.strip() for p in ws.headers.get("sec-websocket-protocol", "").split(",")]
+    bearer = protos[1] if len(protos) == 2 and protos[0] == "bearer" else None
     try:
-        slot = await asyncio.to_thread(_ws_slot, ws.cookies.get("guest_token"),
-                                       ws.query_params.get("access_token"), room_id)
+        slot = await asyncio.to_thread(_ws_slot, ws.cookies.get("guest_token"), bearer, room_id)
     except ApiError:
         slot = None
     if slot is None:
         return await ws.close(code=4403)  # not logged in, or not in this room
 
-    await ws.accept()
+    await ws.accept(subprotocol="bearer" if bearer else None)
     hub.sockets[room_id][id(ws)] = (ws, slot)
     await hub.broadcast(room_id, await asyncio.to_thread(_snapshot_event, room_id))  # presence changed
     recent: deque = deque()
     try:
         while True:
             try:
-                raw = await asyncio.wait_for(ws.receive_text(), HEARTBEAT_TIMEOUT)
+                frame = await asyncio.wait_for(ws.receive(), HEARTBEAT_TIMEOUT)
             except asyncio.TimeoutError:
                 return await ws.close(code=1001)  # silent too long: treat as gone
+            if frame["type"] == "websocket.disconnect":
+                break
+            raw = frame.get("text")
+            if raw is None:  # a binary frame: say so and keep the socket open
+                await ws.send_json(_event("error", code="bad_message", message="Send JSON text frames only."))
+                continue
             now = time.monotonic()
             while recent and now - recent[0] > 1:
                 recent.popleft()

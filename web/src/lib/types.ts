@@ -5,6 +5,8 @@
  */
 
 export type Rating = 'perfect' | 'great' | 'okay' | 'bad' | 'miss';
+export interface TimeRange { start: number; end: number }
+
 export type Register = -12 | 0 | 12; // semitones, chosen before the turn
 
 export interface ClipSummary {
@@ -69,11 +71,13 @@ export interface PhraseScore {
   phrase_id: string;
   rating: Rating;
   pitch: number;
-  timing: number;
+  timing: number | null; // null: the phrase starts mid-note, so it is scored on pitch alone
+  score: number; // this phrase's 0-100 score (ratings and totals derive from it)
   coverage: number; // 0-1
 }
 
 export interface Score {
+  range?: TimeRange | null;
   mode: 'solo' | 'battle';
   clip_id: string;
   clip_version: number;
@@ -84,6 +88,7 @@ export interface Score {
   timing: number;
   phrases: PhraseScore[];
   coach_blurb: string | null;
+  guided?: boolean; // guide vocals were audible (client-reported); such runs skip the leaderboard
 }
 
 export interface WordFeedback {
@@ -101,10 +106,12 @@ export interface Practice {
 }
 
 export interface HistoryItem {
+  range?: TimeRange | null;
   match_id: string;
   clip_id: string;
   created_at: string;
   total: number;
+  guided?: boolean;
 }
 
 export interface MatchView {
