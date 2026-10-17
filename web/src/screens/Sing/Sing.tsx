@@ -353,7 +353,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
             </span>
           </div>
         </div>
-        {song && <Lyrics lines={song.lines.filter((line) => selected.some((p) => song.lines[p.line_index] === line))} t={now} showRoman={showRoman} showTrans={showTrans} />}
+        {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman={showRoman} showTrans={showTrans} />}
       </Panel>
     </ScreenShell>
   );
