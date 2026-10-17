@@ -12,3 +12,11 @@
 `range.ts` exports the whole-phrase selection rule (including the API's 50 ms boundary tolerance), valid handle boundaries, nearest-boundary snapping, and a display label.
 
 `PracticeRangePicker.tsx` is the player-specific wrapper: manifest loading, preview audio, phrase/second counts, full-clip reset, and room-save failure recovery. It stores a temporary drag value locally and restores the last server value if `onChange` returns a promise resolving to `false`.
+
+## Author extensions
+
+Optional `overlay`, `onLineSelect`, `onLineMove`, `selectedLines`, and
+`lineLabels` props support the standalone local reviewer. Author mode displays
+original and romanized text together and emits a line index/new start on drag
+release. It leaves validation, onset snapping, audio and persistence to the
+caller. Existing practice-range callers retain their phrase-snapped handles.
