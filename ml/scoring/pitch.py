@@ -278,7 +278,10 @@ def pitch_score(
     """
     cfg = cfg or PitchConfig()
     ref_hz = np.asarray(ref_hz, dtype=float)
-    user = _align_length(np.asarray(user_hz, dtype=float), len(ref_hz))
+    n = len(ref_hz)
+    k = int(round(cfg.time_tolerance_s / hop_seconds))
+    # Keep k extra user frames beyond the reference length, so a shift can reach the tail of a late take.
+    user = _align_length(np.asarray(user_hz, dtype=float), n + k)
     user = np.where(np.isfinite(user) & (user > 0), user, np.nan)
 
     mask = scoreable_mask(ref_hz, hop_seconds, excluded)
@@ -289,22 +292,25 @@ def pitch_score(
         keep[frames] = True
         mask &= keep
 
-    # Each reference frame takes the best credit among user frames within the time
-    # tolerance (k = 0 means strictly the same frame).
-    k = int(round(cfg.time_tolerance_s / hop_seconds))
-    credit = np.zeros(len(ref_hz))
-    user_voiced = np.zeros(len(ref_hz), dtype=bool)
-    for off in range(-k, k + 1):
-        shifted = np.full(len(user), np.nan)
+    # Pitch time tolerance: ONE shift of the user's track, within +/- tolerance, is chosen for the whole
+    # scored span (a phrase, or the clip), the one that earns the most pitch credit; ties keep the smallest
+    # shift. A consistent small lateness is forgiven (timing still scores it), but a jittery or sweeping
+    # track cannot pick the luckiest frame at every position, which a per-frame "best of the window"
+    # rule would reward. k = 0 means strictly the same frame.
+    credit = np.zeros(n)
+    user_voiced = np.zeros(n, dtype=bool)
+    best_total = -1.0
+    for off in sorted(range(-k, k + 1), key=lambda o: (abs(o), o)):
+        shifted = np.full(n, np.nan)
         if off >= 0:
-            shifted[: len(user) - off] = user[off:]
+            shifted[:] = user[off:off + n]
         else:
-            shifted[-off:] = user[: len(user) + off]
+            shifted[-off:] = user[:n + off]
         ok = mask & np.isfinite(shifted)
-        c = np.zeros(len(ref_hz))
+        c = np.zeros(n)
         c[ok] = _frame_credit(cents_error(shifted[ok], target[ok]), cfg)
-        credit = np.maximum(credit, c)
-        user_voiced |= np.isfinite(shifted)
+        if c[mask].sum() > best_total:
+            best_total, credit, user_voiced = float(c[mask].sum()), c, np.isfinite(shifted)
     both = mask & user_voiced
 
     return PitchResult(

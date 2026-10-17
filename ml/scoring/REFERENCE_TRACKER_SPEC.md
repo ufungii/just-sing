@@ -6,13 +6,13 @@
 
 The "take" is the clip's own vocal, so a perfect score is the correct answer. Totals, 0-100:
 
-| Clip | CREPE live vs CREPE reference | Browser-style tracker (MPM), clarity 0.5 | 0.65 | 0.8 | 0.65 + 0.1 s pitch tolerance | **Same tracker for reference and live** |
-|---|---|---|---|---|---|---|
-| Clip 1 | 96.7 | 68.6 | 59.0 | 39.1 | 74.8 | **100** |
-| Clip 2 | 96.3 | 78.7 | 70.9 | 52.9 | 82.0 | **100** |
-| Clip 3 | 96.3 | 79.6 | 65.8 | 37.8 | 79.3 | **100** |
+| Clip | CREPE live vs CREPE reference | Browser-style tracker (MPM), clarity 0.5 | 0.65 | 0.8 | **Same tracker for reference and live** |
+|---|---|---|---|---|---|
+| Clip 1 | 96.7 | 68.6 | 59.0 | 39.1 | **100** |
+| Clip 2 | 95.6 | 78.7 | 70.9 | 52.9 | **100** |
+| Clip 3 | 96.8 | 79.6 | 65.8 | 37.8 | **100** |
 
-(`python -m ml.evals.score_take take clip.json --tracker mpm --clarity 0.65`, with `--ref-audio` for the last column.) "MPM" is our Python emulation of Pitchy's algorithm. The last column is a ceiling: the take is the reference audio itself, so tracker errors are perfectly correlated. A different human performance will land lower, but the gap to the other columns shows the problem is the tracker mismatch, not the singer. The fix is to produce `reference.hz` with the tracker the browser runs.
+(`python -m ml.evals.score_take take clip.json --tracker mpm --clarity 0.65`, with `--ref-audio` for the last column.) The 0.1 s pitch time tolerance (the default since scoring version 0.2.0) changes **none** of these numbers: these takes are not late, and the tolerance only forgives lateness. Do not expect it to close the gap between the columns. "MPM" is our Python emulation of Pitchy's algorithm, checked against the real library in `ml/evals/results/pitchy_parity.md`. Note: a window is a number of samples **at a sample rate**: 4096 at 48 kHz is 85 ms; at 16 kHz it would be 256 ms. Always state both. The last column is a ceiling: the take is the reference audio itself, so tracker errors are perfectly correlated. A different human performance will land lower, but the gap to the other columns shows the problem is the tracker mismatch, not the singer. The fix is to produce `reference.hz` with the tracker the browser runs.
 
 ## 2. What to build
 
@@ -30,7 +30,7 @@ The "take" is the clip's own vocal, so a perfect score is the correct answer. To
   "silenceGateRms": 0.005
 }
 ```
-   The starting values above are a recommendation. For reference, APR's existing live demo (`web/live/` on branch `ml/pipeline`) runs Pitchy with **`windowSamples` 4096, clarity >= 0.8, RMS gate 0.008**, and timestamps each estimate at the window *center* (the convention this spec requires). Tested against the demo clips with our emulation, that exact setting scores a perfect take **22-40**; 0.65 with a 0.005 gate scores about 47-54; 0.5 with a 0.003 gate about 63-69 (all against a CREPE-made reference). With a reference made by the same tracker these all reach about 100, which is the point of this spec.
+   The starting values above are a recommendation. For reference, APR's existing live demo (`web/live/` on branch `ml/pipeline`) runs Pitchy with **`windowSamples` 4096, clarity >= 0.8, RMS gate 0.008**, and timestamps each estimate at the window *center* (the convention this spec requires). Run through the **real Pitchy** (pitchy@4.1.0 in Node, `ml/evals/pitchy_parity.py`) on the three demo clips, that exact setting scores a perfect take **35-55**, and clarity 0.65 with a 0.005 gate scores **51-67** (both against the CREPE-made manifest reference). Our Python emulation agrees with the real library on 99-100% of pitch values and 89-100% of voicing decisions, and is within about 1.5 points at clarity 0.8 (a few points optimistic at 0.65), so the emulation-based numbers elsewhere in this spec hold. With a reference made by the same tracker these all reach about 100, which is the point of this spec.
    `clarityThreshold` is the one knob to tune (0.5-0.7 on real voices; 0.8 is too strict). `sampleRate` and `windowSamples` must be what the live `AudioContext` and detector actually use; confirm them and update this block. If the live rate varies by device, resample the mic to `sampleRate` before detecting, or the offline reference will not match.
 2. **An offline Node script** (suggested: `web/tools/extract-reference.mjs`, plain Node, no browser) that runs the *same detector function the live code calls* over a vocals file:
    `node extract-reference.mjs vocals.clip.mp3 > reference.json` → `{ "hop_seconds": 0.02, "hz": [null, 261.6, ...], "tracker": { ...config } }`.
