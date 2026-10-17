@@ -63,7 +63,7 @@ export interface SingResult {
 
 export type Route =
   | { name: 'home' }
-  | { name: 'zibran' }
+  | { name: 'zibran'; playerName?: string; reason?: 'joke' | 'language' }
   | { name: 'solo' }
   | { name: 'sing'; setup: SingSetup }
   | { name: 'results'; result: SingResult }
