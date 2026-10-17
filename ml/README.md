@@ -74,7 +74,23 @@ The live game compares the browser's tracker (Pitchy, McLeod Pitch Method) with 
 | 10 dB noise | 99.3 | 86.3 |
 | 5 dB noise | 99.2 | **0.0** (MPM rejects every frame) |
 
-Lowering MPM's clarity threshold from 0.9 to 0.8 lifts the clean take to 96.2 and the 10 dB take to 92.9, while pure noise still scores 0. **Recommendation for the frontend: clarity 0.8**, and show a "we can't hear you" warning when almost no frames are voiced, so a mic problem is never scored as bad singing.
+That was a clean synthetic voice. On a **real vocal stem** the picture is different (`real_tracker_eval.py` → `results/real_tracker_<clip>.md`): a real voice is breathy, has vibrato and fast notes, so the browser tracker is much less sure than CREPE.
+
+| MPM clarity | Frames voiced (CREPE: 82%) | About an octave off | Near-perfect take scores |
+|---|---|---|---|
+| 0.9 | 44% | 3% | 47 |
+| 0.8 | 62% | 7% | 61 |
+| 0.7 | 75% | 10% | 73 |
+| 0.6 | 85% | 11% | 77 |
+
+- **The threshold is the main lever, and 0.8 is too strict for real voices.** Use about **0.6-0.7**. Noise-only and silence still score 0 at every threshold, and bad takes stay well separated from good ones.
+- **Gap filling and octave correction (`track_cleanup.py`) changed scores by 2 points or less**, so they are not adopted.
+- **Tracker disagreement caps a perfect take at about 75-80** when the reference comes from CREPE and the live track from Pitchy-style MPM. Even pyin scores 78.5 against the CREPE reference. If the reference is instead built with the same tracker family as the live one, the same near-perfect take scores about 96 and a detuned or late take still scores 40-60. This is an upper bound (our "perfect take" is the same audio plus noise, so tracker errors are more correlated than they would be for a different human performance), but it is a strong argument for either extracting the reference with the browser's own tracker (then reviewing it by hand) or recalibrating the rating bands against the live path. **Do not ship the 90/75/50 rating bands until they are calibrated on a real take**: with a CREPE reference, a perfect live take would never reach "perfect".
+
+**Frontend:** use Pitchy clarity 0.6-0.7, and show a "we can't hear you" warning when almost no frames are voiced so a mic problem is never scored as bad singing.
+
+### Real-voice degradation (`real_audio_eval.py` → `results/real_audio_<clip>.md`)
+The same controlled damage as above, applied to a real vocal stem instead of a synthetic melody (local-only audio; only aggregated numbers are committed). With CREPE tracking, scores still fall in order for local detuning (100 → 82 → 60), lateness (99 → 82 → 63 → 38), dropped seconds, and noise (98 at 30 dB, 75 at 5 dB). The scorer is not an artifact of clean synthetic voices.
 
 ### Pronunciation (`pronunciation_eval.py`, `pronunciation_nearmiss.py`)
 Test speech is generated locally with Meta's MMS-TTS Korean voice.
@@ -106,7 +122,7 @@ Strict frame-by-frame pitch scoring counts lateness twice (pitch and timing). An
 
 - Whisper's language prior silently fixed most single-sound mistakes, which made it unsuitable for pinpointing errors despite near-perfect transcription.
 - Normalizing B's word scores against a second TTS rendition did not clearly help (AUC 0.643 → 0.662, top-1 0.54 → 0.46: within noise).
-- The browser-style tracker collapses at 5 dB SNR under a 0.9 clarity threshold.
+- The browser-style tracker costs a real singer 20+ points at the default 0.8-0.9 clarity thresholds, and our first recommendation (0.8, from clean synthetic voices) was wrong for real voices.
 - Tempo drift is penalized harshly (5% slower costs ~30 points) and non-monotonically at extremes, a direct consequence of not time-warping.
 
 ## Limitations
@@ -118,6 +134,6 @@ Strict frame-by-frame pitch scoring counts lateness twice (pitch and timing). An
 
 ## Next
 
-1. Score the first real reference (Red Velvet, "Russian Roulette") and check note-start detection on fast syllables.
+1. Score ML A's finished manifest for the first real clip and check note-start detection on fast syllables.
 2. Record real takes (good, late, off-key) and real spoken phrases (correct and deliberately wrong) to replace synthetic evidence and calibrate thresholds and rating bands.
 3. Decide the pitch time tolerance and the 80/20 weighting with that data.
