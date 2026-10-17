@@ -134,24 +134,32 @@ export function scorePhraseSpan(
   const [from, to] = phraseFrames({ start, end }, hop);
   const k = roundHalfEven(cfg.timeToleranceS / hop);
 
-  let scoreable = 0;
-  let voiced = 0;
+  // The phrase's scoreable frames: rests and exclusions are not in the denominator.
+  const frames: number[] = [];
+  for (let i = Math.max(0, from); i < Math.min(to, n); i++) if (isVoiced(target.hz[i]) && !target.excluded[i]) frames.push(i);
+  const scoreable = frames.length;
+
+  // ONE shift of the user's track within +/- timeToleranceS for the whole phrase (SPEC section 4): the shift with
+  // the most pitch credit; ties keep the smallest |shift|, then the negative one. A consistent small lateness is
+  // forgiven (timing still scores it) but jitter cannot pick the luckiest frame at every position. The track is
+  // read up to k frames beyond the reference length so a shift can reach the tail of a late take.
+  const shifts: number[] = [];
+  for (let off = -k; off <= k; off++) shifts.push(off);
+  shifts.sort((x, y) => Math.abs(x) - Math.abs(y) || x - y);
   let credit = 0;
-  for (let i = Math.max(0, from); i < Math.min(to, n); i++) {
-    const t = target.hz[i];
-    if (!isVoiced(t) || target.excluded[i]) continue; // rests and exclusions: not in the denominator
-    scoreable++;
-    let best = 0;
-    let any = false;
-    for (let off = -k; off <= k; off++) {
+  let voiced = 0;
+  let bestTotal = -1;
+  for (const off of shifts) {
+    let total = 0;
+    let seen = 0;
+    for (const i of frames) {
       const j = i + off;
-      const u = j >= 0 && j < n ? userHz[j] : null; // pitch uses the track padded/truncated to the reference length
+      const u = j >= 0 && j < n + k ? userHz[j] : null;
       if (!isVoiced(u)) continue;
-      any = true;
-      best = Math.max(best, pitchCredit(centsBetween(u, t), cfg));
+      seen++;
+      total += pitchCredit(centsBetween(u, target.hz[i] as number), cfg);
     }
-    if (any) voiced++;
-    credit += best;
+    if (total > bestTotal) { bestTotal = total; credit = total; voiced = seen; }
   }
   const pitch = scoreable ? (100 * credit) / scoreable : 0;
   const coverage = scoreable ? voiced / scoreable : 0;
