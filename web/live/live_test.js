@@ -3,6 +3,18 @@ import { CaptureWindow } from "./capture-worklet.js";
 import { PitchDetector } from "./vendor/pitchy.mjs";
 import { createPlayback } from "./playback.js";
 import { lyricDisplay } from "./lyric_display.js";
+import { apiUrl } from "./urls.js";
+
+Deno.test("API URLs retain the mounted karaoke prefix and standalone origin", () => {
+  for (const [moduleUrl, expected] of [
+    ["http://localhost:8000/live/urls.js", "http://localhost:8000/api/songs"],
+    ["http://localhost:8000/karaoke/live/urls.js", "http://localhost:8000/karaoke/api/songs"],
+    ["https://demo.example/karaoke/live/urls.js", "https://demo.example/karaoke/api/songs"],
+  ]) {
+    if (apiUrl("/api/songs", moduleUrl) !== expected) throw new Error("Playback API escaped its mount");
+    if (apiUrl(expected, moduleUrl) !== expected) throw new Error("Already resolved URL changed");
+  }
+});
 
 Deno.test("guide vocals share the playback clock through toggle, pause and seek", () => {
   const sources = [], gains = [];

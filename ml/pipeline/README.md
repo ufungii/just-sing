@@ -9,8 +9,9 @@ gitignored `ml/data/`.
 
 1. Follow [environment setup](docs/SETUP.md). The main pipeline and Demucs use
    separate Python 3.11 environments.
-2. Merge ML B's `ml.scoring.pitch.reference_contour()` adapter before extracting
-   new pitch tracks. It owns chunking, RMS gating and smoothing.
+2. Pitch extraction uses `ml.scoring.pitch.reference_contour()`, which owns
+   chunking, RMS gating and smoothing. Install its offline dependencies using
+   the setup instructions; the runtime API does not load those models.
 3. Provide a recording with lead vocals and a UTF-8 lyric file. Each nonblank
    line is a display line; blank lines separate sections.
 

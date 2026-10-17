@@ -4,6 +4,7 @@
   "locale": "ko-KR",
   "provider": "faster-whisper",
   "status": "ok",
+  "overall": 73,
   "words": [
     { "text": "안녕", "score": 92 },
     { "text": "내", "score": 88 },

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -58,8 +58,13 @@ def create_app(data_dir: Path | None = None, allow_local_demo_audio: bool | None
         return {"status": "ok", "local_demo_audio_enabled": allow_local_demo_audio}
 
     @app.get("/api/songs")
-    def catalog():
-        return {"songs": store.catalog()}
+    def catalog(request: Request):
+        prefix = request.scope.get("root_path", "")
+        songs = store.catalog()
+        for song in songs:
+            for key in ("instrumental_url", "lyrics_url"):
+                song[key] = prefix + song[key]
+        return {"songs": songs}
 
     @app.get("/api/demo-handoff")
     def demo_handoff():

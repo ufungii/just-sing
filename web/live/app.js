@@ -3,6 +3,7 @@ import { activeIndices } from "./clock.js";
 import { scorePhrase, aggregate } from "./scoring.js";
 import { createPlayback } from "./playback.js";
 import { lyricDisplay } from "./lyric_display.js";
+import { apiUrl } from "./urls.js";
 
 const $ = (id) => document.getElementById(id);
 let song = new URLSearchParams(location.search).get("song"), endpoint;
@@ -24,7 +25,7 @@ function clock() {
   return playing ? Math.max(position, Math.min(buffer.duration, context.currentTime - epoch)) : position;
 }
 async function json(url, options) {
-  const response = await fetch(url, options);
+  const response = await fetch(apiUrl(url), options);
   if (!response.ok) {
     let error;
     try { error = (await response.json()).error?.message; } catch {}
@@ -226,9 +227,18 @@ function render() {
 }
 async function load() {
   try {
+    const health = await json("/api/health");
+    if (!health.local_demo_audio_enabled) {
+      $("title").textContent = "Karaoke unavailable";
+      throw new Error("Song playback is not enabled on this server.");
+    }
     const catalog = await json("/api/songs");
+    if (!catalog.songs.length) {
+      $("title").textContent = "No songs available";
+      throw new Error("No prepared songs are available on this server yet.");
+    }
     song ||= catalog.songs.find((item) => item.id.endsWith("-demo"))?.id || catalog.songs[0]?.id;
-    endpoint = `/api/songs/${encodeURIComponent(song)}`;
+    endpoint = apiUrl(`/api/songs/${encodeURIComponent(song)}`);
     catalog.songs.forEach((item) => {
       const option = document.createElement("option"); option.value = item.id;
       option.textContent = `${item.artist} · ${item.title}`; $("song").append(option);

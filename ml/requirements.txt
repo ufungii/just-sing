@@ -1,21 +1,10 @@
-# Python 3.11. Ask the team before adding heavy dependencies.
-
-# --- Scoring + evals (lightweight, must also run inside api/) ---
+# Scoring + evals environment (light, CPU-only, importable by api/). Python 3.11.
+# Heavy stacks live in their own environments:
+#   ml/pipeline/requirements.txt       (Demucs, torchcrepe)
+#   ml/pronunciation/requirements.txt  (speech models)
 numpy>=1.26
 scipy>=1.11
-librosa>=0.10      # DTW (librosa.sequence.dtw), audio loading, pyin fallback
+librosa>=0.10      # audio loading, pyin pitch tracker for CPU-only evals
 soundfile>=0.12
 pytest>=8
-
-# --- Offline pipeline (heavy, laptop/Colab only, never on the prod server) ---
-torch>=2.2
-torchaudio>=2.2
-# Demucs has an incompatible torchaudio constraint. Install separately using
-# ml/pipeline/requirements-demucs.txt, never in this shared environment.
-whisperx>=3.1      # word-level timestamps (fallback: faster-whisper)
-torchcrepe>=0.0.22 # reference pitch contour
-google-genai>=0.3  # Gemini: romanization + translation
-
-# --- Local audio acquisition ---
-yt-dlp[default]==2026.8.19
-imageio-ffmpeg==0.6.0 # bundled FFmpeg executable for MP3 conversion
+matplotlib>=3.8   # optional: contour plots in ml/evals/inspect_reference.py

@@ -74,3 +74,13 @@ def test_missing_frontend_build_is_an_actionable_error(tmp_path, monkeypatch):
     monkeypatch.setenv("WEB_DIST", str(tmp_path / "nothing"))
     r = client.get("/")
     assert r.status_code == 404 and r.json()["error"]["code"] == "frontend_not_built"
+
+
+def test_scoring_numbers_come_from_the_shared_config():
+    """The API must not hard-code scoring weights (CLAUDE.md): they live in contracts/scoring.config.json."""
+    from api import play
+    config = json.loads((CONTRACTS / "scoring.config.json").read_text(encoding="utf-8"))
+    assert play.SCORING == config and play.SCORING_VERSION == config["scoring_version"]
+    assert abs(sum(config["total_weights"].values()) - 1) < 1e-9
+    source = (Path(play.__file__)).read_text(encoding="utf-8")
+    assert "0.8" not in source and "PITCH_WEIGHT" not in source

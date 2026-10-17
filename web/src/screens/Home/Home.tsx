@@ -115,7 +115,7 @@ export function Home({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
       <div className="home-inner">
         <header className="home-header">
           <span className="home-kao home-kao--rose" aria-hidden="true">
-            ♫･˚｡♪ ˚☆˚♬˚.
+            ♬･˚｡♪ ˚☆˚♬˚.
           </span>
         </header>
 

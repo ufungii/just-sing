@@ -136,6 +136,19 @@ class SongStore:
             return {**ready, "reviewed": True, "phrases": self.scoring_phrases(song_id, ready["lines"])}
         path = self.safe_path(song_id, "alignment/lyrics.aligned.json")
         if not path.exists():
+            metadata = self.metadata(song_id)
+            if metadata.get("lines") and self.safe_path(song_id, "song.review.json").exists():
+                self.checked_manifest_review(song_id)
+                try:
+                    timeline = Timeline.model_validate({
+                        **{k: ready[k] for k in ("id", "version", "language", "duration")},
+                        "lines": metadata["lines"],
+                    })
+                except (ValueError, ValidationError):
+                    fail(422, "invalid_alignment_draft", "Portable manifest lyric timing is invalid.")
+                return {**timeline.model_dump(), "status": "draft", "reviewed": False, "section_starts": [],
+                        "phrases": self.scoring_phrases(song_id, metadata["lines"]),
+                        "reason": "Portable supplied-text manifest; listening review is pending."}
             return ready
         draft = self.read(song_id, "alignment/lyrics.aligned.json")
         try:
@@ -176,13 +189,31 @@ class SongStore:
             fail(422, "invalid_phrases", "Scoring phrase windows are invalid.")
         return phrases
 
+    def checked_manifest_review(self, song_id: str) -> dict:
+        """Validate a portable song.json + review sidecar + two-audio handoff."""
+        review = self.read(song_id, "song.review.json")
+        manifest_path = self.safe_path(song_id, "song.json")
+        if (not manifest_path.is_file() or type(review.get("reviewed")) is not bool
+                or review.get("manifest_sha256") != hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+                or any(review.get("audio_sha256", {}).get(role) != hashlib.sha256(self.audio_path(song_id, role).read_bytes()).hexdigest()
+                       for role in ("vocals", "instrumental"))):
+            fail(422, "invalid_manifest_package", "The manifest or audio changed after this handoff was generated.")
+        return review
+
     def reference(self, song_id: str) -> dict:
         from math import isfinite
         metadata = self.metadata(song_id)
         path = self.safe_path(song_id, "reference.pitch.json")
         if not path.exists():
-            fail(503, "reference_unavailable", "Reference pitch is not prepared.")
-        data = self.read(song_id, "reference.pitch.json")
+            if not metadata.get("reference") or not self.safe_path(song_id, "song.review.json").exists():
+                fail(503, "reference_unavailable", "Reference pitch is not prepared.")
+            review = self.checked_manifest_review(song_id)
+            data = {**metadata["reference"], "duration": metadata["duration"],
+                    "source_audio_sha256": review["audio_sha256"]["vocals"],
+                    "reviewed": review.get("reference_reviewed") is True,
+                    "status": "reviewed" if review.get("reference_reviewed") is True else "unreviewed"}
+        else:
+            data = self.read(song_id, "reference.pitch.json")
         try:
             valid = (data["source_audio_sha256"] == hashlib.sha256(self.audio_path(song_id, "vocals").read_bytes()).hexdigest()
                      and not isinstance(data["hop_seconds"], bool)

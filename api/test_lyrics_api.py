@@ -286,3 +286,31 @@ def test_preview_rejects_changed_source_and_invalid_reference(song):
     data["source_audio_sha256"] = "0" * 64
     path.write_text(json.dumps(data))
     assert TestClient(create_app(root, True)).get("/api/songs/test-song/lyrics/preview").status_code == 422
+
+
+@pytest.mark.parametrize("changed", [None, "manifest", "audio"])
+def test_portable_handoff_works_without_analysis_caches_and_rejects_changes(song, changed):
+    from ml.pipeline.manifest import write_manifest
+    root, folder, track = song
+    prepare_preview(folder, track)
+    write_manifest(folder)
+    for relative in ("preparation.json", "reference.pitch.json", "alignment/lyrics.aligned.json"):
+        (folder / relative).unlink()
+    if changed == "manifest":
+        path = folder / "song.json"
+        data = json.loads(path.read_text())
+        data["title"] = "Changed since packaging"
+        path.write_text(json.dumps(data))
+    elif changed == "audio":
+        (folder / "instrumental.wav").write_bytes(b"changed audio")
+    client = TestClient(create_app(root, True))
+    preview = client.get("/api/songs/test-song/lyrics/preview")
+    reference = client.get("/api/songs/test-song/reference")
+    if changed:
+        assert preview.status_code == reference.status_code == 422
+        return
+    assert preview.status_code == reference.status_code == 200
+    assert len(preview.json()["lines"]) == 2
+    assert preview.json()["reviewed"] is False
+    assert client.get("/api/songs/test-song/lyrics").json()["status"] == "unavailable"
+    assert client.post("/api/songs/test-song/score-preview", json={"observations": []}).json()["total"] == 0

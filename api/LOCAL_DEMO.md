@@ -1,11 +1,27 @@
 # Prepared songs and synchronized lyrics
 
-This is the first backend slice: catalog, local audio playback, reviewed lyric
+This local preview provides catalog, audio playback, reviewed lyric
 JSON, VTT subtitles, and a timestamp lookup for debugging. It does not load
 PyTorch/Demucs, run inference, or generate lyrics during playback. No database
 is required for these prepared file assets.
 
 ## Run locally (PowerShell, repository root)
+
+The main backend mounts the preview at `/karaoke/live/`. Start the normal
+backend with the local audio flag enabled, then use **SOLO SING** from the home
+screen:
+
+```powershell
+$env:JUST_SING_LOCAL_DEMO_AUDIO = "1"
+api/.venv/Scripts/python.exe -m uvicorn api.main:app --host 127.0.0.1 --port 8000
+```
+
+The built React home page requires `npm ci` and `npm run build` in `web/`;
+the preview itself also opens directly at **http://127.0.0.1:8000/karaoke/live/**.
+Vite development proxies `/karaoke` to the same backend. Existing `/api/clips`,
+session, practice, room and coaching routes keep their original paths.
+
+For the standalone preview without the main home page:
 
 ```powershell
 uv --cache-dir ml/data/.uv-cache venv --python 3.11 api/.venv
@@ -18,6 +34,14 @@ Open **http://127.0.0.1:8000/live/** for the local karaoke preview, or
 `http://127.0.0.1:8000/docs` for the API. The default data directory is `ml/data/`;
 override it with `JUST_SING_DATA_DIR`. Localhost Vite origins on port 5173 are
 allowed. The backend binds to loopback in the documented command.
+
+To transfer the prepared demo songs to another checkout, extract the local
+`karaoke-demo-handoff.zip` into `ml/data/` (or a separate directory selected by
+`JUST_SING_DATA_DIR`). Each song folder needs `song.json`, `song.review.json`,
+`vocals.mp3` and `instrumental.mp3`. The manifest embeds its reference and
+timestamps; separate analysis caches are optional. The API verifies manifest
+and audio hashes and continues to label these packages as drafts. Media and
+lyric-bearing manifests remain outside Git.
 
 Audio serving defaults to disabled. The explicit local-demo flag above is for
 team-machine use: `CLAUDE.md` prohibits serving copyrighted demo audio from the
