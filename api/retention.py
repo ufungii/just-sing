@@ -37,17 +37,19 @@ def reconcile_attempts() -> int:
     """Turn attempts still 'started' past their deadline were lost (tab closed, connection gone).
     Invalidate them and mark the match retry_required, so players get a recovery state, not a score."""
     with Session(get_engine()) as s:
-        late = s.scalars(select(TurnAttempt).where(TurnAttempt.state == "started",
-                                                   TurnAttempt.deadline_at < datetime.now(timezone.utc))
-                         .with_for_update(skip_locked=True)).all()
+        late = s.scalars(select(TurnAttempt.id).where(TurnAttempt.state == "started",
+                                                      TurnAttempt.deadline_at < datetime.now(timezone.utc))).all()
         changed = []
-        for a in late:
+        for attempt_id in late:
+            m, a = play.lock_turn(s, attempt_id)  # same lock order as the request handlers
+            if a.state != "started" or a.deadline_at >= datetime.now(timezone.utc):
+                s.commit()  # finished or retried meanwhile; release the locks
+                continue
             a.state = "invalidated"
-            m = s.get(Match, a.match_id)
             if m.state == "active":
                 m.state = "retry_required"
                 changed.append(m)
-        s.commit()
+            s.commit()
         for m in changed:
             play.notify(s, m, "retry_required")
         return len(late)

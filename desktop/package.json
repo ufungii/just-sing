@@ -1,0 +1,14 @@
+{
+  "name": "just-sing-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron shell for Just Sing!: one window that loads the shared server's URL.",
+  "type": "commonjs",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^44.8.0"
+  }
+}
