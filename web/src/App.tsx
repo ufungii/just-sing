@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavContext } from './routes';
 import type { Nav, Route, SingSetup } from './routes';
 import { setMenuMusicWanted } from './lib/menuMusic';
-import { MusicToggle } from './ui/MusicToggle';
 import { Home } from './screens/Home/Home';
 import { SoloSetup } from './screens/Solo/SoloSetup';
 import { Sing } from './screens/Sing/Sing';
@@ -30,7 +29,6 @@ export function App() {
   return (
     <NavContext.Provider value={nav}>
       {renderRoute(route, go)}
-      {music && <MusicToggle />}
     </NavContext.Provider>
   );
 }
