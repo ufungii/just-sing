@@ -1,0 +1,48 @@
+"""Every contracts/ example must load through its model, and the API must serve the catalog."""
+import json
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from api.main import app
+from api.models import ErrorEnvelope, Practice, Score, Song
+
+CONTRACTS = Path(__file__).parents[2] / "contracts"
+
+
+@pytest.mark.parametrize("name,model", [
+    ("song", Song), ("score", Score), ("practice", Practice), ("error", ErrorEnvelope)])
+def test_example_matches_model(name, model):
+    model.model_validate(json.loads((CONTRACTS / f"{name}.example.json").read_text(encoding="utf-8")))
+
+
+client = TestClient(app)
+
+
+def test_endpoints():
+    assert client.get("/api/health").json() == {"status": "ok"}
+    assert client.get("/api/ready").json()["catalog"] is True
+    clip = client.get("/api/clips").json()[0]
+    assert clip["synthetic"] is True
+    assert client.get(f"/api/clips/{clip['id']}/manifest").json()["id"] == clip["id"]
+
+
+def test_unknown_clip_uses_error_envelope():
+    r = client.get("/api/clips/nope/manifest")
+    assert r.status_code == 404
+    ErrorEnvelope.model_validate(r.json())
+
+
+def test_audio_served_with_range_and_missing_is_actionable():
+    from api.main import CATALOG_DIR
+    r = client.get("/api/clips/synthetic-demo/audio")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "audio_missing"
+    f = CATALOG_DIR / "synthetic-demo" / "instrumental.mp3"  # *.mp3 is gitignored
+    f.write_bytes(b"0123456789")
+    try:
+        assert client.get("/api/clips/synthetic-demo/audio").content == b"0123456789"
+        part = client.get("/api/clips/synthetic-demo/audio", headers={"Range": "bytes=2-4"})
+        assert part.status_code == 206 and part.content == b"234"
+    finally:
+        f.unlink()
