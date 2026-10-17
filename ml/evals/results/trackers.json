@@ -1,0 +1,190 @@
+{
+  "accuracy": {
+    "clean": {
+      "pyin": {
+        "score_vs_truth": 97.6421642134187,
+        "voicing_recall": 0.9985601151907847,
+        "false_voicing": 0.26,
+        "median_err_cents": 9.209719404553892,
+        "gross_err_share": 0.020906440283042
+      },
+      "crepe": {
+        "score_vs_truth": 97.57498724868795,
+        "voicing_recall": 1.0,
+        "false_voicing": 0.14,
+        "median_err_cents": 7.300993047347529,
+        "gross_err_share": 0.0251979841612671
+      },
+      "mpm": {
+        "score_vs_truth": 91.5948275862069,
+        "voicing_recall": 0.9244060475161987,
+        "false_voicing": 0.20000000000000004,
+        "median_err_cents": 5.786716301421101,
+        "gross_err_share": 0.007009371303840432
+      }
+    },
+    "noise 20 dB": {
+      "pyin": {
+        "score_vs_truth": 97.64695348544934,
+        "voicing_recall": 0.9985601151907847,
+        "false_voicing": 0.20000000000000004,
+        "median_err_cents": 9.209719404553892,
+        "gross_err_share": 0.020906440283042
+      },
+      "crepe": {
+        "score_vs_truth": 97.53782809146328,
+        "voicing_recall": 0.9992800575953923,
+        "false_voicing": 0.12,
+        "median_err_cents": 7.2496776844669,
+        "gross_err_share": 0.025216683963984177
+      },
+      "mpm": {
+        "score_vs_truth": 90.73275862068965,
+        "voicing_recall": 0.9157667386609072,
+        "false_voicing": 0.12,
+        "median_err_cents": 5.81029854061249,
+        "gross_err_share": 0.007075497936361752
+      }
+    },
+    "noise 10 dB": {
+      "pyin": {
+        "score_vs_truth": 97.503653811405,
+        "voicing_recall": 0.9935205183585313,
+        "false_voicing": 0.20000000000000004,
+        "median_err_cents": 9.209719404553509,
+        "gross_err_share": 0.017391304347826087
+      },
+      "crepe": {
+        "score_vs_truth": 97.49811840518441,
+        "voicing_recall": 0.9978401727861771,
+        "false_voicing": 0.12,
+        "median_err_cents": 7.988713583515751,
+        "gross_err_share": 0.024531024531024532
+      },
+      "mpm": {
+        "score_vs_truth": 83.97988505747128,
+        "voicing_recall": 0.8416126709863211,
+        "false_voicing": 0.0,
+        "median_err_cents": 5.47355774212409,
+        "gross_err_share": 0.0
+      }
+    },
+    "noise 5 dB": {
+      "pyin": {
+        "score_vs_truth": 96.46513875450411,
+        "voicing_recall": 0.9776817854571634,
+        "false_voicing": 0.18666666666666668,
+        "median_err_cents": 9.209719404554018,
+        "gross_err_share": 0.012520593617118261
+      },
+      "crepe": {
+        "score_vs_truth": 97.40187127467163,
+        "voicing_recall": 0.9978401727861771,
+        "false_voicing": 0.12,
+        "median_err_cents": 7.5088129814707605,
+        "gross_err_share": 0.023088023088023088
+      },
+      "mpm": {
+        "score_vs_truth": 0.0,
+        "voicing_recall": 0.0,
+        "false_voicing": 0.0,
+        "median_err_cents": NaN,
+        "gross_err_share": NaN
+      }
+    },
+    "detuned 100 cents": {
+      "pyin": {
+        "score_vs_truth": 64.82091918565602,
+        "voicing_recall": 0.9935205183585314,
+        "false_voicing": 0.28,
+        "median_err_cents": 100.26342686514856,
+        "gross_err_share": 0.5101744537683247
+      },
+      "crepe": {
+        "score_vs_truth": 65.34412533655525,
+        "voicing_recall": 0.9992800575953923,
+        "false_voicing": 0.1466666666666667,
+        "median_err_cents": 100.12346489467002,
+        "gross_err_share": 0.505048946733612
+      },
+      "mpm": {
+        "score_vs_truth": 61.18788405823409,
+        "voicing_recall": 0.9402447804175665,
+        "false_voicing": 0.20000000000000004,
+        "median_err_cents": 100.41721618696444,
+        "gross_err_share": 0.5160392489994773
+      }
+    },
+    "late 0.2 s": {
+      "pyin": {
+        "score_vs_truth": 74.20700433463507,
+        "voicing_recall": 0.9576149425287356,
+        "false_voicing": 0.5,
+        "median_err_cents": 9.209719404554018,
+        "gross_err_share": 0.2288059789822541
+      },
+      "crepe": {
+        "score_vs_truth": 72.45496867516921,
+        "voicing_recall": 0.9482758620689656,
+        "false_voicing": 0.44,
+        "median_err_cents": 9.796039335667988,
+        "gross_err_share": 0.24545454545454545
+      },
+      "mpm": {
+        "score_vs_truth": 69.23385670085007,
+        "voicing_recall": 0.8793103448275863,
+        "false_voicing": 0.46,
+        "median_err_cents": 6.725998914465669,
+        "gross_err_share": 0.21486813749146552
+      }
+    }
+  },
+  "pairing": {
+    "clean": {
+      "crepe ref vs crepe player": 99.56666666666666,
+      "crepe ref vs mpm player (live game)": 93.43333333333332
+    },
+    "noise 20 dB": {
+      "crepe ref vs crepe player": 99.33333333333333,
+      "crepe ref vs mpm player (live game)": 92.5
+    },
+    "noise 10 dB": {
+      "crepe ref vs crepe player": 99.3,
+      "crepe ref vs mpm player (live game)": 86.26666666666667
+    },
+    "noise 5 dB": {
+      "crepe ref vs crepe player": 99.2,
+      "crepe ref vs mpm player (live game)": 0.0
+    },
+    "detuned 100 cents": {
+      "crepe ref vs crepe player": 71.56666666666666,
+      "crepe ref vs mpm player (live game)": 68.13333333333334
+    },
+    "late 0.2 s": {
+      "crepe ref vs crepe player": 70.0,
+      "crepe ref vs mpm player (live game)": 66.56666666666666
+    }
+  },
+  "clarity": {
+    "0.7": {
+      "clean": 97.26666666666667,
+      "noise 10 dB": 96.39999999999999,
+      "noise only (no voice)": 0.0
+    },
+    "0.8": {
+      "clean": 96.23333333333335,
+      "noise 10 dB": 92.89999999999999,
+      "noise only (no voice)": 0.0
+    },
+    "0.9": {
+      "clean": 93.43333333333332,
+      "noise 10 dB": 86.26666666666667,
+      "noise only (no voice)": 0.0
+    },
+    "0.95": {
+      "clean": 91.33333333333333,
+      "noise 10 dB": 0.0,
+      "noise only (no voice)": 0.0
+    }
+  }
+}
