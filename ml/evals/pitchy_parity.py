@@ -29,6 +29,23 @@ CONFIGS = [  # (label, sample_rate, window, clarity, gate)
 ]
 
 
+def browser_smooth(track: np.ndarray) -> np.ndarray:
+    """Python twin of smoothFrame() in web/src/audio/pitchTracker.ts: octave-glitch fix, then a 5-frame
+    median over voiced frames; unvoiced stays unvoiced. Keep the two in step."""
+    n, out = len(track), np.full(len(track), np.nan)
+    fixed = track.copy()
+    for j in range(1, n - 1):
+        v, a, b = track[j], track[j - 1], track[j + 1]
+        if np.isfinite([v, a, b]).all() and abs(1200 * np.log2(a / b)) < 100 and all(
+                abs(abs(1200 * np.log2(v / x)) - 1200) < 150 for x in (a, b)):
+            fixed[j] = np.sqrt(a * b)
+    for i in np.flatnonzero(np.isfinite(track)):
+        w = fixed[max(0, i - 2): i + 3]
+        w = np.sort(w[np.isfinite(w)])
+        out[i] = w[len(w) // 2] if len(w) % 2 else np.sqrt(w[len(w) // 2 - 1] * w[len(w) // 2])
+    return out
+
+
 def agreement(a: np.ndarray, b: np.ndarray) -> dict:
     n = min(len(a), len(b))
     a, b = a[:n], b[:n]
@@ -49,8 +66,8 @@ def main() -> None:
           "Same audio, same settings: `ml/evals/mpm.py` (our emulation) vs pitchy@4.1.0 run in Node "
           "(`ml/evals/node/pitchy_track.mjs`). 'Perfect take' = the clip's own vocal scored against its manifest "
           "reference (CREPE-made), so it measures tracker disagreement, not singing.", "",
-          "| Clip | Setting | Voiced (real / emulated) | Voicing agreement | Pitch within 1 semitone | Perfect take: real / emulated |",
-          "|---|---|---|---|---|---|"]
+          "| Clip | Setting | Voiced (real / emulated) | Voicing agreement | Pitch within 1 semitone | Perfect take: real / emulated | Real, browser-smoothed |",
+          "|---|---|---|---|---|---|---|"]
     for k, clip in enumerate(clips, 1):
         m = json.loads((clip / "song.json").read_text(encoding="utf-8"))
         ref = to_track(m["reference"]["hz"])
@@ -64,8 +81,9 @@ def main() -> None:
             a = agreement(real, emu)
             s_real = score_turn(real, ref, phrases, ref_onsets=onsets)["total"]
             s_emu = score_turn(emu, ref, phrases, ref_onsets=onsets)["total"]
+            s_smooth = score_turn(browser_smooth(real), ref, phrases, ref_onsets=onsets)["total"]
             row = (f"| Clip {k} | {label} | {a['voiced_real']:.0%} / {a['voiced_emulated']:.0%} | "
-                   f"{a['voicing_agreement']:.0%} | {a['within_semitone']:.0%} | {s_real:.1f} / {s_emu:.1f} |")
+                   f"{a['voicing_agreement']:.0%} | {a['within_semitone']:.0%} | {s_real:.1f} / {s_emu:.1f} | {s_smooth:.1f} |")
             md.append(row)
             print(row, flush=True)
     RESULTS.mkdir(exist_ok=True)

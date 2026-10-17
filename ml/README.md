@@ -79,6 +79,8 @@ A synthetic voice-like melody is damaged at increasing severity, rendered to aud
 | White noise | ~97 down to 5 dB SNR, then collapses | −0.92 |
 | Slower tempo | 76 at 5% slower; non-monotonic at extremes | −0.82 |
 
+**Scoring version 0.3.0 (looser grading, a chosen default, not a validated one).** Players found 0.2.0 too harsh, so full pitch credit now extends to 70 cents (was 50) and the rating bands are Perfect 82 / Great 65 / Okay 50 (were 90 / 75 / 50). Phrase ratings on the synthetic melody (9 phrases per row, 3 seeds): reference-like take 9 Perfect; every note off by up to 50 cents 9 Perfect; up to 100 cents was 9 Okay and is now 1 Perfect + 8 Great (a semitone-off take now reads Great, which is the cost of loosening); 200 and 300 cents 9 Bad; silence 9 Miss. Spearman for local degradations is unchanged within 0.01 (detune -0.958, skipped -0.990, noise -0.920, late -0.971, tempo -0.819). The browser tracker also smooths its pitch (5-frame median, octave-glitch fix); `pitchy_parity.md` has a column scoring the real Pitchy track with that smoothing: perfect-take totals move by 0.0-0.6 points, so it reduces visible jitter without changing scores.
+
 Sanity checks pass: silence 0, noise only 3.5, octave up 97 with the right register and 20 without, identical input gives identical output.
 
 ### Trackers: browser vs reference (`tracker_eval.py` → `results/trackers.md`)
