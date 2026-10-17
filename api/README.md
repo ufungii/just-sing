@@ -254,7 +254,9 @@ uvicorn api.main:app                    # restart to pick up new songs
   Drafts are served too, so they can be played and tried, and the UI should label them. A song with no review file counts as
   not reviewed.
 - **`practice_text`:** a line cut off at the clip edge has `practice_text: ""` and no phrase, and that is fine. A line that
-  has a phrase must have `practice_text`, or the song fails to load.
+  has a singing phrase may still have empty `practice_text` (English/mixed-language lyrics).
+  Spoken practice separately requires Korean-only `practice_text`; unsupported phrases return
+  `422 practice_not_supported` before decoding or calling the model.
 - **Errors name the folder:** an invalid `song.json`, or two songs with the same `id`, stop the server at startup with the path.
 - **Audio:** `audio.instrumental` is a path relative to the song's folder. Only the instrumental is served.
 

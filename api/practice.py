@@ -11,6 +11,8 @@ from typing import Protocol
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.orm import Session
 
+from ml.pronunciation.eligibility import is_spoken_korean
+
 from .errors import ApiError
 from .clip_catalog import CATALOG
 from .models import Practice, WordFeedback
@@ -91,7 +93,10 @@ def practice(clip_id: str = Form(), phrase_id: str = Form(), audio: UploadFile =
     phrase = song and next((p for p in song.phrases if p.id == phrase_id), None)
     if not phrase:
         raise ApiError(404, "phrase_not_found", "Unknown clip or phrase.")
-    expected = song.lines[phrase.line_index].practice_text
+    expected = song.lines[phrase.line_index].practice_text.strip()
+    if not is_spoken_korean(expected):
+        raise ApiError(422, "practice_not_supported",
+                       "Choose a Korean-only line with spoken-practice text.")
 
     provider, status, words, overall = (scorer.provider if scorer else "none"), "unavailable", [], None
     with tempfile.TemporaryDirectory() as d:  # deleted on success, error and timeout alike
