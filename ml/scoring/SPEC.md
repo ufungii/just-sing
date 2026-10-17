@@ -2,7 +2,7 @@
 
 The browser must rate phrases live with exactly the same math as the Python reference in `ml/scoring/`. This page is the language-neutral spec; `contracts/fixtures/` holds the test cases both implementations must pass. If this page and the Python code ever disagree, the code plus fixtures win: tell ML B.
 
-Scoring version: `0.1.0` (`SCORING_VERSION` in `ml/scoring/config.py`). Any change that can change a score bumps it and regenerates the fixtures.
+Scoring version: `0.2.0` (`SCORING_VERSION` in `ml/scoring/config.py`). Any change that can change a score bumps it and regenerates the fixtures.
 
 ## 1. Inputs and conventions
 
@@ -11,7 +11,7 @@ Scoring version: `0.1.0` (`SCORING_VERSION` in `ml/scoring/config.py`). Any chan
 - **Reference:** `ref_hz` from the manifest (`reference.hz`), plus `phrases` (`id`, `start`, `end`), `excluded` (`start`, `end`), and the reference note starts `ref_onsets` (seconds).
 - **Player:** `user_hz` from Pitchy at the same hop (resample or bucket your tracker output to 20 ms frames).
 - **Settings for a turn:** `register` in semitones (`-12`, `0`, or `12`) and `latency_offset_s` (measured once in the setup step).
-- `round(x)` below means round to the nearest integer. The Python reference uses round-half-even; ties practically never occur on these values.
+- `round(x)` below means round to the nearest integer, **ties to the nearest even integer** (Python's `round`; implement a `roundHalfEven` helper, because JavaScript's `Math.round` rounds ties up). Ties do occur: a phrase boundary of `x.5` frames is common. The first TypeScript port shifted frame indices by one because of this.
 
 ## 2. Config (defaults)
 
@@ -19,7 +19,7 @@ Scoring version: `0.1.0` (`SCORING_VERSION` in `ml/scoring/config.py`). Any chan
 |---|---|---|
 | `full_credit_cents` | 50 | pitch error with full credit |
 | `zero_credit_cents` | 200 | pitch error where credit reaches 0 |
-| `time_tolerance_s` | 0 | pitch may match this early/late (0 = strict). **Implement it even though it is 0.** |
+| `time_tolerance_s` | 0.1 | the player's track may be shifted up to this much, earlier or later, **once per phrase** (0 = strict). Section 4. |
 | `full_credit_s` | 0.10 | timing offset with full credit |
 | `zero_credit_s` | 0.40 | timing offset where credit reaches 0 |
 | `match_window_s` | 0.50 | max distance to match a note start |
@@ -33,7 +33,7 @@ Scoring version: `0.1.0` (`SCORING_VERSION` in `ml/scoring/config.py`). Any chan
 ## 3. Preparing the player track
 
 1. **Latency:** `n = round(latency_offset_s / hop)`. If `n > 0`, drop the first `n` frames of `user_hz` and append `n` unvoiced frames at the end. Do this **once**; both pitch and timing use the corrected track.
-2. **Length (pitch only):** make a copy padded with unvoiced frames or truncated to `len(ref_hz)`. Timing uses the corrected track at its full length.
+2. **Length (pitch only):** make a copy padded with unvoiced frames or truncated to `len(ref_hz) + k`, where `k = round(time_tolerance_s / hop)` (the `k` extra frames let a shift reach the tail of a late take). Timing uses the corrected track at its full length.
 
 Keep recording about 0.5 s past the clip end, so step 1 doesn't cut off the last note.
 
@@ -49,9 +49,11 @@ err    = 1200 * log2(u / t)
 credit = clamp((zero_credit_cents - |err|) / (zero_credit_cents - full_credit_cents), 0, 1)
 ```
 
-**With time tolerance:** `k = round(time_tolerance_s / hop)`. For each frame `i`, look at user frames `i + off` for every `off` in `[-k, k]` (outside the array = unvoiced). Then:
-- `credit[i]` = the maximum frame credit over those frames, counting only frames where `mask[i]` is true and the shifted user frame is voiced (otherwise 0);
-- `user_voiced[i]` = true if any of those frames is voiced.
+**With time tolerance:** `k = round(time_tolerance_s / hop)`. For every shift `off` in `[-k, k]`, build the shifted user track `shifted_off[i] = user[i + off]` (outside the array = unvoiced) and compute `credit_off[i]` and `voiced_off[i]` for every frame as above.
+
+**Choose ONE shift per span** (see "For a span of frames" below): the `off` that maximizes the sum of `credit_off[i]` over the span's scoreable frames; ties keep the smallest `|off|`, then the negative one. That span then uses `credit_off` and `voiced_off` for its `credit_sum` and `voiced`.
+
+Why one shift and not the best frame at each position: picking the luckiest frame everywhere lets a jittery or sweeping pitch track earn credit by chance (random pitches scored 42 under that rule). One consistent shift forgives a consistent lateness of up to `time_tolerance_s`, which the timing score still measures, and nothing else.
 
 With `k = 0` this is simply frame `i` against frame `i`.
 

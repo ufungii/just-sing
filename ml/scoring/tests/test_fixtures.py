@@ -5,6 +5,9 @@ from pathlib import Path
 
 import pytest
 
+from dataclasses import replace
+
+from ml.scoring.config import PitchConfig
 from ml.scoring.pitch import to_track
 from ml.scoring.score import score_turn
 from ml.scoring.timing import onset_times
@@ -29,6 +32,7 @@ def test_score_fixtures_match_engine():
             hop_seconds=i["hop_seconds"], ref_onsets=i["ref_onsets"],
             register=i["register"], latency_offset_s=i["latency_offset_s"],
             excluded=[tuple(e) for e in i["excluded"]],
+            pitch_cfg=replace(PitchConfig(), time_tolerance_s=i["time_tolerance_s"]),
         )
         assert got == case["expected"], case["name"]
 

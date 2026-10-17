@@ -47,25 +47,27 @@ def score(inp):
     n = round(inp["latency_offset_s"] / hop)
     if n > 0:
         user = user[n:] + [None] * n
-    aligned = (user + [None] * len(ref))[:len(ref)]
+    k = round(inp["time_tolerance_s"] / hop)
+    ext = (user + [None] * (len(ref) + k))[:len(ref) + k]   # k extra frames so a shift can reach a late take's tail
 
     mask = [voiced(v) for v in ref]
     for s, e in inp["excluded"]:
         for i in range(max(0, round(s / hop)), min(len(ref), max(0, round(e / hop)))):
             mask[i] = False
     target = [v * 2 ** (inp["register"] / 12) if voiced(v) else None for v in ref]
-    k = round(CFG["tol_s"] / hop)
-    credit, uv = [0.0] * len(ref), [False] * len(ref)
-    for i in range(len(ref)):
-        for off in range(-k, k + 1):
+    # credit and voicing at every candidate shift of the user's track (in frames)
+    per_off = {}
+    for off in range(-k, k + 1):
+        credit, uv = [0.0] * len(ref), [False] * len(ref)
+        for i in range(len(ref)):
             j = i + off
-            u = aligned[j] if 0 <= j < len(ref) else None
+            u = ext[j] if 0 <= j < len(ext) else None
             if voiced(u):
                 uv[i] = True
                 if mask[i]:
                     err = 1200 * math.log2(u / target[i])
-                    c = clamp((CFG["zero_c"] - abs(err)) / (CFG["zero_c"] - CFG["full_c"]), 0, 1)
-                    credit[i] = max(credit[i], c)
+                    credit[i] = clamp((CFG["zero_c"] - abs(err)) / (CFG["zero_c"] - CFG["full_c"]), 0, 1)
+        per_off[off] = (credit, uv)
 
     ref_on = [t for t in inp["ref_onsets"] if not any(s <= t < e for s, e in inp["excluded"])]
     user_on = onsets(user, hop)
@@ -74,7 +76,14 @@ def score(inp):
     for pid, start, end in inp["phrases"]:
         idx = [i for i in range(round(start / hop), round(end / hop)) if 0 <= i < len(ref) and mask[i]]
         sc = len(idx)
-        pitch = 100 * sum(credit[i] for i in idx) / sc if sc else 0.0
+        # ONE shift per phrase: the one with the most credit; ties keep the smallest |shift|
+        best = None
+        for off in sorted(range(-k, k + 1), key=lambda o: (abs(o), o)):
+            total = sum(per_off[off][0][i] for i in idx)
+            if best is None or total > best[0]:
+                best = (total, off)
+        credit, uv = per_off[best[1]]
+        pitch = 100 * best[0] / sc if sc else 0.0
         cov = sum(uv[i] for i in idx) / sc if sc else 0.0
 
         rs = sorted(t for t in ref_on if start <= t < end)

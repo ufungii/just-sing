@@ -6,13 +6,13 @@
 
 The "take" is the clip's own vocal, so a perfect score is the correct answer. Totals, 0-100:
 
-| Clip | CREPE live vs CREPE reference | Browser-style tracker (MPM), clarity 0.5 | 0.65 | 0.8 | 0.65 + 0.1 s pitch tolerance | **Same tracker for reference and live** |
-|---|---|---|---|---|---|---|
-| Clip 1 | 96.7 | 68.6 | 59.0 | 39.1 | 74.8 | **100** |
-| Clip 2 | 96.3 | 78.7 | 70.9 | 52.9 | 82.0 | **100** |
-| Clip 3 | 96.3 | 79.6 | 65.8 | 37.8 | 79.3 | **100** |
+| Clip | CREPE live vs CREPE reference | Browser-style tracker (MPM), clarity 0.5 | 0.65 | 0.8 | **Same tracker for reference and live** |
+|---|---|---|---|---|---|
+| Clip 1 | 96.7 | 68.6 | 59.0 | 39.1 | **100** |
+| Clip 2 | 95.6 | 78.7 | 70.9 | 52.9 | **100** |
+| Clip 3 | 96.8 | 79.6 | 65.8 | 37.8 | **100** |
 
-(`python -m ml.evals.score_take take clip.json --tracker mpm --clarity 0.65`, with `--ref-audio` for the last column.) "MPM" is our Python emulation of Pitchy's algorithm, checked against the real library in `ml/evals/results/pitchy_parity.md`. Note: a window is a number of samples **at a sample rate**: 4096 at 48 kHz is 85 ms; at 16 kHz it would be 256 ms. Always state both. The last column is a ceiling: the take is the reference audio itself, so tracker errors are perfectly correlated. A different human performance will land lower, but the gap to the other columns shows the problem is the tracker mismatch, not the singer. The fix is to produce `reference.hz` with the tracker the browser runs.
+(`python -m ml.evals.score_take take clip.json --tracker mpm --clarity 0.65`, with `--ref-audio` for the last column.) The 0.1 s pitch time tolerance (the default since scoring version 0.2.0) changes **none** of these numbers: these takes are not late, and the tolerance only forgives lateness. Do not expect it to close the gap between the columns. "MPM" is our Python emulation of Pitchy's algorithm, checked against the real library in `ml/evals/results/pitchy_parity.md`. Note: a window is a number of samples **at a sample rate**: 4096 at 48 kHz is 85 ms; at 16 kHz it would be 256 ms. Always state both. The last column is a ceiling: the take is the reference audio itself, so tracker errors are perfectly correlated. A different human performance will land lower, but the gap to the other columns shows the problem is the tracker mismatch, not the singer. The fix is to produce `reference.hz` with the tracker the browser runs.
 
 ## 2. What to build
 
