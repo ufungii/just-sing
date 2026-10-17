@@ -21,11 +21,10 @@ from sqlalchemy.orm import Session
 
 from . import play
 from .auth import verify_bearer
-from .clip_catalog import CATALOG
 from .db import get_engine
 from .errors import ApiError
 from .play import current_guest, get_db, match_view
-from .tables import Clip, GuestSession, Match, MatchPlayer, Room, RoomMember
+from .tables import GuestSession, Match, Room, RoomMember
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -49,6 +48,11 @@ class Hub:
         self.sockets: dict[uuid.UUID, dict[int, tuple[WebSocket, int]]] = defaultdict(dict)  # room -> id(ws) -> (ws, slot); WebSocket is unhashable
         self.active_slot: dict[uuid.UUID, int | None] = {}  # who may relay progress right now
         self.loop: asyncio.AbstractEventLoop | None = None
+
+    def track_turn(self, room_id, snap: dict):
+        """Remember whose turn it is, so progress from anyone else is refused without a DB read."""
+        match = snap["match"]
+        self.active_slot[room_id] = match["active_slot"] if match and match["state"] == "active" else None
 
     def present(self, room_id) -> set[int]:
         return {slot for _, slot in self.sockets[room_id].values()}
@@ -87,7 +91,7 @@ def publish(s: Session, room: Room, *extra: dict):
     """After a durable change commits: bump nothing here, just tell everyone the new truth."""
     s.refresh(room)
     snap = snapshot(s, room)
-    hub.active_slot[room.id] = snap["match"]["active_slot"] if snap["match"] and snap["match"]["state"] == "active" else None
+    hub.track_turn(room.id, snap)
     hub.broadcast_threadsafe(room.id, _event("room_snapshot", **snap))
     for e in extra:
         hub.broadcast_threadsafe(room.id, e)
@@ -116,15 +120,6 @@ def _host_only(room: Room, guest: GuestSession):
         raise ApiError(403, "host_only", "Only the host can do that.")
 
 
-def _clip(s: Session, clip_id: str):
-    song = CATALOG.get(clip_id)
-    if not song:
-        raise ApiError(404, "clip_not_found", f"No clip with id '{clip_id}'.")
-    if not s.get(Clip, (song.id, song.version)):
-        raise ApiError(503, "catalog_not_seeded", "Clip metadata is missing; run python -m api.seed.")
-    return song
-
-
 # ---- HTTP: durable actions -------------------------------------------------------------------
 
 class RoomIn(BaseModel):
@@ -141,7 +136,7 @@ class ReadyIn(BaseModel):
 
 @router.post("/api/rooms")
 def create_room(body: RoomIn, guest=Depends(current_guest), s: Session = Depends(get_db)):
-    song = _clip(s, body.clip_id)
+    song = play.require_clip(s, body.clip_id)
     for _ in range(5):  # a code collision is rare; retry
         room = Room(code="".join(secrets.choice(CODE_ALPHABET) for _ in range(5)), host_guest_id=guest.id,
                     clip_id=song.id, clip_version=song.version, expires_at=datetime.now(timezone.utc) + ROOM_TTL)
@@ -216,7 +211,7 @@ def change_clip(room_id: uuid.UUID, body: RoomIn, guest=Depends(current_guest), 
     _host_only(room, guest)
     if room.state != "lobby":
         raise ApiError(409, "room_started", "The room is no longer in the lobby.")
-    song = _clip(s, body.clip_id)
+    song = play.require_clip(s, body.clip_id)
     room.clip_id, room.clip_version = song.id, song.version
     for m in s.scalars(select(RoomMember).where(RoomMember.room_id == room.id)):
         m.ready = False  # a new clip needs a fresh yes from everyone
@@ -327,7 +322,7 @@ def _snapshot_event(room_id: uuid.UUID) -> dict | None:
         if not room:
             return None
         snap = snapshot(s, room)
-        hub.active_slot[room_id] = snap["match"]["active_slot"] if snap["match"] and snap["match"]["state"] == "active" else None
+        hub.track_turn(room_id, snap)
         return _event("room_snapshot", **snap)
 
 

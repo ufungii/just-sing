@@ -123,14 +123,20 @@ def create_guest(body: GuestIn, response: Response, s: Session = Depends(get_db)
     return {"id": guest.id, "display_name": guest.display_name}
 
 
-def _new_match(s: Session, guest: GuestSession, clip_id: str, names: list[str],
-               previous: uuid.UUID | None = None, room_id: uuid.UUID | None = None):
-    """Create a match and its first attempt. The caller commits, so it can join other changes."""
+def require_clip(s: Session, clip_id: str):
+    """The loaded song, or a 404 (unknown id) / 503 (not yet seeded into the database)."""
     song = CATALOG.get(clip_id)
     if not song:
         raise ApiError(404, "clip_not_found", f"No clip with id '{clip_id}'.")
     if not s.get(Clip, (song.id, song.version)):
         raise ApiError(503, "catalog_not_seeded", "Clip metadata is missing; run python -m api.seed.")
+    return song
+
+
+def _new_match(s: Session, guest: GuestSession, clip_id: str, names: list[str],
+               previous: uuid.UUID | None = None, room_id: uuid.UUID | None = None):
+    """Create a match and its first attempt. The caller commits, so it can join other changes."""
+    song = require_clip(s, clip_id)
     match = Match(guest_id=guest.id, mode="online" if room_id else "solo" if len(names) == 1 else "local",
                   clip_id=song.id, clip_version=song.version, scoring_version=SCORING_VERSION,
                   previous_match_id=previous, room_id=room_id)
