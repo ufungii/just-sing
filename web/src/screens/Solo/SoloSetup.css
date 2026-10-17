@@ -1,0 +1,255 @@
+/*
+ * Solo setup screen. Panels, keycaps and notices come from the shared kit (src/ui); this file
+ * only lays them out and draws the screen's own pieces: song cards, name input, level meter,
+ * and the tap keycap for the timing check.
+ */
+
+.solo-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    'songs side'
+    'go    side';
+  gap: 28px;
+  align-items: start;
+}
+.solo-songs { grid-area: songs; }
+.solo-side { grid-area: side; }
+.solo-go { grid-area: go; }
+
+.solo-side {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.solo-hint {
+  margin: 10px 0 0;
+  font-size: 16px;
+  line-height: 1.3;
+}
+.solo-small { font-size: 14px; }
+
+/* ---------- song cards ---------- */
+
+.solo-clips {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin: 0;
+  padding: 0 10px 10px 0;
+  list-style: none;
+}
+
+.solo-clip {
+  --face: var(--paper);
+  --bevel: #ffffff;
+  --side: #f3d5e6;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 14px 18px 16px;
+  border: var(--border-thin) solid var(--ink);
+  background: var(--face);
+  color: var(--ink);
+  text-align: left;
+  box-shadow:
+    inset 4px 4px 0 var(--bevel),
+    inset -4px -6px 0 var(--side),
+    6px 8px 0 var(--ink);
+  transition: transform 0.08s steps(2), box-shadow 0.08s steps(2);
+}
+.solo-clip:hover {
+  transform: translate(-2px, -3px);
+  box-shadow:
+    inset 4px 4px 0 var(--bevel),
+    inset -4px -6px 0 var(--side),
+    8px 11px 0 var(--ink);
+}
+.solo-clip:active {
+  transform: translate(5px, 7px);
+  box-shadow:
+    inset 4px 4px 0 var(--bevel),
+    inset -4px -6px 0 var(--side),
+    1px 1px 0 var(--ink);
+}
+.solo-clip.is-selected {
+  --face: var(--butter);
+  --bevel: #fff0a8;
+  --side: #c9a400;
+  transform: translate(-2px, -3px);
+  box-shadow:
+    inset 4px 4px 0 var(--bevel),
+    inset -4px -6px 0 var(--side),
+    8px 11px 0 var(--ink);
+}
+.solo-clip:focus-visible,
+.solo-tap:focus-visible,
+.solo-input:focus-visible {
+  outline: 4px dashed var(--hot);
+  outline-offset: 5px;
+}
+
+.solo-clip__title { font-family: var(--font-display); font-weight: 700; font-size: 20px; line-height: 1.1; }
+.solo-clip__artist { font-size: 17px; }
+.solo-clip__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-family: var(--font-display);
+  font-size: 13px;
+}
+.solo-clip__check { color: var(--hot-dark); }
+
+.solo-tag {
+  padding: 2px 8px;
+  border: 3px solid var(--ink);
+  background: var(--lav-light);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+/* ---------- name + range ---------- */
+
+.solo-you { display: flex; flex-direction: column; gap: 12px; }
+.solo-field { display: flex; flex-direction: column; gap: 8px; }
+.solo-field__label { font-family: var(--font-display); font-weight: 700; font-size: 13px; }
+
+.solo-input {
+  width: 100%;
+  max-width: 420px;
+  min-height: 46px;
+  padding: 6px 14px;
+  border: var(--border-thin) solid var(--ink);
+  background: #ffffff;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 20px;
+  box-shadow: inset 4px 4px 0 #f3d5e6;
+}
+.solo-input::placeholder { color: var(--ink-rose); opacity: 0.6; }
+
+/* ---------- mic level meter ---------- */
+
+.solo-mic__row,
+.solo-timing__row {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+
+.solo-meter {
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  border: var(--border-thin) solid var(--ink);
+  background: var(--ink);
+}
+.solo-meter__cell {
+  width: 14px;
+  height: 26px;
+  background: #5a3a60;
+}
+.solo-meter__cell.is-lit { background: var(--mint); }
+.solo-meter__cell.is-lit.is-warm { background: var(--butter); }
+.solo-meter__cell.is-lit.is-hot { background: var(--hot); }
+
+.solo-mic .ui-notice,
+.solo-timing .ui-notice { margin-top: 14px; }
+
+/* ---------- timing check ---------- */
+
+.solo-timing .solo-hint { margin: 0 0 10px; }
+
+.solo-tap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 128px;
+  height: 104px;
+  border: var(--border) solid var(--ink);
+  background: var(--butter);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 28px;
+  touch-action: manipulation;
+  user-select: none;
+  box-shadow:
+    inset 5px 5px 0 #fff0a8,
+    inset -5px -7px 0 #c9a400,
+    8px 10px 0 var(--ink);
+}
+.solo-tap__sub { font-size: 12px; }
+.solo-tap.is-hit,
+.solo-tap:active:not(:disabled) {
+  transform: translate(6px, 8px);
+  box-shadow:
+    inset 5px 5px 0 #fff0a8,
+    inset -5px -7px 0 #c9a400,
+    2px 2px 0 var(--ink);
+}
+.solo-tap:disabled {
+  cursor: default;
+  border-style: dashed;
+  opacity: 0.6;
+}
+
+.solo-timing__side { display: flex; flex-direction: column; gap: 10px; flex: 1 1 260px; }
+
+.solo-beats { display: flex; gap: 8px; }
+.solo-beat {
+  width: 22px;
+  height: 22px;
+  border: 3px solid var(--ink);
+  background: var(--paper);
+}
+.solo-beat.is-on { background: var(--lav-dark); }
+.solo-beat.is-now { background: var(--hot); }
+
+.solo-timing__readout {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+}
+.solo-timing__buttons { display: flex; gap: 14px; flex-wrap: wrap; }
+
+/* ---------- start (under the songs on wide screens, last on narrow ones) ---------- */
+
+.solo-go {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
+  padding-top: 6px;
+}
+.solo-go__status {
+  margin: 0;
+  font-size: 18px;
+  text-align: center;
+}
+.solo-go__actions { display: flex; gap: 14px; flex-wrap: wrap; }
+.solo-start { min-height: 84px; font-size: 30px; }
+
+@media (max-width: 1180px) {
+  .solo-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 24px; }
+  .solo-meter__cell { width: 11px; }
+}
+
+@media (max-width: 860px) {
+  .solo-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas: 'songs' 'side' 'go';
+  }
+}
