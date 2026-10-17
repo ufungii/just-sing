@@ -26,13 +26,17 @@ Updated 2026-10-17. This is the current work list; completed implementation deta
 
 ## Task 2: song author tool — teammate
 
-**Ready to hand off.** Full requirements and code entry points: [author-tool handoff](docs/author-tool-handoff.md).
+**Implemented in this PR.** Setup and use: [author/README.md](author/README.md). Full requirements and code entry points: [author-tool handoff](docs/author-tool-handoff.md).
+
+The standalone loopback editor imports the shared timeline, overlays the vocal waveform/reference pitch, shows original and romanized lyrics, and supports lyric/timing/phrase/exclusion/translation edits, tap-to-sync, whole-line player assignments, and undo/redo. Explicit Save preserves aligner metadata and backs up corrections/review files. Rebuild applies the namespaced author overrides through manifest assembly, including duet sections. Review marking remains an explicit human action. Synthetic unit and browser tests cover persistence and ownership validation; listening accuracy and real reference quality remain human checks. Existing song assets were only read during verification.
 
 Build the standalone localhost-only review app in `author/`, importing the shared timeline from `web/src/`. Show original and romanized lyrics together; support waveform/reference-pitch review, lyric/timing edits, tap-to-sync, and selecting lines to assign Player 1/Player 2. Explicit Save, backups, undo/redo, Rebuild, and review marking are required. Song ingestion and note/octave editing are out of scope.
 
 The runtime now supports the optional duet manifest field; the handoff describes its shape and the remaining author/pipeline integration. Save assignments through corrections and preserve them through Rebuild.
 
 ## Remaining bugs and maintenance
+
+- Local catalog verification found a pre-existing incompatibility: `api.models.Song` rejects scored lines with empty `practice_text`, while the pipeline intentionally leaves mixed/English lines empty for Korean-only pronunciation practice. The author tool reads all ten prepared full/demo manifests, but the main API cannot load that catalog until singing eligibility is separated from pronunciation eligibility. Author regression tests use the built-in synthetic API catalog and do not change existing song assets.
 
 - Verify explicit quitting mid-performance closes the shared duet promptly. Save retry and missed-start/shared-restart now have browser coverage in the verification follow-up.
 - Online: an existing guest name overrides a newly typed name; the singing title omits the online player name.
