@@ -6,9 +6,11 @@
   "type": "commonjs",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build:appimage": "electron-builder --config electron-builder.config.cjs --linux AppImage --x64"
   },
   "devDependencies": {
-    "electron": "^44.8.0"
+    "electron": "^44.8.0",
+    "electron-builder": "^26.15.3"
   }
 }
