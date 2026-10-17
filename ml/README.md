@@ -89,6 +89,8 @@ That was a clean synthetic voice. On a **real vocal stem** the picture is differ
 
 **Frontend:** use Pitchy clarity 0.6-0.7, and show a "we can't hear you" warning when almost no frames are voiced so a mic problem is never scored as bad singing.
 
+**Checked against the real Pitchy.** `pitchy_parity.py` runs pitchy@4.1.0 in Node on the same audio with the same settings: the emulation agrees on 99-100% of pitch values and 89-100% of voicing decisions, and perfect-take scores are within about 1.5 points at clarity 0.8 (a few points optimistic at 0.65). APR's live demo setting (48 kHz, 4096-sample window, clarity 0.8, RMS gate 0.008) scores a perfect take 35-55 against the CREPE reference with the real library (`results/pitchy_parity.md`).
+
 ### Real-voice degradation (`real_audio_eval.py` → `results/real_audio_<clip>.md`)
 The same controlled damage as above, applied to a real vocal stem instead of a synthetic melody (local-only audio; only aggregated numbers are committed). With CREPE tracking, scores still fall in order for local detuning (100 → 84 → 63), lateness (100 → 81 → 61 → 37), dropped seconds, and noise (99 at 30 dB, 76 at 5 dB). The scorer is not an artifact of clean synthetic voices.
 
