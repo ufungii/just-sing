@@ -238,7 +238,7 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
       {phase === 'error' && <PixelButton onClick={() => void restart()}>{setup.online ? 'STOP DUET FOR RESTART' : 'RESTART TOGETHER'}</PixelButton>}
       <Panel>
         {engine.current?.vocals && <><PixelButton aria-pressed={guide} onClick={() => setGuide((v) => !v)}>GUIDE VOCALS</PixelButton><input type="range" aria-label="Guide vocal volume" min={0} max={100} value={guideVolume * 100} onChange={(e) => setGuideVolume(Number(e.target.value) / 100)} /></>}
-        {song && <Lyrics lines={song.lines.filter((_, index) => song.phrases.some((p) => p.line_index === index && owner.has(p.id)))} t={now} showRoman showTrans />}
+        {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman showTrans />}
       </Panel>
     </ScreenShell>
   );

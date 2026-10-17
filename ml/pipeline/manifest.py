@@ -13,6 +13,7 @@ from statistics import median
 from .text import korean_practice_text, apply_cached_translations
 from .common import ROOT, digest, read
 from .author_edits import apply_author_edits
+from .duet import section_plan, assign_sections
 
 GENERATOR = "ml.pipeline.manifest"
 
@@ -142,8 +143,16 @@ def build_manifest(folder):
               "partial_line_indices": sorted(partial_lines),
               "notes": "Automatic lyric/word timing, line-based phrases and display notes need listening review. Verify held-note ends, harmonies and octave errors before judging singers."}
     corrections_path = folder / 'corrections.json'
+    corrections = read(corrections_path) if corrections_path.is_file() else {}
+    plan = section_plan(track, corrections.get('duet'))
+    manifest['duet_sections'], fallback = assign_sections(
+        phrases, plan, short_clip=bool(provenance.get('clip_source_id')))
+    review['duet_assignment'] = {'policy': 'whole_line_demo_split' if fallback else 'song_sections',
+                                 'reviewed': False}
     if corrections_path.is_file():
-        manifest = apply_author_edits(manifest, read(corrections_path).get('author'), hashes)
+        manifest = apply_author_edits(manifest, corrections.get('author'), hashes)
+        if corrections.get('author'):
+            review['duet_assignment']['policy'] = 'author_override' if 'duet_sections' in manifest else 'legacy_fallback'
     return manifest, review
 
 

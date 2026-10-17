@@ -1,5 +1,46 @@
 # Prepared songs and review notes
 
+## Fixed continuous-1v1 arrangements
+
+All thirteen local songs and demos now have explicit `duet_sections`, replacing
+the legacy three-line fallback. Full-song handoffs use saved stanza/verse,
+pre-chorus and chorus boundaries; short intro/ad-lib blocks are merged where
+appropriate. Each scored line belongs to one singer, with stable ownership
+across replays and practice-range filtering. Short demos confined to one section
+use a saved whole-line midpoint handoff so both singers have scored phrases.
+
+`DUET_HANDOFFS.json` in each preparation lists the exact timed assignments.
+`ml/data/duet-arrangements-2026-10-17/` preserves the prior manifests and plans.
+New manifest versions require refreshed demo fingerprints and a new match;
+existing matches keep their original frozen arrangements. Lyrics, reference
+pitch, audio and scoring math are unchanged by this ownership update. Musical
+section labels and the underlying draft timing still require listening review.
+The local `ml/data/handoff/fixed-1v1-arrangements-2026-10-17.zip` contains all
+26 current manifests, saved plans and matching demo fingerprints. It updates
+metadata only; preserve each preparation's existing MP3 pair and restart the API.
+
+## Catalog timing audit — 2026-10-17
+
+All thirteen full songs and their thirteen existing demos passed decoded audio
+length, ordered line/word bounds, parent-to-demo timing, API streaming and
+scoring sanity checks. Vocal excerpts from every demo were checked with
+unprompted ASR; problem sections also used longer probes and selected video
+frames. ASR failed to establish matching entrances in some singing excerpts,
+so this is not a complete listening review or a timing-accuracy measurement.
+
+Recording-specific corrections adjust 38 entrances: Party in the U.S.A. (17),
+Soda Pop (13), Love (4), and Last Christmas (4). Their full manifests are v2;
+three affected demos are v2 with regenerated fingerprints. Love's demo timing
+and manifest are unchanged. Every selected MP3 is unchanged. Cached acoustic
+realignment supplies word highlights inside the corrected windows.
+
+Local evidence, prior drafts and remaining review flags are under
+`ml/data/timing-audit-2026-10-17/`. The updated eight-folder handoff is
+`ml/data/handoff/karaoke-timing-review-2026-10-17.zip`; it supersedes these four
+songs' folders in older local archives. Keep it outside Git. Source cues used
+for corrections cannot independently validate them, and all preparations remain
+drafts pending listening review, including sustained notes and repeated ad-libs.
+
 ## Draft demo lyric fingerprints
 
 The thirteen local 30-second `*-demo` preparations have

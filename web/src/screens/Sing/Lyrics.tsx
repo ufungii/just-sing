@@ -5,13 +5,10 @@
 import type { CSSProperties } from 'react';
 import type { Line, Word } from '../../lib/types';
 
-/** Show a line this many seconds before it starts, so the singer can read ahead. */
-const LEAD = 0.6;
-
-/** Index of the line to show at clip time t (the last line whose lead-in has begun), or -1 before the first. */
+/** Latest line entrance at playback time t. Read-ahead belongs in NEXT, including during rests. */
 export function currentLine(lines: Line[], t: number): number {
   let idx = -1;
-  for (let i = 0; i < lines.length; i++) if (t >= lines[i].start - LEAD) idx = i;
+  for (let i = 0; i < lines.length; i++) if (t >= lines[i].start) idx = i;
   return idx;
 }
 
@@ -36,7 +33,7 @@ export function Lyrics({ lines, t, showRoman, showTrans }: { lines: Line[]; t: n
   // Highlight romanization word by word when it splits into as many words as the Hangul line.
   const roman = line?.romanized.split(/\s+/).filter(Boolean) ?? [];
   const romanWords = line && roman.length === line.words.length ? line.words.map((w, i) => ({ ...w, text: roman[i] })) : null;
-  const done = line && t > line.end + 0.3;
+  const done = line && t >= line.end;
 
   return (
     <div className="sing-lyrics" aria-live="off">
@@ -49,7 +46,7 @@ export function Lyrics({ lines, t, showRoman, showTrans }: { lines: Line[]; t: n
         </>
       ) : (
         <p className="sing-lyrics__rest ui-kao" aria-label="instrumental">
-          ♪ ・ ♪ ・ ♪
+          ♫⋆｡♪ ₊˚♬ﾟ.
         </p>
       )}
       {next && (
