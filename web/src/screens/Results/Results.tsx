@@ -94,7 +94,7 @@ export function Results({ result }: { result: SingResult }) {
       </div>
 
       <p className="results-fine">
-        Ratings are provisional: the thresholds will be recalibrated once the reference scoring engine and its evals land.
+        Rating cutoffs come from real takes measured against the original singer (one singer so far), so they may still change.
       </p>
     </ScreenShell>
   );
