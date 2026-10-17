@@ -1,5 +1,5 @@
 import { chromium, expect, test } from '@playwright/test';
-import { assigned, duetPlayer, expectOnePlayback, expectOwnedScores, manifest, mic, schedules } from './duetHarness';
+import { addPlayer, assigned, duetPlayer, expectOnePlayback, expectOwnedScores, manifest, mic, schedules } from './duetHarness';
 
 /** One shared capture/playback, automatic P1→P2→P1 handoffs, two register-specific results. */
 test('local duet: one song and microphone session, automatic handoffs, disjoint saved scores', async ({ baseURL }) => {
@@ -9,10 +9,10 @@ test('local duet: one song and microphone session, automatic handoffs, disjoint 
     await page.goto('/');
     const song = await manifest(page);
     await page.getByText('1P VS 2P', { exact: true }).first().click();
-    await page.getByRole('button', { name: new RegExp(song.title, 'i') }).click();
-    await page.getByPlaceholder('e.g. Mina').fill('E2E-Bot-duet-local');
-    await page.getByPlaceholder('e.g. Jisoo').fill('E2E-Rival-duet-local');
-    await page.getByRole('group', { name: 'Player 2 voice range' }).getByRole('button', { name: 'HIGH 8VA', exact: true }).click();
+    await page.getByRole('button').filter({ has: page.getByText(song.title, { exact: true }) }).click();
+    await addPlayer(page, 'PLAYER 1', 'E2E-Bot-duet-local');
+    await addPlayer(page, 'PLAYER 2', 'E2E-Rival-duet-local');
+    await page.getByRole('group', { name: 'Player 2 voice range' }).getByRole('button', { name: 'HIGH', exact: true }).click();
     await mic(page);
     const created = page.waitForResponse((r) => r.url().endsWith('/api/matches') && r.request().method() === 'POST' && r.status() === 200);
     await page.getByRole('button', { name: 'FIGHT ♪', exact: true }).click();

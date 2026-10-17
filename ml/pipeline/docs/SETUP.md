@@ -22,3 +22,7 @@ uv --cache-dir ml/data/.uv-cache pip install --python ml/pipeline/separation/.ve
 Choose and verify a compatible build separately for GPU workstations. Do not
 install Demucs in the modern PyTorch environment. The backend has its own
 lightweight environment and never imports the preparation stack.
+
+The song runner selects `Scripts/python.exe` on Windows and `bin/python` on
+other platforms in `ml/pipeline/separation/.venv`. To use another Demucs
+environment, pass `--separation-python <path-to-interpreter>`.

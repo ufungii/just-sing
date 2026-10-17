@@ -3,3 +3,5 @@ dist/
 .design-ref/
 *.tsbuildinfo
 .env.local
+# Local-only audio (menu music etc.): the repo is public and must never contain audio. See src/lib/menuMusic.ts.
+public/audio/

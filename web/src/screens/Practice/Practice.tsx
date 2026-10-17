@@ -9,7 +9,7 @@ import { ApiError, asGuest, getClips, getManifest, savedName, submitPractice } f
 import type { ClipSummary, Practice as PracticeResult, Song } from '../../lib/types';
 import { Notice, Panel, PixelButton, ScreenShell, Segmented } from '../../ui';
 import { Recorder } from './Recorder';
-import { practicePhrases } from './eligibility';
+import { practicePhrases } from '../../lib/practicePhrases';
 import './Practice.css';
 
 type Check =
@@ -32,7 +32,7 @@ function describeError(e: unknown): { message: string; retry: boolean } {
       return { message: "The server couldn't read that recording. Re-record and try again.", retry: false };
     case 'network':
       return { message: "Can't reach the server. Check the connection and try again.", retry: true };
-    case 'practice_not_supported':
+    case 'practice_unavailable':
       return { message: 'Choose a Korean-only line for spoken practice.', retry: false };
     case 'phrase_not_found':
       return { message: 'The server does not know this line any more. Pick the line again.', retry: false };
@@ -162,12 +162,10 @@ export function Practice() {
               </Notice>
             )}
             {!song && !songError && <Notice>Loading lines…</Notice>}
+            {song && !practicePhrases(song).length && <Notice>This song has no Korean-only pronunciation lines. You can still sing it in karaoke.</Notice>}
             {song && (
               <ol className="practice-lines">
-                {availablePhrases.length === 0 && (
-                  <li>No Korean-only spoken-practice lines are available for this clip. Choose another clip.</li>
-                )}
-                {availablePhrases.map((p, i) => {
+                {practicePhrases(song).map((p, i) => {
                   const l = song.lines[p.line_index];
                   return (
                     <li key={p.id}>

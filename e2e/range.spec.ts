@@ -1,4 +1,5 @@
 import { chromium, expect, test, type Browser, type Page } from '@playwright/test';
+import { addPlayer } from './duetHarness';
 
 const CLIP = 'russian-roulette';
 const NAME = `E2E-Bot-range-${Date.now().toString(36)}`;
@@ -111,7 +112,7 @@ test('solo middle section: snapped handles, preview, offset audio, saved subset 
     const song = await manifest.json();
     const range = { start: song.phrases[1].start, end: song.phrases[1].end };
     await page.getByText('SOLO SING', { exact: true }).first().click();
-    await page.getByRole('button', { name: new RegExp(song.title, 'i') }).click();
+    await page.getByRole('button').filter({ has: page.getByText(song.title, { exact: true }) }).click();
     await chooseSection(page, song);
     await page.getByRole('button', { name: 'FULL CLIP', exact: true }).click();
     await expect(page.getByRole('slider', { name: 'Start of practice section' })).toHaveAttribute('aria-valuenow', '0');
@@ -140,7 +141,7 @@ test('solo middle section: snapped handles, preview, offset audio, saved subset 
     await page.getByRole('button', { name: 'STOP PREVIEW' }).click();
     // Keep screenshots lyric-free; the actual manifest is used for all selection/scoring assertions.
     await page.screenshot({ path: 'e2e/artifacts/range-solo-setup.png', mask: [page.locator('.clip-timeline__line')] });
-    await page.getByPlaceholder('e.g. Mina').fill(NAME);
+    await addPlayer(page, 'PLAYER', NAME);
     await mic(page);
     await page.getByRole('button', { name: 'START ♪', exact: true }).click();
     const saved = await sing(page, range);
@@ -159,6 +160,63 @@ test('solo middle section: snapped handles, preview, offset audio, saved subset 
   } finally { await browser.close(); }
 });
 
+test('full-screen practice workspace applies precise phrase-snapped boundaries and aligned preview', async ({baseURL})=>{
+  const browser=await chromium.launch({args:['--autoplay-policy=no-user-gesture-required']});
+  try{
+    const page=await player(browser,baseURL!);
+    await page.goto('/');
+    const song=await (await page.request.get(`/api/clips/${CLIP}/manifest`)).json();
+    await page.getByText('SOLO SING',{exact:true}).first().click();
+    await page.getByRole('button').filter({has:page.getByText(song.title,{exact:true})}).click();
+    await page.getByRole('button',{name:'OPEN SECTION EDITOR',exact:true}).click();
+    const dialog=page.getByRole('dialog',{name:'Choose a practice section'});
+    await expect(dialog).toBeVisible();
+    const lyrics=dialog.getByRole('region',{name:'Song lyrics',exact:true});
+    const scrubber=dialog.getByRole('slider',{name:'Song position',exact:true});
+    expect((await lyrics.boundingBox())!.y).toBeLessThan((await scrubber.boundingBox())!.y);
+    const scrubBox=(await scrubber.boundingBox())!;
+    const seekTime=(song.lines[1].start+song.lines[1].end)/2;
+    await page.mouse.click(scrubBox.x+scrubBox.width*seekTime/song.duration,scrubBox.y+scrubBox.height/2);
+    await expect(lyrics.locator('[data-current=true]')).toHaveAttribute('data-line-index','1');
+    // Dragging an endpoint updates the lyric selection before the pointer is released.
+    const endHandle=dialog.getByRole('slider',{name:'End of practice section',exact:true});
+    const endBox=(await endHandle.boundingBox())!;
+    await page.mouse.move(endBox.x+endBox.width/2,endBox.y+endBox.height/2);await page.mouse.down();
+    await page.mouse.move(scrubBox.x+scrubBox.width*song.phrases[3].end/song.duration,endBox.y+endBox.height/2,{steps:4});
+    await expect(endHandle).toHaveAttribute('aria-valuenow',String(song.phrases[3].end));
+    await expect(lyrics.locator('[data-in-selection=true]')).toHaveCount(4);
+    await page.mouse.up();
+    const range={start:song.phrases[1].start,end:song.phrases[1].end};
+    await dialog.getByLabel('Section start',{exact:true}).fill(String(range.start+.03));
+    await dialog.getByLabel('Section start',{exact:true}).press('Enter');
+    await dialog.getByLabel('Section end',{exact:true}).fill(String(range.end-.03));
+    await dialog.getByLabel('Section end',{exact:true}).press('Enter');
+    await expect(dialog.getByRole('slider',{name:'Start of practice section'})).toHaveAttribute('aria-valuenow',String(range.start));
+    await expect(dialog.getByRole('slider',{name:'End of practice section'})).toHaveAttribute('aria-valuenow',String(range.end));
+    const selectedLine=song.phrases[1].line_index;
+    await expect(lyrics.locator('[data-in-selection=true]')).toHaveCount(1);
+    await expect(lyrics.locator(`[data-line-index="${selectedLine}"] [data-boundary=start]`)).toBeVisible();
+    await expect(lyrics.locator(`[data-line-index="${selectedLine}"] [data-boundary=end]`)).toBeVisible();
+    await dialog.getByRole('button',{name:'Fit selection',exact:true}).click();
+    await page.setViewportSize({width:390,height:844});
+    await expect(lyrics.locator('[data-current=true]')).toBeInViewport();
+    expect(await dialog.evaluate(node=>node.scrollWidth)).toBeLessThanOrEqual(390);
+    await page.setViewportSize({width:1280,height:720});
+    await dialog.getByRole('button',{name:'Preview selection',exact:true}).click();
+    await expect.poll(()=>page.evaluate(()=>(window as any).__starts.length)).toBe(2);
+    for(const src of await page.evaluate(()=>(window as any).__starts)){
+      expect(src.offset).toBe(range.start);expect(src.duration).toBeCloseTo(range.end-range.start);
+    }
+    await expect.poll(async()=>Number(await scrubber.inputValue())).toBeGreaterThan(range.start+.1);
+    await dialog.getByRole('button',{name:'Stop preview',exact:true}).click();
+    expect(Number(await scrubber.inputValue())).toBeGreaterThan(range.start+.1);
+    await dialog.getByRole('button',{name:'Use this practice section',exact:true}).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('slider',{name:'Start of practice section'})).toHaveAttribute('aria-valuenow',String(range.start));
+    await expect(page.getByRole('slider',{name:'End of practice section'})).toHaveAttribute('aria-valuenow',String(range.end));
+  }finally{await browser.close();}
+});
+
 test('online host section: guest read-only, readiness reset, shared range with disjoint assigned phrases', async ({ baseURL }) => {
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   try {
@@ -168,13 +226,13 @@ test('online host section: guest read-only, readiness reset, shared range with d
     const song = await (await host.request.get(`/api/clips/${CLIP}/manifest`)).json();
     const range = { start: song.phrases[1].start, end: song.phrases[3].end };
     await host.getByText('ONLINE', { exact: true }).first().click();
-    await host.getByPlaceholder('e.g. Mina').fill(`${NAME}-host`);
-    await host.getByRole('button', { name: new RegExp(song.title, 'i') }).click();
+    await addPlayer(host, 'PLAYER', `${NAME}-host`);
+    await host.getByRole('button').filter({ has: host.getByText(song.title, { exact: true }) }).click();
     await host.getByRole('button', { name: /CREATE ROOM/ }).click();
     const code = await host.getByTestId('room-code').innerText();
     await guest.goto('/');
     await guest.getByText('ONLINE', { exact: true }).first().click();
-    await guest.getByPlaceholder('e.g. Mina').fill(`${NAME}-guest`);
+    await addPlayer(guest, 'PLAYER', `${NAME}-guest`);
     await guest.getByLabel('Room code').fill(code);
     await guest.getByRole('button', { name: 'JOIN', exact: true }).click();
     await chooseSection(guest, song, true);
@@ -190,6 +248,12 @@ test('online host section: guest read-only, readiness reset, shared range with d
     await chooseSection(host, song, false, 3);
     await expect(guest.getByRole('slider', { name: 'Start of practice section' })).toHaveAttribute('aria-valuenow', String(range.start));
     await expect(guest.getByRole('slider', { name: 'End of practice section' })).toHaveAttribute('aria-valuenow', String(range.end));
+    await guest.getByRole('button',{name:'OPEN SECTION EDITOR',exact:true}).click();
+    const guestWorkspace=guest.getByRole('dialog',{name:'View practice section'});
+    await expect(guestWorkspace.getByLabel('Section start',{exact:true})).toBeDisabled();
+    await expect(guestWorkspace.getByLabel('Section end',{exact:true})).toBeDisabled();
+    await expect(guestWorkspace.getByRole('button',{name:'Use this practice section',exact:true})).toHaveCount(0);
+    await guestWorkspace.getByRole('button',{name:'Close / back',exact:true}).click();
     await expect(host.getByRole('button', { name: 'START (BOTH MUST BE READY)' })).toBeDisabled();
     // A full reload recovers the host selection from the server (join again with the same cookie).
     await guest.reload();

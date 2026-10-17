@@ -43,7 +43,7 @@ environment. The checker command above works without FastAPI or a database.
 - A singing phrase no longer requires Korean `practice_text` for catalog validation.
   English, mixed-language and disabled-practice lines can still be sung.
 - Practice itself requires a Korean-only target. The API returns
-  `422 practice_not_supported` before decoding/model inference, the browser hides
+  `422 practice_unavailable` before decoding/model inference, the browser hides
   unsupported lines, and an empty practice list explains how to pick another clip.
 - The ML public scorer rejects unsupported target text and invalid nonfinite audio
   explicitly. No partial Korean grading of mixed-language text.

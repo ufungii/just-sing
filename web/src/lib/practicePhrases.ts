@@ -1,4 +1,4 @@
-import type { Song } from '../../lib/types';
+import type { Song } from './types';
 
 /** Mirror ml/pronunciation/eligibility.py: don't grade only the Korean part of a mixed line. */
 export function isSpokenKorean(text: string): boolean {

@@ -20,7 +20,11 @@ test('review lyrics, assign whole lines, drag, save and rebuild', async ({page},
   await block.scrollIntoViewIfNeeded();
   const box = (await block.boundingBox())!;
   await page.mouse.move(box.x+10,box.y+20); await page.mouse.down();
-  await page.mouse.move(box.x+26,box.y+20,{steps:5}); await page.mouse.up();
+  await page.mouse.move(box.x+26,box.y+20,{steps:5});
+  await expect(block).toHaveAttribute('data-dragging','valid');
+  await expect(page.locator('.clip-timeline__drag-readout')).toContainText('Release to place');
+  await expect(page.getByLabel('Line start',{exact:true})).toHaveValue('1'); // only preview until release
+  await page.mouse.up();
   await block.click();
   await expect(page.getByLabel('Line start',{exact:true})).not.toHaveValue('1');
   await page.screenshot({path:testInfo.outputPath('author.png'),fullPage:true});
