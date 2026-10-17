@@ -63,6 +63,22 @@ cookie will not be sent). In `web/vite.config.ts`:
 server: { proxy: { "/api": "http://localhost:8000", "/ws": { target: "ws://localhost:8000", ws: true } } }
 ```
 
+## Public demo through a Cloudflare tunnel
+
+Microphones need HTTPS, and remote players need a public URL. A Quick Tunnel gives both from a laptop, no account needed.
+
+```bash
+sudo pacman -S cloudflared                                   # Arch; other OS: developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads
+COOKIE_SECURE=1 .venv/bin/uvicorn api.main:app --port 8000   # terminal 1: Secure cookie, because the public URL is HTTPS
+cloudflared tunnel --url http://localhost:8000               # terminal 2: prints https://<random>.trycloudflare.com
+python -m api.scripts.smoke_public https://<random>.trycloudflare.com   # terminal 3: end-to-end check
+```
+
+The smoke script plays a full two-player room over the public URL and checks the cookie flags, WebSockets, the
+origin check, live progress, turns and the winner. The URL changes every time the tunnel restarts, and it is
+public: do not put it in the README or Devpost. Real copyrighted clips are served from this laptop only.
+The script leaves `smoke-*` guests in the database; they expire with the 7-day cleanup.
+
 ## Conventions
 
 - **Times** are seconds from clip start. **Scores** are 0-100, rounded to 2 decimals. **Pitch** is Hz in manifests.
