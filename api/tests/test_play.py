@@ -87,3 +87,75 @@ def test_local_battle_alternates_and_picks_winner_or_tie(guests):
         assert view["state"] == "finished" and view["winner_slot"] == winner
     rematch = c.post(f"/api/matches/{m['match_id']}/rematch").json()
     assert [p["display_name"] for p in c.get(f"/api/matches/{rematch['match_id']}").json()["players"]] == ["Ann", "Bo"]
+
+
+def test_concurrent_submit_and_retry_never_crash_or_lose_a_result(guests):
+    """Regression: submit locked attempt->match and retry locked match->attempt, so racing them could
+    deadlock (500), or retry could invalidate a result that had just been accepted."""
+    from concurrent.futures import ThreadPoolExecutor
+    c = new_guest(guests)
+    for i in range(6):
+        m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+        a = m["attempt_id"]
+        c.post(f"/api/turns/{a}/begin", json={})
+        with ThreadPoolExecutor(2) as pool:
+            fs = pool.submit(c.post, f"/api/turns/{a}/result", json=GOOD, headers={"Idempotency-Key": f"k{i}"})
+            fr = pool.submit(c.post, f"/api/matches/{m['match_id']}/retry")
+            rs, rr = fs.result(), fr.result()
+        assert rs.status_code in (200, 409) and rr.status_code in (200, 409), (rs.text, rr.text)
+        states = {x["id"]: x["state"] for x in c.get(f"/api/matches/{m['match_id']}").json()["attempts"]}
+        if rs.status_code == 200:
+            assert states[a] == "accepted"  # an accepted result is never invalidated afterwards
+
+
+def test_history_has_one_row_per_match(guests):
+    """Regression: history returned every accepted attempt, so one local battle showed up as two rows
+    with both players' totals and nothing saying whose was whose."""
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo", "players": ["Ann", "Bo"]}).json()
+    view = play_turn(c, m["match_id"], m["attempt_id"], 70)
+    play_turn(c, m["match_id"], next(a["id"] for a in view["attempts"] if a["slot"] == 1), 90)
+    solo = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    c.post(f"/api/turns/{solo['attempt_id']}/begin", json={})
+    c.post(f"/api/turns/{solo['attempt_id']}/result", json=GOOD, headers={"Idempotency-Key": "s"})
+
+    rows = c.get("/api/history").json()
+    assert [r["match_id"] for r in rows].count(m["match_id"]) == 1
+    battle = next(r for r in rows if r["match_id"] == m["match_id"])
+    assert battle["total"] is None and [(p["display_name"], p["total"]) for p in battle["players"]] == [("Ann", 70), ("Bo", 90)]
+    assert next(r for r in rows if r["match_id"] == solo["match_id"])["total"] == 76.0
+
+
+def test_turn_deadline_holds(guests):
+    """Regression: a second /begin reset the deadline and register (so a turn could be kept alive
+    forever), and a result after the deadline was accepted until the 15 s recovery tick ran."""
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    a = m["attempt_id"]
+    deadline = lambda: get_engine().connect().execute(text("select deadline_at from turn_attempt where id=:i"), {"i": a}).scalar()
+    c.post(f"/api/turns/{a}/begin", json={"register": 0})
+    first = deadline()
+    assert c.post(f"/api/turns/{a}/begin", json={"register": 0}).status_code == 200  # a harmless repeat
+    assert deadline() == first
+    assert c.post(f"/api/turns/{a}/begin", json={"register": 12}).json()["error"]["code"] == "attempt_already_started"
+
+    with get_engine().begin() as conn:
+        conn.execute(text("update turn_attempt set deadline_at = now() - interval '1 second' where id=:i"), {"i": a})
+    late = c.post(f"/api/turns/{a}/result", json=GOOD, headers={"Idempotency-Key": "late"})
+    assert late.json()["error"]["code"] == "attempt_invalidated"
+    assert c.get(f"/api/matches/{m['match_id']}").json()["state"] == "retry_required"
+
+
+def test_turns_refuse_a_changed_clip_version(guests, monkeypatch):
+    """Regression: begin/submit used the current manifest, not the match's frozen clip_version, so a
+    manifest update mid-match graded results against the wrong phrases and durations."""
+    from api import play as play_module
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    c.post(f"/api/turns/{m['attempt_id']}/begin", json={})
+    bumped = play_module.CATALOG["synthetic-demo"].model_copy(update={"version": 2})
+    monkeypatch.setitem(play_module.CATALOG, "synthetic-demo", bumped)
+    r = c.post(f"/api/turns/{m['attempt_id']}/result", json=GOOD, headers={"Idempotency-Key": "v"})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "clip_version_changed"
+    fresh = c.post("/api/matches", json={"clip_id": "synthetic-demo"})
+    assert fresh.json()["error"]["code"] == "catalog_not_seeded"  # version 2 was never seeded

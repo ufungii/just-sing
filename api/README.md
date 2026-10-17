@@ -120,7 +120,7 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | GET | `/api/matches/{id}` | Match, players, attempts, scores, `winner_slot` |
 | POST | `/api/matches/{id}/retry` | Replace a lost or abandoned turn with a fresh attempt |
 | POST | `/api/matches/{id}/rematch` | New local/solo match with the same players (online: use the room) |
-| GET | `/api/history`, `/api/leaderboard?clip_id=` | Your saved results; best totals of logged-in players |
+| GET | `/api/history`, `/api/leaderboard?clip_id=` | One row per match: `total` is your own score (null in a local battle; see `players`). Leaderboard: best solo totals of logged-in players on the current clip version |
 | POST | `/api/turns/{attempt_id}/coach` | Coaching blurb for a finished turn: `{status: ok\|unavailable, coach_blurb}`. Generated once, then cached. |
 | POST | `/api/practice` | Multipart: `clip_id`, `phrase_id`, `audio` (WAV/MP3/WebM/Ogg, max 5 MB and 15 s) |
 | POST | `/api/rooms`, `/api/rooms/join` | Create `{clip_id}`; join `{code}` |
@@ -207,8 +207,10 @@ saved and also appears as `coach_blurb` on the attempt's score in `GET /api/matc
 - **ML A (pronunciation):** set `api.practice.scorer` to an object with a `provider` string and
   `assess(wav_path, expected_text) -> [{"text": ..., "score": 0-100}]`. It receives 16 kHz mono WAV. Raise on failure;
   the API reports `status: "error"` (never a score). Only one assessment runs at a time.
-- **ML B (scoring):** `play.py` recomputes totals with a **stand-in** (duration-weighted mean of phrase pitch and timing,
-  80/20). Replace it with a call into `ml/scoring` once that exists, and keep `scoring_version` in step.
+- **ML B (scoring):** `play.py` recomputes totals with a **stand-in** (duration-weighted mean of phrase pitch and timing).
+  The weights, tie precision and `scoring_version` are read from [`contracts/scoring.config.json`](../contracts/scoring.config.json),
+  the one file the Python engine and the TypeScript port should read too. Replace the stand-in with a call into
+  `ml/scoring` once that exists; change values only in that file, and bump `scoring_version` when you do.
 - **Real clips:** put `manifest.json` and the instrumental in `api/catalog/<id>/`, then run `python -m api.seed`.
   Audio is gitignored; never commit copyrighted audio.
 
