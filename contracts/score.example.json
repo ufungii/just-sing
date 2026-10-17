@@ -1,0 +1,10 @@
+{
+  "total": 0,
+  "pitch": 0,
+  "timing": 0,
+  "pronunciation": null,
+  "per_line": [
+    { "line_index": 0, "pitch": 0, "timing": 0, "pronunciation": null }
+  ],
+  "coach_blurb": "string"
+}

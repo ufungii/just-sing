@@ -1,0 +1,17 @@
+# Audio: never commit copyrighted songs or stems (repo is public)
+*.mp3
+*.wav
+*.flac
+
+# Model weights
+*.pt
+
+# Secrets
+.env
+
+# Python
+.venv/
+__pycache__/
+
+# Local ML data: audio, stems, model outputs
+ml/data/

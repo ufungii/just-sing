@@ -1,0 +1,28 @@
+{
+  "id": "example-song",
+  "title": "Example Song",
+  "artist": "Example Artist",
+  "audio": {
+    "instrumental": "songs/example-song/instrumental.mp3",
+    "vocals": "songs/example-song/vocals.mp3"
+  },
+  "offset_ms": 0,
+  "lines": [
+    {
+      "start": 12.3,
+      "end": 15.8,
+      "text": "안녕 내 사랑",
+      "romanized": "annyeong nae sarang",
+      "translation": "Hello, my love",
+      "words": [
+        { "text": "안녕", "start": 12.3, "end": 12.9 },
+        { "text": "내", "start": 13.0, "end": 13.4 },
+        { "text": "사랑", "start": 13.5, "end": 15.8 }
+      ]
+    }
+  ],
+  "pitch_contour": {
+    "hop_seconds": 0.02,
+    "cents": [null, 1250.5, 1262.1]
+  }
+}

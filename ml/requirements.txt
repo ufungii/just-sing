@@ -1,0 +1,16 @@
+# Python 3.11. Ask the team before adding heavy dependencies.
+
+# --- Scoring + evals (lightweight, must also run inside api/) ---
+numpy>=1.26
+scipy>=1.11
+librosa>=0.10      # DTW (librosa.sequence.dtw), audio loading, pyin fallback
+soundfile>=0.12
+pytest>=8
+
+# --- Offline pipeline (heavy, laptop/Colab only, never on the prod server) ---
+torch>=2.2
+torchaudio>=2.2
+demucs>=4.0        # vocal / instrumental separation
+whisperx>=3.1      # word-level timestamps (fallback: faster-whisper)
+torchcrepe>=0.0.22 # reference pitch contour
+google-genai>=0.3  # Gemini: romanization + translation
