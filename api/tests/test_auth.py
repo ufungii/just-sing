@@ -10,6 +10,7 @@ from sqlalchemy import text
 from api import auth
 from api.db import get_engine
 from api.main import app
+from api.retention import cleanup_expired
 from api.seed import seed
 from api.tests.test_play import GOOD
 
@@ -34,10 +35,12 @@ def auth0(monkeypatch):
     yield
     with get_engine().begin() as c:
         ids = "(select id from guest_session where auth0_sub like 'test|%' or display_name='claimme')"
-        for t in ("turn_attempt", "match_player"):
-            c.execute(text(f"delete from {t} where match_id in (select id from match where guest_id in {ids})"))
-        c.execute(text(f"delete from match where guest_id in {ids}"))
-        c.execute(text(f"delete from guest_session where id in {ids}"))
+        rooms = f"(select id from room where host_guest_id in {ids})"
+        m = f"(select id from match where guest_id in {ids} or room_id in {rooms})"
+        for sql in (f"delete from turn_attempt where match_id in {m}", f"delete from match_player where match_id in {m}",
+                    f"delete from match where id in {m}", f"delete from room_member where room_id in {rooms} or guest_id in {ids}",
+                    f"delete from room where id in {rooms}", f"delete from guest_session where id in {ids}"):
+            c.execute(text(sql))
 
 
 def test_bad_tokens_rejected():
@@ -59,3 +62,21 @@ def test_login_claim_and_leaderboard():
     assert c.post("/api/auth/claim", headers=auth_h).json()["claimed_guest_history"] is True
     assert c.get("/api/history", headers=auth_h).json()[0]["match_id"] == m["match_id"]
     assert [r["total"] for r in c.get("/api/leaderboard?clip_id=synthetic-demo").json()][:1] == [pytest.approx(76)]
+
+
+def test_claim_moves_rooms_so_cleanup_keeps_working():
+    """Regression: claim moved matches but not rooms, so the hourly cleanup hit a foreign-key error
+    deleting the spent guest's room (and failed every hour after), and the account lost the room."""
+    host, other = TestClient(app), TestClient(app)
+    for c in (host, other):
+        c.post("/api/guests", json={"display_name": "claimme"})
+    room = host.post("/api/rooms", json={"clip_id": "synthetic-demo"}).json()
+    other.post("/api/rooms/join", json={"code": room["code"]})
+    for c in (host, other):
+        c.post(f"/api/rooms/{room['id']}/ready", json={"ready": True})
+    assert host.post(f"/api/rooms/{room['id']}/start").status_code == 200
+
+    auth_h = {"Authorization": f"Bearer {token('test|77')}"}
+    assert host.post("/api/auth/claim", headers=auth_h).json()["claimed_guest_history"] is True
+    cleanup_expired()  # must not raise
+    assert host.get(f"/api/rooms/{room['id']}", headers=auth_h).status_code == 200  # the account keeps the room

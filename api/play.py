@@ -17,7 +17,7 @@ from .db import get_engine
 from .errors import ApiError
 from .clip_catalog import CATALOG
 from .models import PhraseScore, Score
-from .tables import Clip, GuestSession, Match, MatchPlayer, PracticeAttempt, RoomMember, TurnAttempt
+from .tables import Clip, GuestSession, Match, MatchPlayer, PracticeAttempt, Room, RoomMember, TurnAttempt
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -312,6 +312,11 @@ def claim_guest(request: Request, account=Depends(current_guest), s: Session = D
     if guest and guest.id != account.id and not guest.auth0_sub:
         for table in (Match, PracticeAttempt):
             s.execute(update(table).where(table.guest_id == guest.id).values(guest_id=account.id))
+        # Rooms too: otherwise cleanup later deletes a room that the moved matches still point at.
+        s.execute(update(Room).where(Room.host_guest_id == guest.id).values(host_guest_id=account.id))
+        already_in = select(RoomMember.room_id).where(RoomMember.guest_id == account.id)
+        s.execute(update(RoomMember).where(RoomMember.guest_id == guest.id, RoomMember.room_id.not_in(already_in))
+                  .values(guest_id=account.id))
         guest.expires_at = datetime.now(timezone.utc)  # the guest cookie is spent
         moved = True
     s.commit()
