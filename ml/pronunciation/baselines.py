@@ -140,3 +140,31 @@ def score_b(log_probs: np.ndarray, heard: str, expected: str) -> dict:
            for w, s in zip(words, per_word)]
     scored = [x for x in tok_scores]
     return _result("wav2vec2-ctc", "ok", out, round(100 * float(np.mean(scored)), 1), heard=heard)
+
+
+# --------------------------------------------------------------------------- #
+# Public entry point
+# --------------------------------------------------------------------------- #
+def assess(audio, expected: str, sr: int | None = None) -> dict:
+    """Score a spoken Korean phrase against its expected text. This is what the API calls.
+
+    audio:    path to a 16 kHz-decodable file, or a mono float array (pass `sr`).
+              Convert browser uploads first: ffmpeg -i in -ac 1 -ar 16000 out.wav
+    expected: the practice line's Korean text (practice_text in the manifest).
+    Returns the practice-result shape (contracts/practice.example.json) plus a
+    `debug` dict that must not be sent to the client:
+      {"provider", "status": "ok" | "error", "overall": 0-100 | None,
+       "words": [{"text", "score": 0-100 | None}], "debug": {...}}
+    status "error" with debug.reason (audio_too_short, no_scoreable_syllables,
+    audio_too_short_for_text) is an input problem to retry, never a low score.
+
+    Uses Baseline B (wav2vec2 forced alignment). Why not A (Whisper): in the
+    near-miss eval Whisper "autocorrected" 25 of 39 one-sound mistakes back to the
+    right word, and flagged the changed word at chance level (0.33 vs 0.31). B
+    cannot autocorrect, since it scores the expected text against the audio, and
+    flagged the changed word 0.54 of the time. Both are weak on single-sound
+    errors; see ml/evals/results/pronunciation_nearmiss.md. Word scores are raw
+    model confidence: correct speech averages ~60-70, not 100, so the UI should
+    highlight the lowest-scoring words rather than read the number as a grade.
+    """
+    return assess_b(audio, expected, sr)

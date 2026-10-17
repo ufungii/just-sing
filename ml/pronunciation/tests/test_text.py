@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
 
+pytest.importorskip("rapidfuzz")  # speech env only; skipped in the light scoring env
+
 from ml.pronunciation.ctc import forced_align
 from ml.pronunciation.text import score_words, split_words, to_jamo
 
@@ -68,3 +70,26 @@ def test_forced_align_repeated_token_needs_a_blank_between():
 
 def test_forced_align_too_short_returns_none():
     assert forced_align(_lp([[.1, .9]]), [1, 1, 1], blank=0) is None
+
+
+# --- syllable surgery used to synthesize near-miss speech ---
+from ml.pronunciation.text import compose, decompose, mispronounce  # noqa: E402
+
+
+def test_compose_decompose_round_trip():
+    for ch in "가힣사랑해요정말많이":
+        assert compose(*decompose(ch)) == ch
+
+
+def test_mispronounce_changes_exactly_one_sound():
+    assert mispronounce("사랑", "tail") == "사란"      # ㅇ -> ㄴ
+    assert mispronounce("정말", "vowel") == "정멀"     # ㅏ -> ㅓ (middle syllable is 말)
+    assert mispronounce("가다", "lead") == "가타"      # ㄷ -> ㅌ
+    assert mispronounce("하나", "tail") is None        # 나 has no final consonant
+
+
+def test_mispronounce_never_returns_the_same_word():
+    for w in ["안녕하세요", "날씨가", "사랑해", "노래해요", "기억할게"]:
+        for kind in ("lead", "vowel", "tail"):
+            out = mispronounce(w, kind)
+            assert out is None or (out != w and len(out) == len(w))
