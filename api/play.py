@@ -196,7 +196,8 @@ def _check_turn(s: Session, guest: GuestSession, match: Match, attempt: TurnAtte
 def _score(match: Match, a: TurnAttempt) -> Score:
     return Score(mode="solo" if match.mode == "solo" else "battle", clip_id=match.clip_id, clip_version=match.clip_version,
                  scoring_version=match.scoring_version, register=a.register, total=a.total,
-                 pitch=a.pitch, timing=a.timing, phrases=[PhraseScore(**p) for p in a.phrase_results])
+                 pitch=a.pitch, timing=a.timing, phrases=[PhraseScore(**p) for p in a.phrase_results],
+                 coach_blurb=a.coach_blurb)
 
 
 @router.post("/turns/{attempt_id}/result", response_model=Score)
