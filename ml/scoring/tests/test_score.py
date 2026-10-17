@@ -75,3 +75,61 @@ def test_garbage_in_excluded_region_does_not_cost_timing(ref):
     garbage[50:100] = 900.0  # 1.0 s - 2.0 s
     r = run(garbage, ref, excluded=[(1.0, 2.0)])
     assert r["pitch"] == r["timing"] == r["total"] == 100.0
+
+
+# --- finalize_turn: what the API calls on browser-submitted phrase results ---
+from ml.scoring.score import finalize_turn, phrase_weights  # noqa: E402
+
+IDS = [p[0] for p in PHRASES]
+
+
+def _submit(result):
+    """What a browser would send: only the measured fields, no score/rating."""
+    return [{k: p[k] for k in ("phrase_id", "pitch", "timing", "coverage")} for p in result["phrases"]]
+
+
+def test_finalize_matches_score_turn(ref):
+    user = ref.copy()
+    user[: int(3.2 / HOP)] = np.nan
+    full = run(user, ref)
+    weights = phrase_weights(ref, PHRASES)
+    again = finalize_turn(_submit(full), weights, expected_phrase_ids=IDS)
+    assert again == full
+
+
+def test_finalize_ignores_client_supplied_score_and_rating(ref):
+    sub = _submit(run(ref, ref))
+    for p in sub:
+        p["score"], p["rating"] = 100, "perfect"
+    sub[0]["pitch"] = 0.0  # but the measured fields say otherwise
+    out = finalize_turn(sub, phrase_weights(ref, PHRASES), expected_phrase_ids=IDS)
+    assert out["phrases"][0]["score"] < 100 and out["total"] < 100
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda s: s.pop(),                                         # missing phrase
+    lambda s: s.append(dict(s[0])),                            # duplicate phrase
+    lambda s: s[0].update(phrase_id="nope"),                   # unknown phrase
+    lambda s: s[0].update(pitch=101),                          # out of range
+    lambda s: s[0].update(pitch=float("nan")),                 # non-finite
+    lambda s: s[0].update(coverage=-0.1),
+    lambda s: s[0].update(timing="90"),                        # wrong type
+])
+def test_finalize_rejects_bad_input(ref, mutate):
+    sub = _submit(run(ref, ref))
+    mutate(sub)
+    with pytest.raises(ValueError):
+        finalize_turn(sub, phrase_weights(ref, PHRASES), expected_phrase_ids=IDS)
+
+
+def test_finalize_rejects_bad_register(ref):
+    with pytest.raises(ValueError):
+        finalize_turn(_submit(run(ref, ref)), phrase_weights(ref, PHRASES),
+                      expected_phrase_ids=IDS, register=7)
+
+
+def test_finalize_allows_null_timing(ref):
+    sub = _submit(run(ref, ref))
+    sub[0]["timing"] = None
+    out = finalize_turn(sub, phrase_weights(ref, PHRASES), expected_phrase_ids=IDS)
+    assert out["phrases"][0]["timing"] is None and out["phrases"][0]["score"] == 100.0
