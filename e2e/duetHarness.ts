@@ -88,7 +88,7 @@ export async function openOnlineDuet(host: Page, guest: Page) {
   const song = await manifest(host);
   await host.getByText('ONLINE', { exact: true }).first().click();
   await addPlayer(host, 'PLAYER', 'E2E-Bot-duet-online');
-  await host.getByRole('button', { name: new RegExp(song.title, 'i') }).click();
+  await host.getByRole('button').filter({ has: host.getByText(song.title, { exact: true }) }).click();
   await host.getByRole('button', { name: /CREATE ROOM/ }).click();
   const code = await host.getByTestId('room-code').innerText();
   await guest.goto('/');

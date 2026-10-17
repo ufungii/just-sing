@@ -1,13 +1,13 @@
 /**
  * Every threshold the live scorer uses, in one place (CLAUDE.md: "thresholds live in config, not code").
  *
- * The scoring values below mirror ml/scoring/config.py (SCORING_VERSION 0.1.0) and ml/scoring/SPEC.md.
+ * The scoring values below mirror ml/scoring/config.py (SCORING_VERSION 0.2.0) and ml/scoring/SPEC.md.
  * `npm test` runs this port against contracts/fixtures; never change the math or these numbers in only
  * one language.
  */
 
 /** Must match ml/scoring/config.py SCORING_VERSION, which the server stores with every result. */
-export const SCORING_VERSION = '0.1.0';
+export const SCORING_VERSION = '0.2.0';
 
 export const SCORING_CONFIG = {
   // ---------- live pitch capture (what counts as a voiced user frame) ----------
@@ -16,9 +16,9 @@ export const SCORING_CONFIG = {
   /** Pitchy window length in samples (about 43 ms at 48 kHz: enough for 2+ periods of 65 Hz). */
   windowSamples: 2048,
   /** Frames below this Pitchy clarity are unvoiced (null). Keeps mic hiss from earning points. */
-  minClarity: 0.85,
+  minClarity: 0.65,
   /** Frames quieter than this RMS (linear, full scale 1.0) are unvoiced, whatever the tracker says. */
-  minRms: 0.01,
+  minRms: 0.005,
   /** Same frequency limits as pitch_contour() in ml/scoring/pitch.py. */
   fminHz: 65,
   fmaxHz: 1000,
@@ -29,7 +29,7 @@ export const SCORING_CONFIG = {
   /** Credit falls linearly to zero at this many cents. */
   pitchZeroCents: 200,
   /** Pitch may match the target this many seconds early/late (0 = strict). Implemented, off by default. */
-  timeToleranceS: 0,
+  timeToleranceS: 0.1,
 
   // ---------- timing ----------
   /** Entrance within this many seconds of a reference note start earns full credit. */
@@ -58,4 +58,5 @@ export const SCORING_CONFIG = {
   noteChangeCents: 80,
 } as const;
 
-export type ScoringConfig = typeof SCORING_CONFIG;
+/** The config's shape with plain `number`s (not the literal defaults), so tests and tools can override single values. */
+export type ScoringConfig = { -readonly [K in keyof typeof SCORING_CONFIG]: (typeof SCORING_CONFIG)[K] extends number ? number : (typeof SCORING_CONFIG)[K] };

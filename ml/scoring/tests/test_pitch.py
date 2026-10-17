@@ -137,7 +137,7 @@ def test_time_tolerance_forgives_small_lateness_but_not_wrong_notes(ref):
     from ml.scoring.config import PitchConfig
 
     late = np.concatenate([np.full(5, np.nan), ref])  # 0.1 s late
-    strict, tol = PitchConfig(), PitchConfig(time_tolerance_s=0.1)
+    strict, tol = PitchConfig(time_tolerance_s=0.0), PitchConfig(time_tolerance_s=0.1)
     assert pitch_score(late, ref, cfg=strict).score < 97
     assert pitch_score(late, ref, cfg=tol).score == pytest.approx(100.0)
     assert pitch_score(ref * 2, ref, cfg=tol).score == 0.0          # wrong register still wrong

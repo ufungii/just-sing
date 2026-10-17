@@ -7,34 +7,34 @@ A real 30 s vocal clip (local only, never committed) is damaged at increasing se
 
 | cents | CREPE total | MPM (browser-style) total |
 |---|---|---|
-| 0 | 100.0 | 69.5 |
-| 50 | 93.3 | 68.0 |
-| 100 | 83.7 | 61.1 |
-| 200 | 62.8 | 43.4 |
-| 300 | 60.6 | 42.0 |
+| 0 | 98.9 | 69.0 |
+| 50 | 93.2 | 68.0 |
+| 100 | 84.0 | 61.2 |
+| 200 | 62.8 | 43.5 |
+| 300 | 60.8 | 41.9 |
 
-Spearman rho (severity vs total): CREPE **-0.99**, MPM **-0.99**
+Spearman rho (severity vs total): CREPE **-0.98**, MPM **-0.99**
 
 ## Late entrance, uncalibrated (seconds)
 
 | seconds | CREPE total | MPM (browser-style) total |
 |---|---|---|
-| 0.0 | 100.0 | 69.5 |
-| 0.1 | 80.8 | 62.1 |
-| 0.2 | 61.2 | 47.4 |
-| 0.3 | 47.7 | 36.3 |
-| 0.4 | 37.1 | 32.6 |
+| 0.0 | 99.5 | 69.0 |
+| 0.1 | 99.8 | 68.9 |
+| 0.2 | 74.7 | 58.1 |
+| 0.3 | 56.2 | 44.4 |
+| 0.4 | 42.2 | 37.1 |
 
-Spearman rho (severity vs total): CREPE **-0.99**, MPM **-1.00**
+Spearman rho (severity vs total): CREPE **-0.94**, MPM **-1.00**
 
 ## Dropped seconds (fraction silenced)
 
 | fraction | CREPE total | MPM (browser-style) total |
 |---|---|---|
-| 0.0 | 99.5 | 69.5 |
-| 0.1 | 88.7 | 63.3 |
-| 0.25 | 71.8 | 49.6 |
-| 0.5 | 50.2 | 33.8 |
+| 0.0 | 99.2 | 69.0 |
+| 0.1 | 88.8 | 62.9 |
+| 0.25 | 71.0 | 49.4 |
+| 0.5 | 49.7 | 33.7 |
 
 Spearman rho (severity vs total): CREPE **-0.98**, MPM **-0.98**
 
@@ -42,10 +42,10 @@ Spearman rho (severity vs total): CREPE **-0.98**, MPM **-0.98**
 
 | -SNR dB | CREPE total | MPM (browser-style) total |
 |---|---|---|
-| -30 | 99.0 | 68.8 |
-| -20 | 98.1 | 62.6 |
-| -10 | 87.5 | 28.8 |
-| -5 | 76.0 | 10.6 |
+| -30 | 98.2 | 68.5 |
+| -20 | 97.8 | 62.5 |
+| -10 | 86.8 | 28.6 |
+| -5 | 76.5 | 10.4 |
 
-Spearman rho (severity vs total): CREPE **-0.98**, MPM **-0.98**
+Spearman rho (severity vs total): CREPE **-0.93**, MPM **-0.98**
 

@@ -12,6 +12,7 @@ from pathlib import Path
 from statistics import median
 from .text import korean_practice_text, apply_cached_translations
 from .common import ROOT, digest, read
+from .author_edits import apply_author_edits
 
 GENERATOR = "ml.pipeline.manifest"
 
@@ -140,6 +141,9 @@ def build_manifest(folder):
               "translations_reviewed": False,
               "partial_line_indices": sorted(partial_lines),
               "notes": "Automatic lyric/word timing, line-based phrases and display notes need listening review. Verify held-note ends, harmonies and octave errors before judging singers."}
+    corrections_path = folder / 'corrections.json'
+    if corrections_path.is_file():
+        manifest = apply_author_edits(manifest, read(corrections_path).get('author'), hashes)
     return manifest, review
 
 
