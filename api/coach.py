@@ -1,6 +1,6 @@
 """Coaching blurb: Gemini turns the already-final, measured numbers into 2-3 friendly sentences.
 It runs after scoring and never changes a score, a rating or a winner. Failure is a normal
-"unavailable" answer, not an error, and nothing is saved so the player can retry."""
+template blurb built from the same numbers (source "template"), and nothing is saved so a retry can still reach Gemini."""
 import logging
 import os
 import uuid
@@ -37,6 +37,20 @@ def build_prompt(score: dict, phrase_count: int) -> str:
         "given. No lists, no emoji.")
 
 
+def template_blurb(score: dict) -> str:
+    """Deterministic fallback from the measured numbers only: no Gemini key or the call failed."""
+    ph = score["phrases"]
+    best = max(range(len(ph)), key=lambda i: ph[i]["score"]) + 1
+    worst = min(range(len(ph)), key=lambda i: ph[i]["score"]) + 1
+    tip = ("your timing is the place to gain points: start each phrase right on the beat"
+           if score["timing"] < score["pitch"] else
+           "your pitch is the place to gain points: aim for the middle of each note and hold it steady")
+    out = f"You scored {score['total']:.0f}/100, with pitch {score['pitch']:.0f} and timing {score['timing']:.0f}. "
+    if len(ph) > 1:
+        out += f"Phrase {best} was your strongest and phrase {worst} your weakest. "
+    return out + f"Next take, {tip}."
+
+
 def _generate(prompt: str) -> str:
     """One Gemini call. Raises on any problem; the caller turns that into 'unavailable'."""
     key = os.environ["GEMINI_API_KEY"]
@@ -58,19 +72,20 @@ def coach(attempt_id: uuid.UUID, guest=Depends(current_guest), s: Session = Depe
         raise ApiError(409, "attempt_not_scored", "There is no result to coach yet.")
     if attempt.coach_blurb:
         return {"status": "ok", "coach_blurb": attempt.coach_blurb}  # generated once, then cached
+    measured = {"total": attempt.total, "pitch": attempt.pitch, "timing": attempt.timing,
+                "register": attempt.register, "phrases": attempt.phrase_results}
+    fallback = {"status": "ok", "coach_blurb": template_blurb(measured), "source": "template"}
     if not os.getenv("GEMINI_API_KEY"):
-        return {"status": "unavailable", "coach_blurb": None}
-    prompt = build_prompt({"total": attempt.total, "pitch": attempt.pitch, "timing": attempt.timing,
-                           "register": attempt.register, "phrases": attempt.phrase_results},
-                          len(attempt.phrase_results))
+        return fallback
+    prompt = build_prompt(measured, len(attempt.phrase_results))
     s.rollback()  # give the connection back to the pool; the Gemini call below can take seconds
     try:
         text = " ".join(_generate(prompt).split())[:MAX_BLURB_CHARS]
     except Exception as e:  # key, network, quota, bad response: all just "unavailable"
         log.warning("coach blurb failed: %s", type(e).__name__)  # never log the response or key
-        return {"status": "unavailable", "coach_blurb": None}
+        return fallback
     if not text:
-        return {"status": "unavailable", "coach_blurb": None}
+        return fallback
     # ponytail: two simultaneous requests may both call Gemini; the last write wins. Add a lock if cost matters.
     s.get(TurnAttempt, attempt_id).coach_blurb = text  # a fresh transaction, re-read after the wait
     s.commit()
