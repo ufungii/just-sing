@@ -1,0 +1,6 @@
+# Local editor only. Heavy ML environments are not used by the server.
+fastapi>=0.115
+uvicorn>=0.30
+korean-romanizer>=0.28
+pytest>=8
+httpx>=0.27
