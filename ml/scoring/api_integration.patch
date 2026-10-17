@@ -1,0 +1,82 @@
+diff --git a/api/models.py b/api/models.py
+index c6ef1f6..ef06524 100644
+--- a/api/models.py
++++ b/api/models.py
+@@ -104,7 +104,8 @@ class PhraseScore(BaseModel):
+     phrase_id: str
+     rating: Rating
+     pitch: float = Score100
+-    timing: float = Score100
++    timing: float | None = Field(default=None, ge=0, le=100)  # null: no note starts inside the phrase
++    score: float = Score100
+     coverage: float = Field(ge=0, le=1)
+ 
+ 
+diff --git a/api/play.py b/api/play.py
+index a561e55..2e524b9 100644
+--- a/api/play.py
++++ b/api/play.py
+@@ -34,13 +34,28 @@ def notify(s: Session, match: Match, event: str, attempt: TurnAttempt | None = N
+         except Exception:
+             log.exception("match hook failed")
+ 
+-SCORING_VERSION = "0.1.0"
++from ml.scoring.config import SCORING_VERSION  # one source of truth for the scoring version
++from ml.scoring.pitch import to_track
++from ml.scoring.score import finalize_turn, phrase_weights
+ GUEST_TTL = timedelta(days=int(os.getenv("GUEST_TTL_DAYS", "7")))
+ TIE_DECIMALS = 1  # totals equal at this display precision are a tie
+ RECONNECT_GRACE = timedelta(seconds=int(os.getenv("RECONNECT_GRACE_SECONDS", "60")))
+ PITCH_WEIGHT = 0.8  # CLAUDE.md default, 80% pitch / 20% timing
+ 
+ 
++_weight_cache: dict[str, list[int]] = {}
++
++
++def _weights(clip_id: str) -> list[int]:
++    """Scoreable reference frames per phrase, from the server's own manifest (never from the client)."""
++    if clip_id not in _weight_cache:
++        song = CATALOG[clip_id]
++        _weight_cache[clip_id] = phrase_weights(
++            to_track(song.reference.hz), [(p.id, p.start, p.end) for p in song.phrases],
++            hop_seconds=song.reference.hop_seconds, excluded=[(e.start, e.end) for e in song.reference.excluded])
++    return _weight_cache[clip_id]
++
++
+ def get_db():
+     with Session(get_engine()) as s:
+         yield s
+@@ -221,13 +236,16 @@ def submit_result(attempt_id: uuid.UUID, body: ResultIn, idempotency_key: str =
+     if sorted(p.phrase_id for p in body.phrases) != sorted(durations):
+         raise ApiError(422, "phrase_mismatch", "Results must cover each phrase of the clip exactly once.")
+ 
+-    # ponytail: stand-in for ml/scoring (empty today). Duration-weighted mean of phrase scores;
+-    # swap for the reference engine once ML B lands it. Ratings are stored as submitted.
+-    total_time = sum(durations.values())
+-    mean = lambda f: sum(f(p) * durations[p.phrase_id] for p in body.phrases) / total_time
+-    attempt.pitch, attempt.timing = round(mean(lambda p: p.pitch), 2), round(mean(lambda p: p.timing), 2)
+-    attempt.total = round(PITCH_WEIGHT * attempt.pitch + (1 - PITCH_WEIGHT) * attempt.timing, 2)  # no float noise
+-    attempt.phrase_results = [p.model_dump() for p in body.phrases]
++    # Reference engine (ml/scoring): validates the phrases, ignores any client-claimed score or rating,
++    # and recomputes phrase scores, ratings and totals with weights taken from our own manifest copy.
++    try:
++        result = finalize_turn([p.model_dump() for p in body.phrases], _weights(match.clip_id),
++                               expected_phrase_ids=[p.id for p in CATALOG[match.clip_id].phrases],
++                               register=attempt.register)
++    except ValueError as e:
++        raise ApiError(422, "invalid_result", str(e))
++    attempt.pitch, attempt.timing, attempt.total = result["pitch"], result["timing"], result["total"]
++    attempt.phrase_results = result["phrases"]
+     attempt.idempotency_key, attempt.state = idempotency_key, "accepted"
+     attempt.completed_at = datetime.now(timezone.utc)
+     # Result and turn transition commit together: next player's attempt, or the match is finished.
+diff --git a/api/requirements.txt b/api/requirements.txt
+index ced797b..63ed168 100644
+--- a/api/requirements.txt
++++ b/api/requirements.txt
+@@ -10,3 +10,5 @@ httpx>=0.27               # FastAPI TestClient
+ pytest>=8
+ python-dotenv>=1.0
+ pyjwt[crypto]>=2.8
++
++numpy>=1.26               # ml/scoring (scoring engine used by play.py)
