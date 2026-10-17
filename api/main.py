@@ -9,7 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
 from sqlalchemy import text
 
-from .clip_catalog import CATALOG, CATALOG_DIR
+from .clip_catalog import CATALOG, REVIEWED, SONG_DIR
 from .db import get_engine
 from .errors import ApiError, error_response
 from .models import ClipSummary, Song
@@ -65,7 +65,8 @@ def ready():
 def clips():
     return [
         ClipSummary(id=s.id, version=s.version, title=s.title, artist=s.artist,
-                    duration=s.duration, synthetic=s.provenance.source_version == "synthetic")
+                    duration=s.duration, synthetic=s.provenance.source_version == "synthetic",
+                    reviewed=REVIEWED[s.id])
         for s in CATALOG.values()
     ]
 
@@ -83,8 +84,9 @@ def instrumental(clip_id: str):
     """Instrumental only (vocals stay offline). Path comes from the validated manifest, never the URL.
     FileResponse handles Range requests, which browsers use for seeking."""
     song = manifest(clip_id)
-    path = (CATALOG_DIR / song.id / song.audio.instrumental).resolve()
-    if not path.is_relative_to((CATALOG_DIR / song.id).resolve()) or not path.is_file():
+    folder = SONG_DIR[song.id].resolve()
+    path = (folder / song.audio.instrumental).resolve()
+    if not path.is_relative_to(folder) or not path.is_file():
         raise ApiError(404, "audio_missing", f"Instrumental for '{clip_id}' is not installed on this server.")
     return FileResponse(path)
 

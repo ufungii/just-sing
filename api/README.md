@@ -37,6 +37,7 @@ Without a pronunciation scorer, `/api/practice` answers `status: "unavailable"`.
 | `COOKIE_SECURE` | `1` on public HTTPS so the guest cookie is Secure. Leave `0` on `http://localhost`. |
 | `GUEST_TTL_DAYS` | Guest session lifetime, default 7. Expired guests and their data are deleted hourly. |
 | `ALLOWED_ORIGINS` | Extra browser origins allowed to open WebSockets. The server's own host is always allowed. |
+| `SONG_DIRS` | Folders to load songs from (`:`-separated on Linux/macOS), each containing `<id>/song.json`. Default: `api/catalog` and `ml/data`. |
 | `GEMINI_API_KEY` | Server-side only. Enables coaching blurbs; without it they answer `unavailable`. |
 | `GEMINI_MODEL` | Model for blurbs, default `gemini-3.5-flash-lite`. Google retires older models for new accounts, so if blurbs go `unavailable`, check this first. |
 | `WEB_DIST` | Folder with the built frontend. Default `web/dist`. |
@@ -110,7 +111,7 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | Method | Route | Purpose |
 |---|---|---|
 | GET | `/api/health`, `/api/ready` | Liveness; readiness (`catalog`, `database`, `pronunciation`) |
-| GET | `/api/clips`, `/api/clips/{id}/manifest` | Prepared catalog; full manifest |
+| GET | `/api/clips`, `/api/clips/{id}/manifest` | Prepared catalog (each clip has `synthetic` and `reviewed` flags); full manifest |
 | GET | `/api/clips/{id}/audio` | Instrumental only, supports `Range` |
 | POST | `/api/guests` | Create guest `{display_name}`; sets the cookie |
 | POST | `/api/auth/claim` | After login, send bearer token + guest cookie to move guest history to the account |
@@ -191,8 +192,26 @@ network blip can submit the same attempt with the same `Idempotency-Key` as long
 | `practice.py` | Spoken-practice upload and the pluggable scorer |
 | `models.py`, `tables.py` | Pydantic contracts; SQLAlchemy tables |
 | `retention.py` | Hourly guest cleanup; lost-turn recovery every 15 s |
-| `clip_catalog.py`, `catalog/<id>/manifest.json` | Validated manifests (audio files go next to them, gitignored) |
+| `clip_catalog.py`, `catalog/<id>/song.json` | Song loading and validation; the synthetic fixture lives in `catalog/` |
 | `migrations/` | Alembic migrations (committed) |
+
+## Songs from the ML pipeline
+
+`python -m ml.pipeline.run` writes `ml/data/<id>/song.json` (the `contracts/song.example.json` shape) with its audio
+beside it, plus `song.review.json`. The API reads those folders directly, with no copying:
+
+```bash
+python -m api.seed                      # records each song's metadata and checksum in the database
+uvicorn api.main:app                    # restart to pick up new songs
+```
+
+- **Draft vs reviewed:** `GET /api/clips` returns `reviewed: true` only when `song.review.json` says `"reviewed": true`.
+  Drafts are served too, so they can be played and tried, and the UI should label them. A song with no review file counts as
+  not reviewed.
+- **`practice_text`:** a line cut off at the clip edge has `practice_text: ""` and no phrase, and that is fine. A line that
+  has a phrase must have `practice_text`, or the song fails to load.
+- **Errors name the folder:** an invalid `song.json`, or two songs with the same `id`, stop the server at startup with the path.
+- **Audio:** `audio.instrumental` is a path relative to the song's folder. Only the instrumental is served.
 
 ## Coaching blurb
 
@@ -211,8 +230,7 @@ saved and also appears as `coach_blurb` on the attempt's score in `GET /api/matc
   The weights, tie precision and `scoring_version` are read from [`contracts/scoring.config.json`](../contracts/scoring.config.json),
   the one file the Python engine and the TypeScript port should read too. Replace the stand-in with a call into
   `ml/scoring` once that exists; change values only in that file, and bump `scoring_version` when you do.
-- **Real clips:** put `manifest.json` and the instrumental in `api/catalog/<id>/`, then run `python -m api.seed`.
-  Audio is gitignored; never commit copyrighted audio.
+- **Real clips:** see "Songs from the ML pipeline" below. Audio is gitignored; never commit copyrighted audio.
 
 ## Known limits
 
