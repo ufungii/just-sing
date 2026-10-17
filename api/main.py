@@ -13,6 +13,8 @@ from .retention import cleanup_loop
 
 @asynccontextmanager
 async def lifespan(_):
+    from .rooms import hub
+    hub.loop = asyncio.get_running_loop()
     task = asyncio.create_task(cleanup_loop())
     yield
     task.cancel()
@@ -79,3 +81,7 @@ app.include_router(router)
 from .practice import router as practice_router  # noqa: E402
 
 app.include_router(practice_router)
+
+from .rooms import router as rooms_router  # noqa: E402
+
+app.include_router(rooms_router)

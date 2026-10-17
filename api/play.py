@@ -1,6 +1,7 @@
 """Guest sessions and solo matches. A solo run is a match with one player slot; the browser
 rates phrases locally and submits the final phrase results once, with an idempotency key."""
 import hashlib
+import logging
 import os
 import secrets
 import uuid
@@ -8,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from .auth import verify_bearer
@@ -16,13 +17,27 @@ from .db import get_engine
 from .errors import ApiError
 from .clip_catalog import CATALOG
 from .models import PhraseScore, Score
-from .tables import Clip, GuestSession, Match, MatchPlayer, PracticeAttempt, TurnAttempt
+from .tables import Clip, GuestSession, Match, MatchPlayer, PracticeAttempt, RoomMember, TurnAttempt
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
+
+# Called after a match change commits: hook(session, match, event, attempt_or_None). rooms.py registers
+# one to broadcast to online players. A failing hook is logged and never fails the request.
+match_hooks: list = []
+
+
+def notify(s: Session, match: Match, event: str, attempt: TurnAttempt | None = None):
+    for hook in match_hooks:
+        try:
+            hook(s, match, event, attempt)
+        except Exception:
+            log.exception("match hook failed")
 
 SCORING_VERSION = "0.1.0"
 GUEST_TTL = timedelta(days=int(os.getenv("GUEST_TTL_DAYS", "7")))
 TIE_DECIMALS = 1  # totals equal at this display precision are a tie
+RECONNECT_GRACE = timedelta(seconds=int(os.getenv("RECONNECT_GRACE_SECONDS", "60")))
 PITCH_WEIGHT = 0.8  # CLAUDE.md default, 80% pitch / 20% timing
 
 
@@ -97,14 +112,16 @@ def create_guest(body: GuestIn, response: Response, s: Session = Depends(get_db)
 
 
 def _new_match(s: Session, guest: GuestSession, clip_id: str, names: list[str],
-               previous: uuid.UUID | None = None):
+               previous: uuid.UUID | None = None, room_id: uuid.UUID | None = None):
+    """Create a match and its first attempt. The caller commits, so it can join other changes."""
     song = CATALOG.get(clip_id)
     if not song:
         raise ApiError(404, "clip_not_found", f"No clip with id '{clip_id}'.")
     if not s.get(Clip, (song.id, song.version)):
         raise ApiError(503, "catalog_not_seeded", "Clip metadata is missing; run python -m api.seed.")
-    match = Match(guest_id=guest.id, mode="solo" if len(names) == 1 else "local", clip_id=song.id,
-                  clip_version=song.version, scoring_version=SCORING_VERSION, previous_match_id=previous)
+    match = Match(guest_id=guest.id, mode="online" if room_id else "solo" if len(names) == 1 else "local",
+                  clip_id=song.id, clip_version=song.version, scoring_version=SCORING_VERSION,
+                  previous_match_id=previous, room_id=room_id)
     s.add(match)
     s.flush()
     for slot, name in enumerate(names):
@@ -112,18 +129,23 @@ def _new_match(s: Session, guest: GuestSession, clip_id: str, names: list[str],
     s.flush()
     attempt = TurnAttempt(match_id=match.id, slot=0)  # later slots get theirs when the turn before is saved
     s.add(attempt)
-    s.commit()
+    s.flush()
     return {"match_id": match.id, "attempt_id": attempt.id, "scoring_version": SCORING_VERSION}
 
 
 @router.post("/matches")
 def create_match(body: MatchIn, guest=Depends(current_guest), s: Session = Depends(get_db)):
-    return _new_match(s, guest, body.clip_id, body.players or [guest.display_name])
+    out = _new_match(s, guest, body.clip_id, body.players or [guest.display_name])
+    s.commit()
+    return out
 
 
 def _owned_match(s: Session, guest: GuestSession, match_id: uuid.UUID) -> Match:
+    """The creator, or either member of the match's room. Same 404 for "missing" and "not yours"."""
     match = s.get(Match, match_id)
-    if not match or match.guest_id != guest.id:  # same 404 for "missing" and "not yours"
+    member = match and match.room_id and s.scalar(select(RoomMember.slot).where(
+        RoomMember.room_id == match.room_id, RoomMember.guest_id == guest.id)) is not None
+    if not match or not (match.guest_id == guest.id or member):
         raise ApiError(404, "match_not_found", "No such match.")
     return match
 
@@ -131,9 +153,13 @@ def _owned_match(s: Session, guest: GuestSession, match_id: uuid.UUID) -> Match:
 @router.post("/matches/{match_id}/rematch")
 def rematch(match_id: uuid.UUID, guest=Depends(current_guest), s: Session = Depends(get_db)):
     old = _owned_match(s, guest, match_id)
+    if old.room_id:
+        raise ApiError(409, "use_room_rematch", "Online matches are replayed from the room.")
     names = s.scalars(select(MatchPlayer.display_name).where(MatchPlayer.match_id == old.id)
                       .order_by(MatchPlayer.slot)).all()
-    return _new_match(s, guest, old.clip_id, list(names), previous=old.id)
+    out = _new_match(s, guest, old.clip_id, list(names), previous=old.id)
+    s.commit()
+    return out
 
 
 @router.post("/turns/{attempt_id}/begin")
@@ -143,21 +169,28 @@ def begin_turn(attempt_id: uuid.UUID, body: BeginIn, guest=Depends(current_guest
     if not attempt:
         raise ApiError(404, "attempt_not_found", "No such attempt.")
     match = _owned_match(s, guest, attempt.match_id)
-    _check_turn(match, attempt)
+    _check_turn(s, guest, match, attempt)
     if body.register not in (-12, 0, 12):
         raise ApiError(422, "invalid_register", "register must be -12, 0 or 12.")
     if attempt.state not in ("pending", "started"):
         raise ApiError(409, "attempt_closed", "This attempt already has a result.")
+    now = datetime.now(timezone.utc)
     attempt.state, attempt.register = "started", body.register
     attempt.calibration_offset = body.calibration_offset
+    # Past this deadline the attempt is treated as lost (tab closed, connection gone): see retention.
+    attempt.started_at, attempt.deadline_at = now, now + timedelta(seconds=CATALOG[match.clip_id].duration) + RECONNECT_GRACE
     s.commit()
+    notify(s, match, "turn_started", attempt)
     return {"attempt_id": attempt.id, "state": attempt.state}
 
 
-def _check_turn(match: Match, attempt: TurnAttempt):
-    """Turns alternate: only the active slot's attempt may move."""
+def _check_turn(s: Session, guest: GuestSession, match: Match, attempt: TurnAttempt):
+    """Turns alternate: only the active slot's attempt may move. In a room, only that seat's guest."""
     if match.state != "active" or attempt.slot != match.active_slot:
         raise ApiError(409, "not_your_turn", "It is not this player's turn.")
+    if match.room_id and s.scalar(select(RoomMember.slot).where(
+            RoomMember.room_id == match.room_id, RoomMember.guest_id == guest.id)) != attempt.slot:
+        raise ApiError(403, "not_your_seat", "Only the player whose turn it is can do that.")
 
 
 def _score(match: Match, a: TurnAttempt) -> Score:
@@ -178,9 +211,11 @@ def submit_result(attempt_id: uuid.UUID, body: ResultIn, idempotency_key: str = 
         if attempt.idempotency_key == idempotency_key:
             return _score(match, attempt)  # replay: same answer, nothing advances twice
         raise ApiError(409, "already_submitted", "This attempt already has a different result.")
+    if attempt.state == "invalidated":
+        raise ApiError(409, "attempt_invalidated", "This attempt was replaced; start a new one.")
     if attempt.state != "started":
         raise ApiError(409, "attempt_not_started", "Begin the attempt before submitting a result.")
-    _check_turn(match, attempt)
+    _check_turn(s, guest, match, attempt)
 
     durations = {p.id: p.end - p.start for p in CATALOG[match.clip_id].phrases}
     if sorted(p.phrase_id for p in body.phrases) != sorted(durations):
@@ -203,12 +238,16 @@ def submit_result(attempt_id: uuid.UUID, body: ResultIn, idempotency_key: str = 
     else:
         match.state = "finished"
     s.commit()
+    notify(s, match, "result_saved", attempt)
     return _score(match, attempt)
 
 
 @router.get("/matches/{match_id}")
 def get_match(match_id: uuid.UUID, guest=Depends(current_guest), s: Session = Depends(get_db)):
-    match = _owned_match(s, guest, match_id)
+    return match_view(s, _owned_match(s, guest, match_id))
+
+
+def match_view(s: Session, match: Match) -> dict:
     players = s.scalars(select(MatchPlayer).where(MatchPlayer.match_id == match.id)
                         .order_by(MatchPlayer.slot)).all()
     attempts = s.scalars(select(TurnAttempt).where(TurnAttempt.match_id == match.id)
@@ -225,10 +264,37 @@ def get_match(match_id: uuid.UUID, guest=Depends(current_guest), s: Session = De
                           "score": _score(match, a) if a.state == "accepted" else None} for a in attempts]}
 
 
+@router.post("/matches/{match_id}/retry")
+def retry_turn(match_id: uuid.UUID, guest=Depends(current_guest), s: Session = Depends(get_db)):
+    """Replace a lost or abandoned turn with a fresh attempt. The old one is invalidated first, so a
+    late submission from it cannot overwrite anything."""
+    match = s.get(Match, match_id, with_for_update=True)
+    if match:
+        _owned_match(s, guest, match_id)
+    if not match or match.state not in ("active", "retry_required"):
+        raise ApiError(409, "cannot_retry", "This match has no turn to retry.")
+    last = s.scalars(select(TurnAttempt).where(TurnAttempt.match_id == match.id, TurnAttempt.slot == match.active_slot)
+                     .order_by(TurnAttempt.attempt_number.desc()).limit(1)).one()
+    if last.state == "accepted":
+        raise ApiError(409, "cannot_retry", "That turn already has a result.")
+    last.state = "invalidated"
+    match.state = "active"
+    fresh = TurnAttempt(match_id=match.id, slot=match.active_slot, attempt_number=last.attempt_number + 1)
+    _check_turn(s, guest, match, fresh)
+    s.add(fresh)
+    s.commit()
+    notify(s, match, "retry", fresh)
+    return {"attempt_id": fresh.id}
+
+
 @router.get("/history")
 def history(guest=Depends(current_guest), s: Session = Depends(get_db)):
+    # Own matches, plus the guest's own seat in online rooms.
+    seat = select(RoomMember.slot).where(RoomMember.room_id == Match.room_id,
+                                         RoomMember.guest_id == guest.id).scalar_subquery()
     rows = s.execute(select(Match, TurnAttempt.total).join(TurnAttempt, TurnAttempt.match_id == Match.id)
-                     .where(Match.guest_id == guest.id, TurnAttempt.state == "accepted")
+                     .where(TurnAttempt.state == "accepted",
+                            or_(and_(Match.room_id.is_(None), Match.guest_id == guest.id), TurnAttempt.slot == seat))
                      .order_by(Match.created_at.desc())).all()
     return [{"match_id": m.id, "clip_id": m.clip_id, "created_at": m.created_at, "total": t}
             for m, t in rows]
@@ -257,6 +323,6 @@ def leaderboard(clip_id: str, s: Session = Depends(get_db)):
     rows = s.execute(
         select(GuestSession.display_name, func.max(TurnAttempt.total).label("best"))
         .join(Match, Match.guest_id == GuestSession.id).join(TurnAttempt, TurnAttempt.match_id == Match.id)
-        .where(Match.clip_id == clip_id, TurnAttempt.state == "accepted", GuestSession.auth0_sub.is_not(None))
+        .where(Match.clip_id == clip_id, Match.room_id.is_(None), TurnAttempt.state == "accepted", GuestSession.auth0_sub.is_not(None))
         .group_by(GuestSession.id).order_by(func.max(TurnAttempt.total).desc()).limit(20)).all()
     return [{"display_name": n, "total": t} for n, t in rows]

@@ -3,7 +3,7 @@ slot (and later a room) without changing these tables. Audio and manifests stay 
 import uuid
 from datetime import datetime
 
-from sqlalchemy import (DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, String,
+from sqlalchemy import (Boolean, DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, String,
                         UniqueConstraint, func, text)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -53,6 +53,7 @@ class Match(Base):
     state: Mapped[str] = mapped_column(String(24), default="active")
     active_slot: Mapped[int] = mapped_column(Integer, default=0)
     previous_match_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("match.id"))  # rematch
+    room_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("room.id"), index=True)  # online only
     created_at: Mapped[datetime] = _now()
     __table_args__ = (ForeignKeyConstraint(["clip_id", "clip_version"], ["clip.id", "clip.version"]),)
 
@@ -80,6 +81,8 @@ class TurnAttempt(Base):
     total: Mapped[float | None] = mapped_column(Float)
     created_at: Mapped[datetime] = _now()
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # clip length + reconnect grace
     __table_args__ = (
         ForeignKeyConstraint(["match_id", "slot"], ["match_player.match_id", "match_player.slot"]),
         UniqueConstraint("match_id", "idempotency_key"),
@@ -100,3 +103,28 @@ class PracticeAttempt(Base):
     status: Mapped[str] = mapped_column(String(16))  # ok | unavailable | error
     words: Mapped[list | None] = mapped_column(JSONB)  # no raw audio is stored
     created_at: Mapped[datetime] = _now()
+
+
+class Room(Base):
+    """Online lobby for two guests. Durable state lives here; only socket handles live in memory."""
+    __tablename__ = "room"
+    id: Mapped[uuid.UUID] = _id()
+    code: Mapped[str] = mapped_column(String(8), unique=True)
+    host_guest_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("guest_session.id"))
+    clip_id: Mapped[str] = mapped_column(String(64))
+    clip_version: Mapped[int] = mapped_column(Integer)
+    state: Mapped[str] = mapped_column(String(16), default="lobby")  # lobby | playing | finished | aborted
+    state_version: Mapped[int] = mapped_column(Integer, default=1)  # bumped on every durable change
+    created_at: Mapped[datetime] = _now()
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (ForeignKeyConstraint(["clip_id", "clip_version"], ["clip.id", "clip.version"]),)
+
+
+class RoomMember(Base):
+    __tablename__ = "room_member"
+    room_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("room.id"), primary_key=True)
+    slot: Mapped[int] = mapped_column(Integer, primary_key=True)  # 0 = host, 1 = guest; unique per room
+    guest_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("guest_session.id"))
+    display_name: Mapped[str] = mapped_column(String(40))
+    ready: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    __table_args__ = (UniqueConstraint("room_id", "guest_id"),)
