@@ -1,0 +1,287 @@
+{
+  "scoring_version": "0.1.0",
+  "seeds": 3,
+  "axes": {
+    "Detuning (every note off by +/- N cents)": {
+      "rows": [
+        {
+          "severity": 0,
+          "total": 98.10000000000001,
+          "total_sd": 0.14142135623730817,
+          "pitch": 97.66666666666667,
+          "timing": 100.0
+        },
+        {
+          "severity": 25,
+          "total": 98.0,
+          "total_sd": 0.16329931618554752,
+          "pitch": 97.5,
+          "timing": 100.0
+        },
+        {
+          "severity": 50,
+          "total": 96.06666666666666,
+          "total_sd": 0.09428090415820768,
+          "pitch": 95.10000000000001,
+          "timing": 100.0
+        },
+        {
+          "severity": 100,
+          "total": 69.83333333333333,
+          "total_sd": 2.1483844059096042,
+          "pitch": 64.83333333333333,
+          "timing": 89.86666666666667
+        },
+        {
+          "severity": 150,
+          "total": 42.866666666666674,
+          "total_sd": 1.8838494867926385,
+          "pitch": 32.6,
+          "timing": 84.00000000000001
+        },
+        {
+          "severity": 200,
+          "total": 18.466666666666665,
+          "total_sd": 2.2881336402307353,
+          "pitch": 2.8666666666666667,
+          "timing": 81.06666666666668
+        },
+        {
+          "severity": 300,
+          "total": 19.833333333333332,
+          "total_sd": 0.873053390247252,
+          "pitch": 0.5333333333333333,
+          "timing": 97.06666666666666
+        }
+      ],
+      "spearman": -0.9593158953255569
+    },
+    "Skipped notes (fraction replaced by rests)": {
+      "rows": [
+        {
+          "severity": 0.0,
+          "total": 98.10000000000001,
+          "total_sd": 0.14142135623730817,
+          "pitch": 97.66666666666667,
+          "timing": 100.0
+        },
+        {
+          "severity": 0.1,
+          "total": 90.96666666666665,
+          "total_sd": 0.3091206165165258,
+          "pitch": 92.66666666666667,
+          "timing": 84.36666666666666
+        },
+        {
+          "severity": 0.25,
+          "total": 69.56666666666666,
+          "total_sd": 1.6048537489614305,
+          "pitch": 70.2,
+          "timing": 67.26666666666667
+        },
+        {
+          "severity": 0.5,
+          "total": 48.03333333333333,
+          "total_sd": 0.873053390247254,
+          "pitch": 51.9,
+          "timing": 32.63333333333333
+        },
+        {
+          "severity": 0.75,
+          "total": 25.2,
+          "total_sd": 1.430617582258329,
+          "pitch": 27.566666666666666,
+          "timing": 15.6
+        },
+        {
+          "severity": 1.0,
+          "total": 0.0,
+          "total_sd": 0.0,
+          "pitch": 0.0,
+          "timing": 0.0
+        }
+      ],
+      "spearman": -0.9900961854443917
+    },
+    "Background noise (white, lower SNR = worse)": {
+      "rows": [
+        {
+          "severity": -40,
+          "total": 98.10000000000001,
+          "total_sd": 0.14142135623730817,
+          "pitch": 97.66666666666667,
+          "timing": 100.0
+        },
+        {
+          "severity": -30,
+          "total": 98.13333333333333,
+          "total_sd": 0.09428090415820767,
+          "pitch": 97.7,
+          "timing": 100.0
+        },
+        {
+          "severity": -20,
+          "total": 98.13333333333333,
+          "total_sd": 0.09428090415820767,
+          "pitch": 97.7,
+          "timing": 100.0
+        },
+        {
+          "severity": -10,
+          "total": 98.0,
+          "total_sd": 0.0,
+          "pitch": 97.5,
+          "timing": 100.0
+        },
+        {
+          "severity": -5,
+          "total": 97.10000000000001,
+          "total_sd": 0.24494897427832127,
+          "pitch": 96.40000000000002,
+          "timing": 100.0
+        },
+        {
+          "severity": 0,
+          "total": 24.73333333333333,
+          "total_sd": 17.490822990611072,
+          "pitch": 24.633333333333336,
+          "timing": 25.266666666666666
+        },
+        {
+          "severity": 5,
+          "total": 0.3,
+          "total_sd": 0.42426406871192857,
+          "pitch": 0.0,
+          "timing": 1.5666666666666667
+        }
+      ],
+      "spearman": -0.8700767413850156
+    },
+    "Late entrance, uncalibrated (seconds)": {
+      "rows": [
+        {
+          "severity": 0.0,
+          "total": 98.10000000000001,
+          "total_sd": 0.14142135623730817,
+          "pitch": 97.66666666666667,
+          "timing": 100.0
+        },
+        {
+          "severity": 0.1,
+          "total": 90.43333333333334,
+          "total_sd": 0.09428090415820768,
+          "pitch": 88.23333333333333,
+          "timing": 99.16666666666667
+        },
+        {
+          "severity": 0.2,
+          "total": 72.36666666666666,
+          "total_sd": 0.20548046676563317,
+          "pitch": 71.8,
+          "timing": 74.60000000000001
+        },
+        {
+          "severity": 0.3,
+          "total": 52.633333333333326,
+          "total_sd": 0.16996731711975957,
+          "pitch": 55.5,
+          "timing": 41.199999999999996
+        },
+        {
+          "severity": 0.4,
+          "total": 33.03333333333334,
+          "total_sd": 0.1699673171197619,
+          "pitch": 39.06666666666666,
+          "timing": 8.733333333333333
+        },
+        {
+          "severity": 0.5,
+          "total": 20.5,
+          "total_sd": 0.0,
+          "pitch": 22.899999999999995,
+          "timing": 10.9
+        }
+      ],
+      "spearman": -0.9906101206907555
+    },
+    "Tempo drift (singer slower; 1 - rate)": {
+      "rows": [
+        {
+          "severity": 0.0,
+          "total": 97.56666666666666,
+          "total_sd": 0.16996731711975635,
+          "pitch": 97.66666666666667,
+          "timing": 97.23333333333333
+        },
+        {
+          "severity": 0.05,
+          "total": 68.5,
+          "total_sd": 0.864098759787716,
+          "pitch": 70.16666666666667,
+          "timing": 61.76666666666667
+        },
+        {
+          "severity": 0.1,
+          "total": 44.1,
+          "total_sd": 0.5354126134736324,
+          "pitch": 40.56666666666667,
+          "timing": 58.199999999999996
+        },
+        {
+          "severity": 0.2,
+          "total": 25.866666666666664,
+          "total_sd": 0.1699673171197603,
+          "pitch": 24.63333333333333,
+          "timing": 30.8
+        },
+        {
+          "severity": 0.3,
+          "total": 22.86666666666667,
+          "total_sd": 0.1699673171197603,
+          "pitch": 22.2,
+          "timing": 25.333333333333332
+        },
+        {
+          "severity": 0.4,
+          "total": 30.96666666666667,
+          "total_sd": 0.20548046676563259,
+          "pitch": 30.566666666666663,
+          "timing": 32.53333333333333
+        }
+      ],
+      "spearman": -0.8182461476057493
+    }
+  },
+  "checks": [
+    {
+      "name": "Reference-like take (through tracker)",
+      "score": 97.9,
+      "expected": ">= 90"
+    },
+    {
+      "name": "Same take, octave up, +12 register chosen",
+      "score": 97.2,
+      "expected": ">= 90"
+    },
+    {
+      "name": "Same take, octave up, register NOT chosen",
+      "score": 20.0,
+      "expected": "<= 30"
+    },
+    {
+      "name": "Silence",
+      "score": 0.0,
+      "expected": "== 0"
+    },
+    {
+      "name": "Noise only (no voice)",
+      "score": 3.8,
+      "expected": "<= 10"
+    },
+    {
+      "name": "Identical input scored twice, equal?",
+      "score": 1.0,
+      "expected": "== 1"
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 # Local spoken-Korean pronunciation scorer. Python 3.11.
 -r ../requirements.txt
+# CUDA build for RTX 50-series (Blackwell): uv pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu128
+# (CPU-only alternative: .../whl/cpu). Needs ~7 GB of disk with CUDA.
 torch
 torchaudio
 transformers       # pretrained Korean wav2vec2 CTC model (verify license/size)
