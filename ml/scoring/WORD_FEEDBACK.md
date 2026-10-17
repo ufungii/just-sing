@@ -80,9 +80,9 @@ Frontend wiring remains frontend-owned and is not included in this patch:
   failure from an all-null track. Omit the panel for historical/demo results without
   derived word feedback; don't manufacture misses.
 
-Do not apply the older `ts_port_0.2.0.patch` blindly to this checkout: browser files
-here differ from the branches that patch was prepared for. That port is separate
-work and isn't a prerequisite for this standalone word helper.
+The browser scoring port is now aligned with Python scoring version 0.2.0 after
+integrating current `main`. The older `ts_port_0.2.0.patch` was applied during that
+integration; do not apply it again. The word helper remains a separate additive patch.
 
 ## Testing and recordings
 
