@@ -225,8 +225,8 @@ def submit_result(attempt_id: uuid.UUID, body: ResultIn, idempotency_key: str = 
     # swap for the reference engine once ML B lands it. Ratings are stored as submitted.
     total_time = sum(durations.values())
     mean = lambda f: sum(f(p) * durations[p.phrase_id] for p in body.phrases) / total_time
-    attempt.pitch, attempt.timing = mean(lambda p: p.pitch), mean(lambda p: p.timing)
-    attempt.total = PITCH_WEIGHT * attempt.pitch + (1 - PITCH_WEIGHT) * attempt.timing
+    attempt.pitch, attempt.timing = round(mean(lambda p: p.pitch), 2), round(mean(lambda p: p.timing), 2)
+    attempt.total = round(PITCH_WEIGHT * attempt.pitch + (1 - PITCH_WEIGHT) * attempt.timing, 2)  # no float noise
     attempt.phrase_results = [p.model_dump() for p in body.phrases]
     attempt.idempotency_key, attempt.state = idempotency_key, "accepted"
     attempt.completed_at = datetime.now(timezone.utc)

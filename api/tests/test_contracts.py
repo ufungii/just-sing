@@ -46,3 +46,10 @@ def test_audio_served_with_range_and_missing_is_actionable():
         assert part.status_code == 206 and part.content == b"234"
     finally:
         f.unlink()
+
+
+def test_ready_reports_real_state():
+    import os
+    body = client.get("/api/ready").json()
+    assert body["database"] == ("ok" if os.getenv("DATABASE_URL") else "not_configured")
+    assert body["pronunciation"] == "unavailable"  # no scorer attached yet
