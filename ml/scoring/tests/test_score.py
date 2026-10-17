@@ -20,20 +20,20 @@ def run(user, ref, **kw):
 def test_perfect_take(ref):
     r = run(ref, ref)
     assert r["total"] == r["pitch"] == r["timing"] == 100.0
-    assert [p["rating"] for p in r["phrases"]] == ["Perfect!"] * 3
+    assert [p["rating"] for p in r["phrases"]] == ["perfect"] * 3
 
 
 def test_silence_scores_zero_overall(ref):
     r = run(np.full_like(ref, np.nan), ref)
     assert r["total"] == 0.0
-    assert all(p["rating"] == "Miss" for p in r["phrases"])
+    assert all(p["rating"] == "miss" for p in r["phrases"])
 
 
 def test_wrong_register_is_bad_not_miss(ref):
     r = run(ref * 2.0, ref)  # sung an octave up but register left at original
     assert r["pitch"] == 0.0 and r["timing"] == 100.0
     assert r["total"] == pytest.approx(20.0)
-    assert all(p["rating"] == "Bad" for p in r["phrases"])
+    assert all(p["rating"] == "bad" for p in r["phrases"])
 
 
 def test_selected_register_scores_like_original(ref):
@@ -48,8 +48,8 @@ def test_total_agrees_with_phrase_scores(ref):
     w = np.array([int(np.isfinite(ref[int(s / HOP):int(e / HOP)]).sum()) for _, s, e in PHRASES])
     s = np.array([p["score"] for p in r["phrases"]])
     assert r["total"] == pytest.approx(float((s * w).sum() / w.sum()), abs=0.1)
-    assert r["phrases"][0]["rating"] == "Miss"
-    assert r["phrases"][1]["rating"] == "Perfect!"
+    assert r["phrases"][0]["rating"] == "miss"
+    assert r["phrases"][1]["rating"] == "perfect"
 
 
 def test_deterministic(ref):

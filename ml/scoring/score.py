@@ -16,16 +16,17 @@ from .config import SCORING_VERSION, PitchConfig, ScoreConfig, TimingConfig
 from .timing import onset_times, timing_score
 
 
+# Lowercase ids per contracts/score.example.json; the UI shows "Perfect!", "Great", ...
 def rate(score: float, coverage: float, cfg: ScoreConfig) -> str:
     if coverage < cfg.min_coverage:
-        return "Miss"
+        return "miss"
     if score >= cfg.perfect:
-        return "Perfect!"
+        return "perfect"
     if score >= cfg.great:
-        return "Great"
+        return "great"
     if score >= cfg.okay:
-        return "Okay"
-    return "Bad"
+        return "okay"
+    return "bad"
 
 
 def score_turn(
