@@ -92,9 +92,8 @@ class Song(BaseModel):
                 raise ValueError(f"phrase {p.id} outside clip duration")
             if not 0 <= p.line_index < len(self.lines):
                 raise ValueError(f"phrase {p.id} points at a missing line")
-        for p in self.phrases:  # a gradeable line must be practicable; clip-edge lines have no phrase
-            if not self.lines[p.line_index].practice_text.strip():
-                raise ValueError(f"phrase {p.id} has a line without practice_text")
+        # Singing phrases do not require Korean spoken-practice text. The pipeline
+        # leaves it empty for English/mixed-language lines while retaining their melody.
         if self.duet_sections is not None:
             section_ids = [section.id for section in self.duet_sections]
             if len(section_ids) != len(set(section_ids)):

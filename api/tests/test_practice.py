@@ -82,6 +82,23 @@ def test_bad_input_is_rejected(env, tmp_path):
     assert post(c, b"x", phrase="nope").status_code == 404
 
 
+@pytest.mark.parametrize("practice_text", ["", " "])
+def test_singing_only_line_is_rejected_before_audio_or_scorer(env, monkeypatch, practice_text):
+    c, _ = env
+    song = practice.CATALOG["synthetic-demo"]
+    lines = list(song.lines)
+    lines[0] = lines[0].model_copy(update={"practice_text": practice_text})
+    monkeypatch.setitem(practice.CATALOG, song.id, song.model_copy(update={"lines": lines}))
+
+    def unexpected_audio(*args):
+        pytest.fail("A singing-only line must not be decoded or assessed")
+    monkeypatch.setattr(practice, "_normalize", unexpected_audio)
+    monkeypatch.setattr(practice, "scorer", FakeScorer())
+    response = post(c, b"not decoded")
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "phrase_not_practicable"
+
+
 def streamed_webm(path, seconds):
     """Like Chrome's MediaRecorder: WebM written as a stream, so the header has no duration."""
     with path.open("wb") as f:
