@@ -85,9 +85,9 @@ class Song(BaseModel):
                 raise ValueError(f"phrase {p.id} outside clip duration")
             if p.line_index >= len(self.lines):
                 raise ValueError(f"phrase {p.id} points at a missing line")
-        for line in self.lines:
-            if not line.practice_text.strip():
-                raise ValueError("line missing practice_text")
+        for p in self.phrases:  # a gradeable line must be practicable; clip-edge lines have no phrase
+            if not self.lines[p.line_index].practice_text.strip():
+                raise ValueError(f"phrase {p.id} has a line without practice_text")
         return self
 
 
@@ -98,6 +98,7 @@ class ClipSummary(BaseModel):
     artist: str
     duration: float
     synthetic: bool
+    reviewed: bool  # false for drafts: timings and notes not yet checked by ear
 
 
 class PhraseScore(BaseModel):
