@@ -6,7 +6,7 @@ new file mode 100644
 +/** Display-only singing activity; cannot recognize the words being sung. See WORD_FEEDBACK.md. */
 +export const WORD_FEEDBACK_VERSION = '1.0.0';
 +export const WORD_FEEDBACK_CONFIG = { sung_coverage: 0.5, partly_coverage: 0.2, late_after_s: 0.12 };
-+export const WORD_PITCH_CONFIG = { full_credit_cents: 50, zero_credit_cents: 200 };
++export const WORD_PITCH_CONFIG = { full_credit_cents: 70, zero_credit_cents: 200 };
 +
 +type Word = { text: string; start: number; end: number };
 +export interface SingingWordFeedback extends Word {
