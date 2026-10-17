@@ -6,6 +6,7 @@ import type { MatchView, PhraseScore, Song } from '../../lib/types';
 import { useNav, type DuetSetup } from '../../routes';
 import { aggregate, buildTargetTrack, displayNotes, phraseSettlesAt, phraseWeights, registerRatio, scorePhrase, SCORING_CONFIG } from '../../scoring';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
+import { GuideControl } from '../../ui/GuideControl';
 import { rangeLabel } from '../../components/timeline/range';
 import { MatchBoard } from '../Battle/BattleTurn';
 import { Lyrics } from '../Sing/Lyrics';
@@ -237,7 +238,7 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
       {phase === 'saved' && error && <PixelButton onClick={() => void save()}>RETRY SAVE</PixelButton>}
       {phase === 'error' && <PixelButton onClick={() => void restart()}>{setup.online ? 'STOP DUET FOR RESTART' : 'RESTART TOGETHER'}</PixelButton>}
       <Panel>
-        {engine.current?.vocals && <><PixelButton aria-pressed={guide} onClick={() => setGuide((v) => !v)}>GUIDE VOCALS</PixelButton><input type="range" aria-label="Guide vocal volume" min={0} max={100} value={guideVolume * 100} onChange={(e) => setGuideVolume(Number(e.target.value) / 100)} /></>}
+        {engine.current?.vocals && <GuideControl on={guide} volume={guideVolume} onToggle={() => setGuide((v) => !v)} onVolume={setGuideVolume} />}
         {song && <Lyrics lines={song.lines.filter((_, index) => song.phrases.some((p) => p.line_index === index && owner.has(p.id)))} t={now} showRoman showTrans />}
       </Panel>
     </ScreenShell>
