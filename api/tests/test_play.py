@@ -62,3 +62,28 @@ def test_other_guest_cannot_read(guests):
     m = a.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
     assert b.get(f"/api/matches/{m['match_id']}").status_code == 404
     assert TestClient(app).get("/api/history").status_code == 401  # no cookie
+
+
+def play_turn(c, match_id, attempt_id, pitch):
+    phrases = {"phrases": [{**GOOD["phrases"][0], "pitch": pitch, "timing": pitch}]}
+    assert c.post(f"/api/turns/{attempt_id}/begin", json={}).status_code == 200
+    r = c.post(f"/api/turns/{attempt_id}/result", json=phrases, headers={"Idempotency-Key": str(pitch)})
+    assert r.status_code == 200 and r.json()["mode"] == "battle"
+    return c.get(f"/api/matches/{match_id}").json()
+
+
+def test_local_battle_alternates_and_picks_winner_or_tie(guests):
+    c = new_guest(guests)
+    for scores, winner in [((70, 90), 1), ((80, 80.04), None)]:  # second pair ties at 1 decimal
+        m = c.post("/api/matches", json={"clip_id": "synthetic-demo", "players": ["Ann", "Bo"]}).json()
+        view = c.get(f"/api/matches/{m['match_id']}").json()
+        assert [p["display_name"] for p in view["players"]] == ["Ann", "Bo"] and len(view["attempts"]) == 1
+        view = play_turn(c, m["match_id"], m["attempt_id"], scores[0])
+        assert view["active_slot"] == 1 and view["state"] == "active" and view["winner_slot"] is None
+        # slot 0 cannot go again; slot 1's attempt is now the open one
+        assert c.post(f"/api/turns/{m['attempt_id']}/begin", json={}).status_code == 409
+        second = next(a["id"] for a in view["attempts"] if a["slot"] == 1)
+        view = play_turn(c, m["match_id"], second, scores[1])
+        assert view["state"] == "finished" and view["winner_slot"] == winner
+    rematch = c.post(f"/api/matches/{m['match_id']}/rematch").json()
+    assert [p["display_name"] for p in c.get(f"/api/matches/{rematch['match_id']}").json()["players"]] == ["Ann", "Bo"]
