@@ -10,6 +10,7 @@ import type { ClipSummary, Practice as PracticeResult, Song } from '../../lib/ty
 import { Notice, Panel, PixelButton, ScreenShell, Segmented } from '../../ui';
 import { Recorder } from './Recorder';
 import './Practice.css';
+import { practicePhrases } from '../../lib/practicePhrases';
 
 /**
  * Display-only bands for colouring word chips. These are NOT validated thresholds: the scorer's
@@ -102,7 +103,7 @@ export function Practice() {
       .then((s) => {
         if (!live) return;
         setSong(s);
-        setPhraseId(s.phrases[0]?.id ?? null);
+        setPhraseId(practicePhrases(s)[0]?.id ?? null);
       })
       .catch((e) => live && setSongError(e instanceof ApiError ? e.message : 'Could not load this clip.'));
     return () => {
@@ -170,9 +171,10 @@ export function Practice() {
               </Notice>
             )}
             {!song && !songError && <Notice>Loading lines…</Notice>}
+            {song && !practicePhrases(song).length && <Notice>This song has no Korean-only pronunciation lines. You can still sing it in karaoke.</Notice>}
             {song && (
               <ol className="practice-lines">
-                {song.phrases.map((p, i) => {
+                {practicePhrases(song).map((p, i) => {
                   const l = song.lines[p.line_index];
                   return (
                     <li key={p.id}>

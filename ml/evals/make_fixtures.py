@@ -15,6 +15,9 @@ from pathlib import Path
 import numpy as np
 
 from ml.evals.synthetic import detune, example_melody, example_phrases, melody_track
+from dataclasses import replace
+
+from ml.scoring.config import PitchConfig, SCORING_VERSION
 from ml.scoring.pitch import HOP_SECONDS, to_track, track_to_json
 from ml.scoring.score import score_turn
 from ml.scoring.timing import onset_times
@@ -48,7 +51,11 @@ def build_cases() -> list[dict]:
         ("first_phrase_unsung", "first phrase skipped", unsung_first, 0, 0.0, []),
         ("detuned_100_cents", "every other note 100 cents off", melody_track(detune(notes, 100), HOP_SECONDS), 0, 0.0, []),
         ("excluded_region", "garbage inside an excluded region does not count", garbage, 0, 0.0, [[1.0, 2.0]]),
+        ("late_small_forgiven", "0.1 s late, uncalibrated: inside the default pitch time tolerance", _shift(ref, 0.1), 0, 0.0, []),
+        ("late_small_strict", "the same take with the pitch time tolerance switched off", _shift(ref, 0.1), 0, 0.0, []),
     ]
+    # Per-case override of the pitch time tolerance (seconds). Everything else uses the default.
+    tolerance_override = {"late_small_strict": 0.0}
 
     ref_json = track_to_json(ref)
     ref_rounded = to_track(ref_json)
@@ -57,11 +64,13 @@ def build_cases() -> list[dict]:
 
     cases = []
     for name, desc, user, register, latency, excluded in specs:
+        tolerance = tolerance_override.get(name, PitchConfig().time_tolerance_s)
         user_json = track_to_json(user)
         expected = score_turn(
             to_track(user_json), ref_rounded, [tuple(p) for p in phrases],
             hop_seconds=HOP_SECONDS, ref_onsets=ref_onsets, register=register,
             excluded=[tuple(e) for e in excluded], latency_offset_s=latency,
+            pitch_cfg=replace(PitchConfig(), time_tolerance_s=tolerance),
         )
         cases.append({
             "name": name,
@@ -75,6 +84,7 @@ def build_cases() -> list[dict]:
                 "register": register,
                 "latency_offset_s": latency,
                 "excluded": excluded,
+                "time_tolerance_s": tolerance,
             },
             "expected": expected,
         })
@@ -98,7 +108,7 @@ def build_onset_cases() -> list[dict]:
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    score = {"tolerance": TOLERANCE, "cases": build_cases()}
+    score = {"scoring_version": SCORING_VERSION, "tolerance": TOLERANCE, "cases": build_cases()}
     onset = {"tolerance_s": 0.001, "cases": build_onset_cases()}
     (OUT / "score_cases.json").write_text(json.dumps(score, separators=(",", ":")))
     (OUT / "onset_cases.json").write_text(json.dumps(onset, separators=(",", ":")))

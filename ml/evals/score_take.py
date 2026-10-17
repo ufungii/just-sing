@@ -25,6 +25,7 @@ from ml.scoring.config import PitchConfig
 from ml.scoring.pitch import HOP_SECONDS, pitch_contour, scoreable_mask, to_track
 from ml.scoring.score import phrase_weights, score_turn
 from ml.scoring.timing import onset_times
+from ml.scoring.words import WORD_FEEDBACK_VERSION, word_feedback
 
 SR = 16_000
 
@@ -37,7 +38,7 @@ def track_audio(y: np.ndarray, tracker: str, clarity: float, window: int = 2048,
 
 def score_take(take, manifest: dict, *, tracker="mpm", clarity=0.65, register=0, latency_s=0.0,
                tolerance_s=0.0, ref_audio=None, take_start=0.0, take_end=None, window=2048, gate=1e-3) -> dict:
-    """Returns {"score": score_turn dict, "diagnostics": {...}}. `take` is a path or a float array at 16 kHz."""
+    """Returns score, diagnostics, and display-only word_feedback. `take` is a path or a float array at 16 kHz."""
     if isinstance(take, np.ndarray):
         y = take
     else:
@@ -82,7 +83,12 @@ def score_take(take, manifest: dict, *, tracker="mpm", clarity=0.65, register=0,
             deltas.append(float(user_on[np.abs(user_on - r).argmin()] - r))
     if deltas:
         diag["median_note_offset_s"] = round(float(np.median(deltas)), 3)
-    return {"score": result, "diagnostics": diag}
+    return {"score": result, "diagnostics": diag,
+            "word_feedback_version": WORD_FEEDBACK_VERSION,
+            "word_feedback": word_feedback(user, ref, manifest.get("lines", []),
+                                           hop_seconds=hop, register=register,
+                                           excluded=excluded, latency_offset_s=latency_s,
+                                           pitch_cfg=cfg)}
 
 
 def main() -> None:
@@ -119,6 +125,12 @@ def main() -> None:
         t = "-" if p["timing"] is None else f"{p['timing']:.0f}"
         print(f"{p['phrase_id']:8s}{secs:10.1f}{p['pitch']:8.0f}{t:>8s}{p['score']:8.0f}  {p['rating']}")
     print(f"\nTOTAL {s['total']:.1f}   (pitch {s['pitch']:.1f}, timing {s['timing']:.1f}, register {s['register']})")
+    print("\nWORD ACTIVITY (detected singing, not word recognition; provisional):")
+    for line in out["word_feedback"]:
+        for word in line:
+            suffix = " / late detected start" if word["late"] else ""
+            coverage = "-" if word["coverage"] is None else f"{word['coverage']:.0%}"
+            print(f"  {word['text']}: {word['status']} / coverage {coverage}{suffix}")
     sys.exit(0)
 
 
