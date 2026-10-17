@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { COUNT_IN, SingEngine } from '../../audio/engine';
 import { MicError, openMic, stopStream } from '../../audio/sources';
 import { ApiError, beginTurn, getManifest, submitResult } from '../../lib/api';
+import { sendLive } from '../../lib/rooms';
 import type { PhraseScore, Register, Song } from '../../lib/types';
 import { useNav, type SingSetup } from '../../routes';
 import { aggregate, buildTargetTrack, displayNotes, phraseSettlesAt, phraseTotal, phraseWeights, registerRatio, scorePhrase, SCORING_CONFIG } from '../../scoring';
@@ -64,6 +65,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
   const beginRef = useRef<Promise<void> | null>(null);
   const saveErrorRef = useRef<string | null>(setup.match ? null : 'Playing offline, so this score was not saved.');
   const finishedRef = useRef(false);
+  const lastLive = useRef(0); // clip time of the last live progress message to the room
 
   const target = useMemo(() => (song ? buildTargetTrack(song, setup.register) : null), [song, setup.register]);
   const notes = useMemo(() => (song ? displayNotes(song).map((n) => ({ ...n, hz: n.hz * registerRatio(setup.register) })) : []), [song, setup.register]);
@@ -120,13 +122,14 @@ export function Sing({ setup }: { setup: SingSetup }) {
         if (ratedRef.current.has(p.id) || !settled(phraseSettlesAt(p))) continue;
         latest = scorePhrase(p, target, engine.tracker.hz);
         ratedRef.current.set(p.id, latest);
+        if (setup.online) sendLive('phrase_rating', { phrase_id: p.id, rating: latest.rating, score: phraseTotal(latest) }); // provisional badge for the waiting player
       }
       if (latest) {
         setRatings(new Map(ratedRef.current));
         setJudge(latest);
       }
     },
-    [song, target],
+    [song, target, setup.online],
   );
 
   const finish = useCallback(async () => {
@@ -155,6 +158,10 @@ export function Sing({ setup }: { setup: SingSetup }) {
       }
     }
     const result = { setup, phrases, local, saved, saveError: saved ? null : saveErrorRef.current };
+    if (setup.online) {
+      const room = { id: setup.online.roomId, slot: setup.online.slot, prefs: { register: setup.register, offset: setup.calibrationOffset } };
+      return nav.go({ name: 'online', room, notice: saved ? undefined : (saveErrorRef.current ?? 'Your score was not saved.') });
+    }
     nav.go(setup.battle ? { name: 'battleturn', result } : { name: 'results', result });
   }, [song, target, setup, nav, rateUpTo]);
 
@@ -175,6 +182,11 @@ export function Sing({ setup }: { setup: SingSetup }) {
       }
       // A phrase is final once its user frames are analysed, or a beat later if capture has stalled.
       const analysed = engine.tracker.analysed * hop;
+      if (setup.online && t - lastLive.current >= 0.5) {
+        lastLive.current = t;
+        const rated = [...ratedRef.current.values()];
+        sendLive('progress', { t, running: rated.length ? aggregate(rated, phraseWeights(song.phrases, target!)).total : 0 });
+      }
       rateUpTo((settlesAt) => analysed >= settlesAt || t >= settlesAt + 0.5);
       if (t >= song.duration + 0.3) {
         void finish();
@@ -184,7 +196,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [phase.k, song, rateUpTo, finish]);
+  }, [phase.k, song, target, setup.online, rateUpTo, finish]);
 
   const start = async () => {
     const engine = engineRef.current;
@@ -206,7 +218,8 @@ export function Sing({ setup }: { setup: SingSetup }) {
     finishedRef.current = true;
     engineRef.current?.close();
     engineRef.current = null;
-    nav.go({ name: setup.battle ? 'battle' : 'solo' });
+    if (setup.online) nav.go({ name: 'online', room: { id: setup.online.roomId, slot: setup.online.slot, prefs: { register: setup.register, offset: setup.calibrationOffset } } });
+    else nav.go({ name: setup.battle ? 'battle' : 'solo' });
   };
 
   const getTime = useCallback(() => {

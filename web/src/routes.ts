@@ -18,6 +18,15 @@ export interface SingSetup {
   match: { matchId: string; attemptId: string } | null;
   /** Set for a local battle turn; solo leaves it undefined. */
   battle?: BattleCtx;
+  /** Set for an online room turn; the results go back to the room screen instead of a results screen. */
+  online?: { roomId: string; slot: number };
+}
+
+/** Which room this browser is in, and which seat it holds. `prefs` survives a trip to the singing screen. */
+export interface RoomRef {
+  id: string;
+  slot: number;
+  prefs?: { register: Register; offset: number | null };
 }
 
 /** Local 1P vs 2P: one clip, two singers on one laptop, each with their own register. */
@@ -49,6 +58,8 @@ export type Route =
   | { name: 'practice' }
   | { name: 'history' }
   | { name: 'battle' }
+  /** Online lobby: no `room` means the create/join form. `notice` carries a save failure back from singing. */
+  | { name: 'online'; room?: RoomRef; notice?: string }
   /** After a battle turn: hand-off after player 1, final results after player 2. */
   | { name: 'battleturn'; result: SingResult };
 

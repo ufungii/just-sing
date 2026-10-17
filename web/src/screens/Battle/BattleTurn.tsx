@@ -119,41 +119,11 @@ function BattleResults({ result, battle }: { result: SingResult; battle: BattleC
     }
   }
 
-  const finished = match?.state === 'finished';
-  const headline = !match
-    ? ''
-    : !finished
-      ? 'Waiting for the final score…'
-      : match.winner_slot === null
-        ? 'TIE!'
-        : `${match.players.find((p) => p.slot === match.winner_slot)?.display_name ?? '?'} WINS!`;
-
   return (
     <ScreenShell title="BATTLE RESULTS" kao="ヾ(＾∇＾)">
       {error && <Notice tone="error">Couldn’t load the battle result: {error}</Notice>}
       {!match && !error && <Notice>Counting the votes…</Notice>}
-      {match && (
-        <>
-          <Panel tone="mint" label="WINNER">
-            <p className="battle-headline" style={{ fontSize: 40, margin: 0 }} aria-live="polite">{headline}</p>
-          </Panel>
-          {match.players.map((p) => {
-            const score = match.attempts.find((a) => a.slot === p.slot && a.state === 'accepted')?.score;
-            return (
-              <Panel key={p.slot} tone={p.slot === 0 ? 'pink' : 'sky'} label={`P${p.slot + 1} · ${p.display_name.toUpperCase()}`}>
-                {score ? (
-                  <>
-                    <ScoreSummary total={score.total} pitch={score.pitch} timing={score.timing} />
-                    <PhraseChips phrases={score.phrases} song={song} />
-                  </>
-                ) : (
-                  <Notice tone="warn">No saved score for this player.</Notice>
-                )}
-              </Panel>
-            );
-          })}
-        </>
-      )}
+      {match && <MatchBoard match={match} song={song} />}
       <div className="results-actions">
         <PixelButton tone="hot" size="lg" onClick={again} disabled={busy || !matchId}>
           {busy ? 'STARTING…' : '↻ REMATCH'}
@@ -166,5 +136,37 @@ function BattleResults({ result, battle }: { result: SingResult; battle: BattleC
         </PixelButton>
       </div>
     </ScreenShell>
+  );
+}
+
+/** Winner headline plus both players' saved scores, read from the server's match (the client only displays it). Shared with online rooms. */
+export function MatchBoard({ match, song }: { match: MatchView; song: ReturnType<typeof useManifest> }) {
+  const headline =
+    match.state !== 'finished'
+      ? 'Waiting for the final score…'
+      : match.winner_slot === null
+        ? 'TIE!'
+        : `${match.players.find((p) => p.slot === match.winner_slot)?.display_name ?? '?'} WINS!`;
+  return (
+    <>
+      <Panel tone="mint" label="WINNER">
+        <p className="battle-headline" style={{ fontSize: 40, margin: 0 }} aria-live="polite">{headline}</p>
+      </Panel>
+      {match.players.map((p) => {
+        const score = match.attempts.find((a) => a.slot === p.slot && a.state === 'accepted')?.score;
+        return (
+          <Panel key={p.slot} tone={p.slot === 0 ? 'pink' : 'sky'} label={`P${p.slot + 1} · ${p.display_name.toUpperCase()}`}>
+            {score ? (
+              <>
+                <ScoreSummary total={score.total} pitch={score.pitch} timing={score.timing} />
+                <PhraseChips phrases={score.phrases} song={song} />
+              </>
+            ) : (
+              <Notice tone="warn">No saved score for this player.</Notice>
+            )}
+          </Panel>
+        );
+      })}
+    </>
   );
 }
