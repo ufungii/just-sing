@@ -331,6 +331,8 @@ def claim_guest(request: Request, account=Depends(current_guest), s: Session = D
         s.execute(update(RoomMember).where(RoomMember.guest_id == guest.id, RoomMember.room_id.not_in(already_in))
                   .values(guest_id=account.id))
         guest.expires_at = datetime.now(timezone.utc)  # the guest cookie is spent
+        if account.display_name == "Player":  # a new account takes the name the player already chose
+            account.display_name = guest.display_name
         moved = True
     s.commit()
     return {"id": account.id, "claimed_guest_history": moved}
