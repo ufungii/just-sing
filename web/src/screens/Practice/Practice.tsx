@@ -45,6 +45,8 @@ function describeError(e: unknown): { message: string; retry: boolean } {
       return { message: "Can't reach the server. Check the connection and try again.", retry: true };
     case 'phrase_not_found':
       return { message: 'The server does not know this line any more. Pick the line again.', retry: false };
+    case 'phrase_not_practicable':
+      return { message: 'This line is available for singing only. Pick a Korean spoken-practice line.', retry: false };
     default:
       if (e.status >= 500 || e.code.startsWith('http_')) {
         return { message: 'The server hit a problem checking your take. Give it a moment and try again.', retry: true };
@@ -102,7 +104,7 @@ export function Practice() {
       .then((s) => {
         if (!live) return;
         setSong(s);
-        setPhraseId(s.phrases[0]?.id ?? null);
+        setPhraseId(s.phrases.find((p) => s.lines[p.line_index]?.practice_text.trim())?.id ?? null);
       })
       .catch((e) => live && setSongError(e instanceof ApiError ? e.message : 'Could not load this clip.'));
     return () => {
@@ -115,6 +117,7 @@ export function Practice() {
 
   const phrase = song?.phrases.find((p) => p.id === phraseId) ?? null;
   const line = phrase && song ? song.lines[phrase.line_index] : null;
+  const practicePhrases = song?.phrases.filter((p) => song.lines[p.line_index]?.practice_text.trim()) ?? [];
 
   async function runCheck() {
     if (!take || !clipId || !phraseId) return;
@@ -170,9 +173,10 @@ export function Practice() {
               </Notice>
             )}
             {!song && !songError && <Notice>Loading lines…</Notice>}
+            {song && practicePhrases.length === 0 && <Notice>No Korean spoken-practice lines are available for this song. You can still sing it in karaoke.</Notice>}
             {song && (
               <ol className="practice-lines">
-                {song.phrases.map((p, i) => {
+                {practicePhrases.map((p, i) => {
                   const l = song.lines[p.line_index];
                   return (
                     <li key={p.id}>
