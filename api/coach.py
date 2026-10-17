@@ -23,7 +23,7 @@ MAX_BLURB_CHARS = 400
 def build_prompt(score: dict, phrase_count: int) -> str:
     """Only measured numbers go in: no lyrics, no audio, no names."""
     lines = [f"  phrase {i + 1} of {phrase_count}: rating {p['rating']}, pitch {p['pitch']:.0f}/100, "
-             f"timing {p['timing']:.0f}/100, sang {p['coverage'] * 100:.0f}% of it"
+             f"{'timing ' + format(p['timing'], '.0f') + '/100' if p.get('timing') is not None else 'no timing score'}, sang {p['coverage'] * 100:.0f}% of it"
              for i, p in enumerate(score["phrases"])]
     register = {0: "the original key", 12: "one octave higher", -12: "one octave lower"}[score["register"]]
     return (

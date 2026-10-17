@@ -159,3 +159,47 @@ def test_turns_refuse_a_changed_clip_version(guests, monkeypatch):
     assert r.status_code == 409 and r.json()["error"]["code"] == "clip_version_changed"
     fresh = c.post("/api/matches", json={"clip_id": "synthetic-demo"})
     assert fresh.json()["error"]["code"] == "catalog_not_seeded"  # version 2 was never seeded
+
+
+def test_engine_scoring_null_timing_and_server_side_ratings(guests):
+    """The server recomputes score and rating; the client cannot choose them. timing=null is scored on pitch alone."""
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    url = f"/api/turns/{m['attempt_id']}"
+    c.post(f"{url}/begin", json={})
+    cheat = {"phrases": [{"phrase_id": "p1", "rating": "perfect", "score": 100, "pitch": 40, "timing": None, "coverage": 0.9}]}
+    r = c.post(f"{url}/result", json=cheat, headers={"Idempotency-Key": "n"})
+    assert r.status_code == 200
+    ph = r.json()["phrases"][0]
+    assert ph == {"phrase_id": "p1", "pitch": 40.0, "timing": None, "score": 40.0, "coverage": 0.9, "rating": "bad"}
+    assert r.json()["total"] == 40.0
+    assert c.get(f"/api/matches/{m['match_id']}").json()["attempts"][0]["score"]["phrases"][0]["timing"] is None
+
+
+def test_out_of_range_and_unscoreable_clip_are_422_invalid_result(guests, monkeypatch):
+    from api import play as play_module
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    url = f"/api/turns/{m['attempt_id']}"
+    c.post(f"{url}/begin", json={})
+    # the model's own 0-100 bounds catch this first (standard validation error)
+    assert c.post(f"{url}/result", json={"phrases": [{**GOOD["phrases"][0], "pitch": 120}]},
+                  headers={"Idempotency-Key": "r"}).status_code == 422
+    # a clip with nothing scoreable is a manifest problem: the engine's ValueError becomes invalid_result
+    monkeypatch.setitem(play_module._weight_cache, ("synthetic-demo", 1), [0])
+    r = c.post(f"{url}/result", json=GOOD, headers={"Idempotency-Key": "z"})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_result"
+
+
+def test_old_rows_without_score_still_read(guests):
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    url = f"/api/turns/{m['attempt_id']}"
+    c.post(f"{url}/begin", json={})
+    assert c.post(f"{url}/result", json=GOOD, headers={"Idempotency-Key": "o"}).status_code == 200
+    with get_engine().begin() as conn:  # simulate a row saved by the stand-in
+        conn.execute(text("update turn_attempt set phrase_results = cast(:j as jsonb) where id=:i"),
+                     {"i": m["attempt_id"], "j": '[{"phrase_id":"p1","rating":"great","pitch":80,"timing":60,"coverage":0.9}]'})
+    ph = c.get(f"/api/matches/{m['match_id']}").json()["attempts"][0]["score"]["phrases"][0]
+    assert ph["score"] == 80 and ph["timing"] == 60
+    assert c.get("/api/history").status_code == 200
