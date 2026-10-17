@@ -31,6 +31,19 @@ const REGISTER_LABEL: Record<Register, string> = { [-12]: '-1 OCTAVE', 0: 'ORIGI
 const NO_FRAMES: (number | null)[] = [];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+const GUIDE_KEY = 'just-sing.guide';
+
+/** Guide vocals default to off at 60%; the last choice is remembered. */
+function loadGuide(): { on: boolean; vol: number } {
+  try {
+    const g = JSON.parse(localStorage.getItem(GUIDE_KEY) ?? 'null');
+    if (g && typeof g.vol === 'number') return { on: g.on === true, vol: Math.max(0, Math.min(1, g.vol)) };
+  } catch {
+    // no storage or bad JSON
+  }
+  return { on: false, vol: 0.6 };
+}
+
 export function Sing({ setup }: { setup: SingSetup }) {
   const nav = useNav();
   const [song, setSong] = useState<Song | null>(null);
@@ -43,6 +56,8 @@ export function Sing({ setup }: { setup: SingSetup }) {
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
   const [showRoman, setShowRoman] = useState(true);
   const [showTrans, setShowTrans] = useState(true);
+  const [guide, setGuide] = useState(loadGuide);
+  const [hasGuide, setHasGuide] = useState(false);
 
   const engineRef = useRef<SingEngine | null>(null);
   const ratedRef = useRef(new Map<string, PhraseScore>());
@@ -73,6 +88,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
         if (cancelled) return engine.close();
         engineRef.current = engine;
         setIsClick(engine.backing.isClick);
+        setHasGuide(engine.vocals !== null);
       } catch (e) {
         if (!cancelled) setPhase({ k: 'load-error', message: errorText(e) });
         return;
@@ -204,6 +220,16 @@ export function Sing({ setup }: { setup: SingSetup }) {
   const playing = phase.k === 'playing';
   const level = engineRef.current?.tracker.level ?? 0;
 
+  // The guide vocals follow the toggle and slider live; the choice is remembered per browser.
+  useEffect(() => {
+    engineRef.current?.setGuideVolume(guide.on ? guide.vol : 0);
+    try {
+      localStorage.setItem(GUIDE_KEY, JSON.stringify(guide));
+    } catch {
+      // storage blocked: the setting just won't be remembered
+    }
+  }, [guide, hasGuide]);
+
   return (
     <ScreenShell
       title="SING!"
@@ -271,6 +297,22 @@ export function Sing({ setup }: { setup: SingSetup }) {
               ENGLISH
             </PixelButton>
           </div>
+          {hasGuide && (
+            <div className="sing-guide" title="Hear the original vocals while you sing (use headphones)">
+              <PixelButton size="sm" tone="paper" aria-pressed={guide.on} onClick={() => setGuide((g) => ({ ...g, on: !g.on }))}>
+                GUIDE VOCALS
+              </PixelButton>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(guide.vol * 100)}
+                disabled={!guide.on}
+                aria-label="Guide vocal volume"
+                onChange={(e) => setGuide({ on: true, vol: Number(e.target.value) / 100 })}
+              />
+            </div>
+          )}
           <div className="sing-meter" title="Mic level" aria-label="Mic level">
             <span className="sing-meter__label">MIC</span>
             <span className="sing-meter__bar">

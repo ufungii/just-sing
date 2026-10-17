@@ -2,7 +2,7 @@
  * What the singer hears and what we capture: the instrumental (or a click track when the clip has no
  * installed audio), count-in beeps, and the raw microphone.
  */
-import { ApiError, audioUrl } from '../lib/api';
+import { ApiError, audioUrl, vocalsUrl } from '../lib/api';
 
 export interface Backing {
   buffer: AudioBuffer;
@@ -29,6 +29,16 @@ export async function loadBacking(ctx: BaseAudioContext, clipId: string, duratio
   }
   if (!res.ok) throw new ApiError(res.status, 'http_' + res.status, `The instrumental failed to load (${res.status}).`, res.status >= 500);
   return { buffer: await ctx.decodeAudioData(await res.arrayBuffer()), isClick: false };
+}
+
+/** The guide vocals, or null when the clip has none installed or they fail to load (the guide is optional). */
+export async function loadVocals(ctx: BaseAudioContext, clipId: string): Promise<AudioBuffer | null> {
+  try {
+    const res = await fetch(vocalsUrl(clipId), { credentials: 'same-origin' });
+    return res.ok ? await ctx.decodeAudioData(await res.arrayBuffer()) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** A click every half second (120 BPM), accented every 4th beat, for the whole clip. */

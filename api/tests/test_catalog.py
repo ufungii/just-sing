@@ -88,3 +88,14 @@ def test_audio_is_served_from_the_songs_own_folder(tmp_path, monkeypatch):
     monkeypatch.setitem(clip_catalog.SONG_DIR, "ml-audio", folders["ml-audio"])
     monkeypatch.setitem(clip_catalog.REVIEWED, "ml-audio", False)
     assert client.get("/api/clips/ml-audio/audio").content == b"abc"
+
+
+def test_guide_vocals_are_served_like_the_instrumental(tmp_path, monkeypatch):
+    folder = write_song(tmp_path, "ml-vocals")
+    songs, folders, reviewed = clip_catalog.load_catalog([tmp_path])
+    monkeypatch.setitem(clip_catalog.CATALOG, "ml-vocals", songs["ml-vocals"])
+    monkeypatch.setitem(clip_catalog.SONG_DIR, "ml-vocals", folders["ml-vocals"])
+    monkeypatch.setitem(clip_catalog.REVIEWED, "ml-vocals", False)
+    assert client.get("/api/clips/ml-vocals/vocals").json()["error"]["code"] == "audio_missing"
+    (folder / "vocals.mp3").write_bytes(b"xyz")
+    assert client.get("/api/clips/ml-vocals/vocals").content == b"xyz"
