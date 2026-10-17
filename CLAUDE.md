@@ -4,7 +4,7 @@ You are helping a 4-person team at **SwampHacks XII** (University of Florida hac
 
 ## What we are building
 
-A **website** where a user picks a K-pop clip, sings along with the instrumental, sees their live pitch drawn over scrolling target notes with synced lyrics (Korean + romanization + English), and gets a rating after every lyric phrase plus a final pitch/timing score with a short AI coaching blurb.
+A **desktop app (also runnable as a website)** where a user picks a K-pop clip, sings along with the instrumental, sees their live pitch drawn over scrolling target notes with synced lyrics (Korean + romanization + English), and gets a rating after every lyric phrase plus a final pitch/timing score with a short AI coaching blurb.
 
 Three modes, in priority order:
 
@@ -33,8 +33,8 @@ The singing screen is rhythm-game first: target notes and the live trace dominat
 |---|---|
 | Frontend | React + TypeScript + Vite UI, Canvas pitch lane, audio clock, mic capture, live pitch (Pitchy), **the TypeScript port of the scoring engine**, lyrics, results, practice screen, the Electron shell (a window plus the Auth0 login helper), `web/`, `desktop/` |
 | Full-stack/infra | FastAPI, Tiger Data (Postgres), Auth0, Vultr deploy, domain, FFmpeg audio normalization, practice-upload endpoint, `api/` |
-| ML A (pipeline, then pronunciation) | Offline per-song processing in `ml/pipeline/`. After the first reviewed `song.json` exists, owns the local pronunciation scorer in `ml/pronunciation/`. |
-| ML B (scoring + evals) | The Python **reference scoring engine** `ml/scoring/`, shared test fixtures, the evaluation harness `ml/evals/`, and calibration of thresholds/weights. Owns `ml/scoring/pitch.py`. |
+| ML A (pipeline) | Offline per-song processing in `ml/pipeline/`: stems, reference pitch, hand review, manifest assembly. Also backs ML B up on data prep (TTS/recordings for evals) once the first clip is done. |
+| ML B (pitch + pronunciation + evals) | The Python **reference scoring engine** `ml/scoring/`, the local pronunciation scorer `ml/pronunciation/`, shared test fixtures, the evaluation harness `ml/evals/`, and calibration of thresholds/weights. Owns `ml/scoring/pitch.py`. |
 
 Stay inside the folder of the role you are helping unless asked. Do not edit other roles' folders without saying so.
 
@@ -64,7 +64,7 @@ Stay inside the folder of the role you are helping unless asked. Do not edit oth
 - **Register:** the player picks original / one octave lower / one octave higher before the turn. The target and scoring reference shift together for the whole turn; the instrumental stays in key. Do **not** forgive octave jumps per frame, and do **not** subtract a per-performance median "key shift". Both reward a broken melody.
 - **Pitch:** per voiced, non-excluded reference frame, compare user Hz to target Hz in cents; soft credit (full within ~50 cents, falling to zero by ~150-200). Duration-weighted. Reference rests and excluded regions are not in the denominator. Missing/unvoiced user frames during a target note earn zero but stay in the denominator.
 - **Timing:** compare the user's onsets with reviewed phrase entrances and note changes, after correcting **one** device latency offset measured in the setup step. Never optimize a separate offset per performance. Avoid unrestricted DTW; it aligns away the mistakes we want to measure (a bounded alignment may be used offline for analysis only and must be reported).
-- **Total:** default 80% pitch / 20% timing (a default, not a validated weighting). Phrase rating bands (Perfect!/Great/Okay/Bad/Miss) are config, calibrated on recordings. `Miss` means insufficient sung coverage; a mic failure is an input error with a recovery state, never a poor score.
+- **Total:** default 80% pitch / 20% timing (a default, not a validated weighting). The weights, battle tie precision and `scoring_version` live in `contracts/scoring.config.json`, which the API reads; `ml/scoring/config.py` repeats the weights and the version and must be kept in step with it (ML B to reconcile). Phrase rating bands (Perfect!/Great/Okay/Bad/Miss) are config, calibrated on recordings. `Miss` means insufficient sung coverage; a mic failure is an input error with a recovery state, never a poor score.
 - Silence scores 0 overall. Mic noise must not earn points just because the tracker returns a frequency. Same reference, config, and math for every player. Deterministic: identical input -> identical score.
 - Never use an LLM to decide scores or a winner.
 
@@ -79,7 +79,7 @@ The player reads a short Korean lyric phrase aloud. Sung audio is out of scope b
 
 ## Data contracts (source of truth lives in `contracts/`)
 
-`contracts/song.example.json`, `score.example.json`, and `practice.example.json` are the agreed shapes; fixtures live in `contracts/fixtures/`. Highlights:
+`contracts/song.example.json`, `score.example.json`, `practice.example.json` and `error.example.json` (the API's error envelope) are the agreed shapes; `scoring.config.json` holds the shared scoring numbers; fixtures live in `contracts/fixtures/` (`live_scoring.json` so far). Highlights:
 - **Song manifest:** id, version, language, duration, provenance, audio paths (instrumental/vocals share a timeline), `lines` (text, romanized, translation, `practice_text`, word times), `phrases` (gradeable boundaries incl. sustained final notes), and `reference` (`hop_seconds`, `hz` contour with `null` for unvoiced, reviewed `notes`, `excluded` regions).
 - **Score:** mode (`solo` | `battle`), clip + scoring versions, register in semitones (`-12`, `0`, `12`), total/pitch/timing (0-100), per-phrase scores with rating and coverage, coach blurb. **Pronunciation is not part of the score.**
 - **Practice result:** locale, provider, `status` (`ok` | `unavailable` | `error`), per-word scores. `unavailable` is not a score.
@@ -111,11 +111,11 @@ contracts/         example files, schemas/Pydantic models, shared test fixtures
 
 ## Git workflow
 
-- `main` always works. Never push directly to it after the initial skeleton; merge via GitHub PR (self-approval is fine).
-- Short-lived branches off an up-to-date `main`, named `<role>/<task>`, deleted after merging (e.g. `web/scaffold-pitch-lane`, `api/scaffold-endpoints`, `ml/pipeline-demo-song`, `ml/pitch-score`, `ml/evals-degradation`, `ml/pronunciation-baselines`).
+- `main` always works. Anything large or risky (a new feature, a multi-file refactor, a schema migration, anything teammates should look at) goes on a branch and merges via a GitHub PR (self-approval is fine). A small, low-risk change (a typo or doc fix, a config tweak, a one-file bug fix with its tests passing) may be committed straight to `main`: run the tests first and push right away. Do not push big things to `main` directly.
+- One branch per piece of work, not one per small fix: several commits on a branch, then one PR. If the change is small enough to go straight to `main`, do not make a branch for it. Branches are short-lived, off an up-to-date `main`, named `<role>/<task>`, and deleted after merging (e.g. `web/scaffold-pitch-lane`, `api/scaffold-endpoints`, `ml/pipeline-demo-song`, `ml/pitch-score`, `ml/evals-degradation`, `ml/pronunciation-baselines`).
 - Merge back often (several times a day) and `git pull origin main` into your branch often. Avoid long-lived per-person branches.
 - Changes to `contracts/` or this file get their own small PR and the whole team is told.
-- AI agents: never run `git commit` or `git push` unless the user explicitly asks. The user commits and pushes themselves.
+- AI agents: never run `git commit` or `git push` unless the user explicitly asks, and do not create a new branch for a small fix; stay on the current branch unless the user asks for one.
 
 ## Hard rules
 
@@ -148,13 +148,14 @@ Results go in a table in the README. The README must have a "Design decisions an
 
 ## Current status and immediate next steps
 
-- Repo skeleton exists; no feature code yet. Direction reconciled from two planning docs: solo karaoke + spoken practice are core, battle is stretch, infra from the original brief (Tiger Data, Auth0, Vultr, Gemini).
-- **Team, today:** agree on the manifest/score/practice contracts and pick the first clip; confirm the pronunciation handoff to ML A.
-- ML A (`ml/pipeline-demo-song`): prove one real Demucs separation on the actual machine, extract the reference contour, hand ML B a rough manifest, then hand-review notes/phrases/exclusions and finalize `song.json`. Then `ml/pronunciation-baselines`.
-- ML B (`ml/pitch-score`): `pitch_contour()` + pitch/timing scoring + shared fixtures + pytest on synthetic melodies; then `ml/evals-degradation`; then calibration. Share the scoring spec/fixtures with Frontend early.
-- Frontend: Vite + React + TS, Web Audio clock, mic + Pitchy, pitch lane from the example manifest, TS scoring port against the fixtures.
-- Full-stack: FastAPI scaffold, catalog + manifest endpoints, practice-upload endpoint with FFmpeg normalization, Tiger Data schema/migrations, a hello-world tunnel deploy early (Vultr is a stretch goal).
-- First milestone: one clip, one singer, correctly synchronized pitch trace, and a good take reliably beating a bad take. Then spoken practice end to end. Battle and extras come after.
+State as of 2026-10-17, from the merged work; most of it is not yet proven end to end with a real clip.
+
+- **API (`api/`):** built and tested against the dev database. Catalog and manifest endpoints, instrumental audio, guest sessions and Auth0 login, solo / local-battle / online-room matches, the spoken-practice upload (FFmpeg normalization, pluggable scorer, `unavailable` until one exists), the Gemini coaching blurb, the leaderboard, and a public-URL smoke test. Totals are still recomputed with a stand-in, not the reference engine. The production Tiger Data database has not been migrated to the latest Alembic revision yet; do that before deploying.
+- **Web (`web/`) and desktop (`desktop/`):** the home, solo setup (mic and timing checks), singing, results, history and pronunciation-practice screens exist, with a typed API client. The Electron shell is started.
+- **ML A (`ml/pipeline/`):** the offline pipeline is merged (crop, separate, transcribe and align, reference contour, manifest assembly). Every prepared song is still a **draft**: lyric timing, notes and exclusions have not been reviewed by ear. Once the first clip is done, ML A backs ML B up on evaluation data (TTS speech, recordings).
+- **ML B (`ml/scoring/`, `ml/pronunciation/`, `ml/evals/`):** the reference scoring engine (pitch, timing, per-phrase and per-turn scores), shared fixtures in `contracts/fixtures/`, the local pronunciation baselines, and a set of evals are in, with tests for the scoring and pronunciation code. None of it is validated against real recordings yet, and it is not wired into the API: `api/` still recomputes totals with a stand-in until the patch described in `ml/scoring/API_INTEGRATION.md` is applied.
+- **Next:** review one clip by ear and finish its `song.json`; wire the reference scoring engine and the pronunciation scorer into the API, with the TypeScript port passing the same fixtures; validate both on real recordings; then the two-computer test through the tunnel and the production migration.
+- **First milestone (not reached yet):** one clip, one singer, a correctly synchronized pitch trace, and a good take reliably beating a bad take. Then spoken practice end to end. Battle and extras come after.
 
 ## How to work with me
 
