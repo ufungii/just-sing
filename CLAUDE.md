@@ -1,6 +1,6 @@
-# K-Pop Karaoke (working title) - Project Brief for AI Agents
+# Just Sing - Project Brief for AI Agents
 
-You are helping a 4-person team at **SwampHacks XII** (University of Florida hackathon) build a Smule-style K-pop karaoke web app. The user you are talking to is on the ML side. Read this whole file before doing anything.
+You are helping a 4-person team at **SwampHacks XII** (University of Florida hackathon) build a Smule-style, just-dance like, K-pop karaoke web app. The user you are talking to is on the ML side. Read this whole file before doing anything.
 
 ## What we are building
 
@@ -20,10 +20,31 @@ Core loop: pick song -> sing -> live pitch lane + highlighted lyrics -> post-son
 |---|---|
 | Frontend | React/Vite UI, pitch lane, lyric highlighting, results screen, `web/` |
 | Full-stack/infra | FastAPI, Tiger Data (Postgres), Auth0, Vultr deploy, domain, `api/` |
-| ML A (pipeline) | Offline per-song processing, `ml/pipeline/` |
-| ML B (scoring + evals) | Scoring engine and evaluation harness, `ml/scoring/`, `ml/evals/` |
+| ML A (pipeline) | Offline per-song processing, `ml/pipeline/`. After the demo `song.json` is done, also owns the pronunciation scorer, `ml/scoring/pronunciation.py` (see ML split below). |
+| ML B (scoring + evals) | Scoring engine and evaluation harness, `ml/scoring/` (except `pronunciation.py`), `ml/evals/`. Also owns `ml/scoring/pitch.py`. |
 
 Stay inside the folder of the role you are helping unless asked. Do not edit other roles' folders without saying so.
+
+### ML split and shared pieces
+
+ML B has the larger workload (pitch, DTW timing, blend, evals), so pronunciation scoring goes to ML A once the pipeline works. Pronunciation only needs text and word timings, so it shares almost no code with pitch scoring and the two can proceed in parallel.
+
+Shared pieces where ML A and ML B can collide:
+
+1. **One `pitch_contour()`.** It lives in `ml/scoring/pitch.py` (owned by ML B). ML A's pipeline imports it to build the reference contour; it must not be reimplemented in `ml/pipeline/`. If reference and user contours use different settings, every score is biased. Settings: 16 kHz audio, 0.02 s hop (`hop_length=320`), `fmin=65`, `fmax=1000`, periodicity below ~0.5 counts as unvoiced (`null`), median-filter smoothing.
+2. **Cents convention (decided, do not change without telling the team):** cents are absolute, MIDI note number x 100, so A4 (440 Hz) = 6900 and middle C = 6000.
+   `cents = 1200 * log2(hz / 440) + 6900`. Singing falls roughly in 4500-7500. The `1250.5` in `contracts/song.example.json` is only a placeholder. The frontend's `pitchy` output must be converted with the same formula.
+3. **Early rough `song.json`.** ML A should hand ML B a rough `song.json` (even with unpolished lyrics) as soon as Demucs + CREPE work, so ML B can test per-line scoring on real data.
+4. **Pipeline must be song-agnostic.** ML A's entry point takes arguments (e.g. `python -m ml.pipeline.run --id <song_id> --clip <path> --lyrics <path>`), not a hardcoded song. Outputs go to `ml/data/<song_id>/` (gitignored). Per-song hand corrections (lyric timing fixes) live in a small JSON next to the outputs so reruns reuse them. Plan is ONE polished demo song first; a second or third only after the vertical slice works.
+5. **Lyric timing uses forced alignment, not transcription.** Lyrics are known, so align the official text with `whisperx.align()` rather than transcribing and fixing errors. When transcribing the *user* for pronunciation scoring, never pass the true lyrics to Whisper as a prompt (it would echo them and make the score meaningless).
+
+## Git workflow
+
+- `main` always works. Never push directly to it after the initial skeleton; merge via GitHub PR (self-approval is fine).
+- Short-lived branches off an up-to-date `main`, named `<role>/<task>`, deleted after merging. Examples: `web/scaffold-pitch-lane`, `api/scaffold-endpoints`, `ml/pipeline-demo-song`, `ml/pitch-score`, `ml/evals-degradation`, `ml/dtw-timing`.
+- Merge back to `main` often (several times a day) and `git pull origin main` into your branch often. Avoid long-lived per-person branches.
+- Changes to `contracts/` or this file get their own small PR and the whole team is told.
+- AI agents: never run `git commit` or `git push` unless the user explicitly asks. The user commits and pushes themselves.
 
 ## Architecture
 
@@ -112,9 +133,11 @@ Results go in a table in the README. Weights of the final score blend are tuned 
 
 ## Current status and immediate next steps
 
-- Repo is new and empty.
-- ML A: get Demucs + WhisperX + CREPE working on one chosen demo clip and emit `song.json`.
-- ML B: implement `pitch_contour()` and `pitch_score()` in `ml/scoring/`, then the synthetic-degradation eval script in `ml/evals/`, then DTW timing.
+- Repo skeleton exists (folders, contracts, `.gitignore`, `.env.example`, `ml/requirements.txt`); no feature code yet.
+- ML A (branch `ml/pipeline-demo-song`): get Demucs + CREPE working on one chosen demo clip and hand ML B a rough `song.json` early; then add WhisperX forced alignment of the known lyrics, Gemini romanization/translation, and validate against `contracts/`. Then the pronunciation scorer (RapidFuzz-on-jamo baseline first, wav2vec2 confidence second).
+- ML B (branch `ml/pitch-score`): implement `pitch_contour()` and `pitch_score()` in `ml/scoring/pitch.py` with synthetic-audio pytest tests, then the synthetic-degradation eval script in `ml/evals/`, then DTW timing.
+- Eval trap: a *global* pitch shift is exactly what key-shift tolerance ignores, so it will not lower the score. Test monotonicity with *local* degradations (per-note detuning, dropped segments, falling SNR, time stretch).
+- Two score modes are planned as weight presets only (Karaoke: pitch-heavy; Language Learning: pronunciation-heavy). When `pronunciation` is still `null`, redistribute its weight over the other scores. Adding a `mode` field to the score contract needs a team heads-up first.
 - First milestone: one song working end to end (vertical slice). Add more songs and polish only after that.
 - If time gets short, cut Gemini coaching and pronunciation scoring first. Never cut pitch scoring or the UI.
 
