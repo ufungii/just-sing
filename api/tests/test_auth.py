@@ -120,3 +120,16 @@ def test_leaderboard_counts_only_own_solo_scores_on_current_version(monkeypatch)
     bumped = play_module.CATALOG["synthetic-demo"].model_copy(update={"version": 2})
     monkeypatch.setitem(play_module.CATALOG, "synthetic-demo", bumped)
     assert 50 not in [r["total"] for r in c.get("/api/leaderboard?clip_id=synthetic-demo").json()]
+
+
+def test_claim_carries_the_guest_name_to_the_account():
+    """Regression: accounts were created as 'Player' and claim never copied the guest's chosen name,
+    so every leaderboard row read 'Player'."""
+    c = TestClient(app)
+    c.post("/api/guests", json={"display_name": "claimme"})
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    play(c, {}, m["attempt_id"], 61)
+    h = {"Authorization": f"Bearer {token('test|named')}"}
+    c.post("/api/auth/claim", headers=h)
+    board = c.get("/api/leaderboard?clip_id=synthetic-demo").json()
+    assert {"display_name": "claimme", "total": 61.0} in board
