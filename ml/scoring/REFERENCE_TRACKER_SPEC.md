@@ -8,9 +8,9 @@ The "take" is the clip's own vocal, so a perfect score is the correct answer. To
 
 | Clip | CREPE live vs CREPE reference | Browser-style tracker (MPM), clarity 0.5 | 0.65 | 0.8 | 0.65 + 0.1 s pitch tolerance | **Same tracker for reference and live** |
 |---|---|---|---|---|---|---|
-| Clip 1 | 96.8 | 68.6 | 59.0 | 39.1 | 74.8 | **100** |
-| Clip 2 | 92.9 | 78.7 | 70.9 | 52.9 | 82.0 | **100** |
-| Clip 3 | 95.9 | 79.6 | 65.8 | 37.8 | 79.3 | **100** |
+| Clip 1 | 96.7 | 68.6 | 59.0 | 39.1 | 74.8 | **100** |
+| Clip 2 | 96.3 | 78.7 | 70.9 | 52.9 | 82.0 | **100** |
+| Clip 3 | 96.3 | 79.6 | 65.8 | 37.8 | 79.3 | **100** |
 
 (`python -m ml.evals.score_take take clip.json --tracker mpm --clarity 0.65`, with `--ref-audio` for the last column.) "MPM" is our Python emulation of Pitchy's algorithm. The last column is a ceiling: the take is the reference audio itself, so tracker errors are perfectly correlated. A different human performance will land lower, but the gap to the other columns shows the problem is the tracker mismatch, not the singer. The fix is to produce `reference.hz` with the tracker the browser runs.
 

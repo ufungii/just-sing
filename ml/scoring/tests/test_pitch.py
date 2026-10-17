@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from ml.evals.synthetic import detune, example_melody, melody_track, render_audio
+from ml.evals.synthetic import detune, example_melody, melody_track, midi_to_hz, render_audio
 from ml.scoring.pitch import (
     combine,
     phrase_pitch_scores,
@@ -142,3 +142,60 @@ def test_time_tolerance_forgives_small_lateness_but_not_wrong_notes(ref):
     assert pitch_score(late, ref, cfg=tol).score == pytest.approx(100.0)
     assert pitch_score(ref * 2, ref, cfg=tol).score == 0.0          # wrong register still wrong
     assert pitch_score(np.full_like(ref, np.nan), ref, cfg=tol).score == 0.0
+
+
+# --- shared extractor: RMS gate, smoothing, manifest form ---
+def test_quiet_audio_is_gated_to_silence_even_if_a_pitch_is_present():
+    notes = example_melody()
+    loud = render_audio(notes)
+    assert np.isfinite(pitch_contour(loud, 16_000)).mean() > 0.5
+    assert np.isfinite(pitch_contour(loud * 0.005, 16_000)).sum() == 0      # RMS far below the gate
+    assert np.isfinite(pitch_contour(loud * 0.005, 16_000, rms_gate=0.0)).mean() > 0.5  # gate is the reason
+
+
+def test_smoothing_removes_isolated_single_frame_blips():
+    from ml.scoring.pitch import _clean
+
+    t = 1.0
+    signal = np.full(16_000, 0.3, dtype=np.float32)
+    pitch = np.full(51, np.nan)
+    pitch[10] = 440.0                                  # a lone detection surrounded by silence
+    pitch[20:30] = 220.0                               # a real note
+    out = _clean(pitch, signal, rms_gate=0.0, smooth=True)
+    assert np.isnan(out[10]) and np.isfinite(out[20:30]).all()
+    assert np.isfinite(_clean(pitch, signal, rms_gate=0.0, smooth=False)[10])
+
+
+def test_reference_contour_is_manifest_ready_and_json_safe():
+    import json
+
+    from ml.scoring.pitch import reference_contour
+
+    notes = example_melody()
+    ref = reference_contour(render_audio(notes), 16_000, backend="pyin")
+    json.dumps(ref, allow_nan=False)                   # raises on NaN/inf
+    assert ref["hop_seconds"] == 0.02 and ref["backend"] == "pyin"
+    assert len(ref["hz"]) == len(ref["periodicity"]) and ref["settings"]["minimum_rms"] == 0.003
+    truth = melody_track(notes, HOP)
+    assert pitch_score(to_track(ref["hz"]), truth).score > 85
+
+
+def test_crepe_chunking_is_seamless_across_the_15_second_boundary():
+    pytest.importorskip("torchcrepe")
+    notes = example_melody() * 4                       # ~41 s: spans two 15 s chunk boundaries
+    # Truth from exact note edges: melody_track rounds each note's length separately, which drifts
+    # ~0.1 s against the sample-exact audio over 56 notes and would look like an extractor error.
+    edges = np.cumsum([0.0] + [d for _, d in notes])
+    truth = np.full(int(round(edges[-1] / HOP)), np.nan)
+    for (midi, _), t0, t1 in zip(notes, edges[:-1], edges[1:]):
+        if midi is not None:
+            truth[int(round(t0 / HOP)):int(round(t1 / HOP))] = midi_to_hz(midi)
+    track = pitch_contour(render_audio(notes), 16_000, backend="crepe")
+    assert abs(len(track) - len(truth)) <= 2
+    assert pitch_score(track, truth).score > 90
+    # the frames right at each chunk boundary (15 s and 30 s) must not drop out
+    for boundary_s in (15.0, 30.0):
+        i = int(boundary_s / HOP)
+        window_truth, window_track = truth[i - 10:i + 10], track[i - 10:i + 10]
+        sung = np.isfinite(window_truth)
+        assert np.isfinite(window_track[sung]).mean() > 0.8

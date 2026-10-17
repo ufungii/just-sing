@@ -8,7 +8,7 @@ We have no labeled singing or pronunciation data, and nobody on the team is flue
 
 | Path | What it is |
 |---|---|
-| `scoring/pitch.py` | Pitch extraction (`pitch_contour`, pyin or CREPE) and pitch scoring |
+| `scoring/pitch.py` | The shared pitch extractor (`pitch_contour` → array for evals; `reference_contour` → manifest-form dict for the pipeline) and pitch scoring |
 | `scoring/timing.py` | Note-onset detection and timing scoring |
 | `scoring/score.py` | Per-phrase scores, ratings, and totals (`score_turn`, `finalize_turn`, `phrase_weights`) |
 | `scoring/config.py` | Every tunable threshold, plus `SCORING_VERSION` |
@@ -70,27 +70,27 @@ The live game compares the browser's tracker (Pitchy, McLeod Pitch Method) with 
 
 | Take | Same tracker (CREPE vs CREPE) | Live pairing (CREPE vs MPM) |
 |---|---|---|
-| clean | 99.6 | 93.4 |
-| 10 dB noise | 99.3 | 86.3 |
-| 5 dB noise | 99.2 | **0.0** (MPM rejects every frame) |
+| clean | 99.7 | 94.1 |
+| 10 dB noise | 99.4 | 87.4 |
+| 5 dB noise | 99.4 | **0.0** (MPM rejects every frame) |
 
 That was a clean synthetic voice. On a **real vocal stem** the picture is different (`real_tracker_eval.py` → `results/real_tracker_<clip>.md`): a real voice is breathy, has vibrato and fast notes, so the browser tracker is much less sure than CREPE.
 
 | MPM clarity | Frames voiced (CREPE: 82%) | About an octave off | Near-perfect take scores |
 |---|---|---|---|
-| 0.9 | 44% | 3% | 47 |
-| 0.8 | 62% | 7% | 61 |
-| 0.7 | 75% | 10% | 73 |
-| 0.6 | 85% | 11% | 77 |
+| 0.9 | 44% | 3% | 54 |
+| 0.8 | 62% | 7% | 69 |
+| 0.7 | 75% | 9% | 80 |
+| 0.6 | 85% | 11% | 83 |
 
 - **The threshold is the main lever, and 0.8 is too strict for real voices.** Use about **0.6-0.7**. Noise-only and silence still score 0 at every threshold, and bad takes stay well separated from good ones.
-- **Gap filling and octave correction (`track_cleanup.py`) changed scores by 2 points or less**, so they are not adopted.
-- **Tracker disagreement caps a perfect take at about 75-80** when the reference comes from CREPE and the live track from Pitchy-style MPM. Even pyin scores 78.5 against the CREPE reference. If the reference is instead built with the same tracker family as the live one, the same near-perfect take scores about 96 and a detuned or late take still scores 40-60. This is an upper bound (our "perfect take" is the same audio plus noise, so tracker errors are more correlated than they would be for a different human performance), but it is a strong argument for either extracting the reference with the browser's own tracker (then reviewing it by hand) or recalibrating the rating bands against the live path. **Do not ship the 90/75/50 rating bands until they are calibrated on a real take**: with a CREPE reference, a perfect live take would never reach "perfect".
+- **Gap filling and octave correction (`track_cleanup.py`) did not help** (within about 3 points, mostly slightly worse), so they are not adopted.
+- **Tracker disagreement caps a perfect take at about 80-83 (clarity 0.6-0.7; only 69 at 0.8)** when the reference comes from CREPE and the live track from Pitchy-style MPM. If the reference is instead built with the same tracker family as the live one, the same near-perfect take scores about 97 and a detuned or late take still scores 43-62. This is an upper bound (our "perfect take" is the same audio plus noise, so tracker errors are more correlated than they would be for a different human performance), but it is a strong argument for either extracting the reference with the browser's own tracker (then reviewing it by hand) or recalibrating the rating bands against the live path. **Do not ship the 90/75/50 rating bands until they are calibrated on a real take**: with a CREPE reference, a perfect live take would never reach "perfect".
 
 **Frontend:** use Pitchy clarity 0.6-0.7, and show a "we can't hear you" warning when almost no frames are voiced so a mic problem is never scored as bad singing.
 
 ### Real-voice degradation (`real_audio_eval.py` → `results/real_audio_<clip>.md`)
-The same controlled damage as above, applied to a real vocal stem instead of a synthetic melody (local-only audio; only aggregated numbers are committed). With CREPE tracking, scores still fall in order for local detuning (100 → 82 → 60), lateness (99 → 82 → 63 → 38), dropped seconds, and noise (98 at 30 dB, 75 at 5 dB). The scorer is not an artifact of clean synthetic voices.
+The same controlled damage as above, applied to a real vocal stem instead of a synthetic melody (local-only audio; only aggregated numbers are committed). With CREPE tracking, scores still fall in order for local detuning (100 → 84 → 63), lateness (100 → 81 → 61 → 37), dropped seconds, and noise (99 at 30 dB, 76 at 5 dB). The scorer is not an artifact of clean synthetic voices.
 
 ### Pronunciation (`pronunciation_eval.py`, `pronunciation_nearmiss.py`)
 Test speech is generated locally with Meta's MMS-TTS Korean voice.

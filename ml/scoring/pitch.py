@@ -65,52 +65,135 @@ def cents_error(user_hz: np.ndarray, target_hz: np.ndarray) -> np.ndarray:
 # --------------------------------------------------------------------------- #
 # Extraction
 # --------------------------------------------------------------------------- #
+PERIODICITY_THRESHOLD = 0.5   # tracker confidence below this is unvoiced
+RMS_GATE = 0.003              # window RMS below this is silence, even if the tracker returns a pitch
+CREPE_CHUNK_FRAMES = 750      # 15 s of frames per CREPE call (bounds memory), with 100 ms of context
+
+
+def _extract(signal: np.ndarray, backend: str, device: str | None, progress) -> tuple[np.ndarray, np.ndarray]:
+    """The one extraction path: raw pitch (Hz, NaN = unvoiced) and confidence per 20 ms frame.
+
+    Shared by the offline reference (reference_contour) and the evals (pitch_contour), so both
+    use identical settings. 16 kHz mono in. Heavy imports stay inside the branches.
+    """
+    import librosa
+    from scipy.ndimage import median_filter
+
+    hop = int(round(HOP_SECONDS * EXTRACTION_SR))
+    if backend == "pyin":
+        pitch, voiced, prob = librosa.pyin(signal, fmin=FMIN_HZ, fmax=FMAX_HZ, sr=EXTRACTION_SR,
+                                           frame_length=2048, hop_length=hop)
+        confidence = np.nan_to_num(np.asarray(prob, dtype=np.float32), nan=0.0)
+        # pyin makes its own voiced/unvoiced decision; an extra confidence cut only drops good frames.
+        pitch = np.where(np.asarray(voiced), pitch, np.nan)
+        return np.asarray(pitch, dtype=np.float64), confidence
+
+    if backend == "crepe":
+        import torch
+        import torchcrepe
+
+        device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        n_frames = len(signal) // hop + 1
+        pitch = np.full(n_frames, np.nan, dtype=np.float32)
+        confidence = np.zeros(n_frames, dtype=np.float32)
+        for first in range(0, n_frames, CREPE_CHUNK_FRAMES):
+            last = min(n_frames, first + CREPE_CHUNK_FRAMES)
+            left_frame = max(0, first - 5)
+            lo, hi = left_frame * hop, min(len(signal), (last + 5) * hop)
+            with torch.inference_mode():
+                hz, periodicity = torchcrepe.predict(
+                    torch.from_numpy(signal[lo:hi].copy()).unsqueeze(0), EXTRACTION_SR, hop, FMIN_HZ, FMAX_HZ,
+                    model="full", batch_size=256, device=device, return_periodicity=True)
+            offset = first - left_frame
+            count = min(last - first, hz.shape[1] - offset)
+            pitch[first:first + count] = hz[0, offset:offset + count].cpu().numpy()
+            confidence[first:first + count] = periodicity[0, offset:offset + count].cpu().numpy()
+            if progress:
+                progress(min(len(signal) / EXTRACTION_SR, last * HOP_SECONDS))
+        confidence = median_filter(confidence, size=3, mode="nearest")
+        pitch = np.where(confidence >= PERIODICITY_THRESHOLD, pitch, np.nan)
+        return pitch.astype(np.float64), confidence
+
+    raise ValueError(f"unknown pitch backend: {backend!r}")
+
+
+def _clean(pitch: np.ndarray, signal: np.ndarray, rms_gate: float, smooth: bool) -> np.ndarray:
+    """Drop frames that are silent, out of range, or isolated blips; returns Hz with NaN = unvoiced."""
+    from scipy.ndimage import median_filter
+
+    hop = int(round(HOP_SECONDS * EXTRACTION_SR))
+    squares = np.concatenate([[0.0], np.cumsum(np.pad(signal, (512, 512)).astype(np.float64) ** 2)])
+    starts = np.arange(len(pitch)) * hop
+    ends = np.minimum(starts + 1024, len(squares) - 1)
+    rms = np.sqrt((squares[ends] - squares[np.minimum(starts, len(squares) - 1)]) / 1024.0)
+    valid = np.isfinite(pitch) & (rms >= rms_gate) & (pitch >= FMIN_HZ) & (pitch <= FMAX_HZ)
+    values = np.where(valid, pitch, 0.0)
+    if smooth:  # a 3-frame median also removes single-frame detections surrounded by silence
+        values = median_filter(values, size=3, mode="nearest")
+    return np.where(values > 0, values, np.nan)
+
+
+def _prepare(audio: np.ndarray, sr: int) -> np.ndarray:
+    signal = np.asarray(audio, dtype=np.float32)
+    if signal.ndim != 1 or not len(signal) or not np.isfinite(signal).all():
+        raise ValueError("expected finite, nonempty mono audio")
+    if sr != EXTRACTION_SR:
+        import librosa
+        signal = librosa.resample(signal, orig_sr=sr, target_sr=EXTRACTION_SR)
+    return signal
+
+
 def pitch_contour(
     audio: np.ndarray,
     sr: int,
     backend: str = "pyin",
     hop_seconds: float = HOP_SECONDS,
+    *,
+    rms_gate: float = RMS_GATE,
+    smooth: bool = True,
+    device: str | None = None,
+    progress=None,
 ) -> np.ndarray:
-    """Extract a Hz contour (NaN = unvoiced) from mono audio.
+    """Hz contour (NaN = unvoiced) from mono audio at a 20 ms hop.
 
-    One shared function: the offline pipeline uses it for the reference
-    (backend="crepe") and the evals use it on degraded audio (default "pyin",
-    CPU-only). Heavy imports are lazy so this module stays importable without
-    PyTorch.
+    The one shared extractor: the offline pipeline builds the reference with it
+    (backend="crepe", via reference_contour) and the evals extract degraded audio with
+    it (default "pyin", CPU only). `hop_seconds` must be the scoring hop.
     """
-    import librosa  # lazy: only needed when extracting from audio
+    if abs(hop_seconds - HOP_SECONDS) > 1e-9:
+        raise ValueError("the scoring hop is fixed at 0.02 s")
+    signal = _prepare(audio, sr)
+    pitch, _ = _extract(signal, backend, device, progress)
+    return _clean(pitch, signal, rms_gate, smooth)
 
-    audio = np.asarray(audio, dtype=np.float32)
-    if sr != EXTRACTION_SR:
-        audio = librosa.resample(audio, orig_sr=sr, target_sr=EXTRACTION_SR)
-    hop = int(round(hop_seconds * EXTRACTION_SR))
 
-    if backend == "pyin":
-        f0, _, _ = librosa.pyin(
-            audio, fmin=FMIN_HZ, fmax=FMAX_HZ, sr=EXTRACTION_SR,
-            frame_length=2048, hop_length=hop,
-        )
-        return np.where(np.isfinite(f0) & (f0 > 0), f0, np.nan)
+def reference_contour(
+    audio: np.ndarray,
+    sample_rate: int = EXTRACTION_SR,
+    *,
+    backend: str = "crepe",
+    progress=None,
+    rms_gate: float = RMS_GATE,
+    smooth: bool = True,
+    device: str | None = None,
+) -> dict:
+    """The reference in manifest form: {hop_seconds, hz (null = unvoiced), periodicity, backend, settings}.
 
-    if backend == "crepe":
-        # Verified with torchcrepe 0.0.24 on CUDA against synthetic ground truth
-        # (median error ~8 cents, see test_crepe_backend_matches_ground_truth).
-        import torch
-        import torchcrepe
-
-        x = torch.from_numpy(audio)[None]
-        pitch, periodicity = torchcrepe.predict(
-            x, EXTRACTION_SR, hop, FMIN_HZ, FMAX_HZ, model="full",
-            batch_size=512, device="cuda" if torch.cuda.is_available() else "cpu",
-            return_periodicity=True,
-        )
-        periodicity = torchcrepe.filter.median(periodicity, 3)
-        pitch = torchcrepe.threshold.At(0.5)(pitch, periodicity)  # unvoiced -> NaN
-        pitch = torchcrepe.filter.mean(pitch, 3)
-        return pitch.squeeze(0).cpu().numpy()
-
-    raise ValueError(f"unknown pitch backend: {backend!r}")
-
+    Same extraction as pitch_contour, plus the per-frame confidence and the settings used, so a
+    manifest records exactly how its contour was made. JSON-safe (no NaN).
+    """
+    signal = _prepare(audio, sample_rate)
+    pitch, confidence = _extract(signal, backend, device, progress)
+    hz = _clean(pitch, signal, rms_gate, smooth)
+    return {
+        "hop_seconds": HOP_SECONDS,
+        "hz": [float(v) if np.isfinite(v) else None for v in hz],
+        "periodicity": [float(v) if np.isfinite(v) else 0.0 for v in confidence],
+        "backend": backend,
+        "settings": {"sample_rate_hz": EXTRACTION_SR, "fmin": FMIN_HZ, "fmax": FMAX_HZ,
+                     "periodicity_threshold": PERIODICITY_THRESHOLD, "minimum_rms": rms_gate,
+                     "median_smoothing": smooth},
+    }
 
 # --------------------------------------------------------------------------- #
 # Scoring
