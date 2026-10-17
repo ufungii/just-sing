@@ -1,8 +1,8 @@
 # API
 
 FastAPI backend for the karaoke app: song catalog, guest and Auth0 sessions, solo / local / online matches,
-spoken-practice uploads, and online rooms. It never touches the singing clock: pitch tracking and phrase
-ratings happen in the client, which submits the finished phrase results once.
+spoken-practice uploads, and online rooms. The server schedules continuous multiplayer starts; each browser
+uses its WebAudio clock for playback, pitch tracking and phrase ratings, then submits only its assigned phrases.
 
 Data shapes (song manifest, score, practice result, error) are defined in [`../contracts/`](../contracts/).
 The Pydantic models in `models.py` mirror them, and `tests/test_contracts.py` fails if they drift.
@@ -25,18 +25,20 @@ pytest api                                # tests; the DB tests need DATABASE_UR
 
 Interactive docs: `http://localhost:8000/docs`. Without `DATABASE_URL`, the catalog endpoints still work and
 the database tests are skipped. Without Auth0 values, guests still work and bearer tokens get `auth_unavailable`.
-Without a pronunciation scorer, `/api/practice` answers `status: "unavailable"`.
+Without a pronunciation scorer (the default), `/api/practice` answers `status: "unavailable"`.
 
 ## Environment
 
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | `postgresql+psycopg://...` (SQLAlchemy needs that scheme, not `postgres://`). Server-side only. |
+| `PRONUNCIATION_SCORER` | `1` loads `ml.pronunciation.api_scorer.PronunciationScorer` at startup and warms it (about 30 s, needs the speech environment). Anything else: practice is `unavailable`. If loading fails, the error is logged and practice stays `unavailable`. |
 | `AUTH0_DOMAIN` | Tenant domain, no `https://`. |
 | `AUTH0_AUDIENCE` | The Auth0 API identifier. Login requests must pass the same `audience`, or Auth0 issues an opaque token we cannot verify. |
 | `COOKIE_SECURE` | `1` on public HTTPS so the guest cookie is Secure. Leave `0` on `http://localhost`. |
 | `GUEST_TTL_DAYS` | Guest session lifetime, default 7. Expired guests and their data are deleted hourly. |
 | `ALLOWED_ORIGINS` | Extra browser origins allowed to open WebSockets. The server's own host is always allowed. |
+| `SONG_DIRS` | Folders to load songs from (`:`-separated on Linux/macOS), each containing `<id>/song.json`. Default: `api/catalog` and `ml/data`. |
 | `GEMINI_API_KEY` | Server-side only. Enables coaching blurbs; without it they answer `unavailable`. |
 | `GEMINI_MODEL` | Model for blurbs, default `gemini-3.5-flash-lite`. Google retires older models for new accounts, so if blurbs go `unavailable`, check this first. |
 | `WEB_DIST` | Folder with the built frontend. Default `web/dist`. |
@@ -99,9 +101,10 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | 401 | `not_authenticated`, `invalid_token` |
 | 403 | `host_only`, `not_your_seat` |
 | 404 | `clip_not_found`, `phrase_not_found`, `match_not_found`, `attempt_not_found`, `room_not_found`, `audio_missing` |
-| 409 | `not_your_turn`, `attempt_not_started`, `attempt_closed`, `attempt_invalidated`, `already_submitted`, `cannot_retry`, `use_room_rematch`, `room_full`, `room_started`, `not_ready`, `not_finished` |
+| 409 | `not_your_turn`, `attempt_not_started`, `attempt_closed`, `attempt_invalidated`, `already_submitted`, `cannot_retry`, `use_room_rematch`, `room_full`, `room_started`, `not_ready`, `not_finished`, `use_duet_ready`, `duet_closed`, `missed_start`, `restart_duet`, `duet_not_started` |
 | 410 | `room_expired` |
-| 413 / 422 | `audio_too_large`, `audio_too_long`, `unsupported_audio`, `phrase_mismatch`, `invalid_register`, `invalid_request` |
+| 411 | `length_required` (practice uploads must send a `Content-Length`; browsers do this for `FormData`) |
+| 413 / 422 | `audio_too_large`, `audio_too_long`, `unsupported_audio`, `phrase_mismatch`, `invalid_result`, `invalid_register`, `invalid_request`, `invalid_duet`, `invalid_duet_range` |
 | 429 | `pronunciation_busy` (retryable), `too_many_joins` (retryable) |
 | 503 | `catalog_not_seeded`, `auth_unavailable`, `room_code_unavailable` |
 
@@ -110,12 +113,15 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | Method | Route | Purpose |
 |---|---|---|
 | GET | `/api/health`, `/api/ready` | Liveness; readiness (`catalog`, `database`, `pronunciation`) |
-| GET | `/api/clips`, `/api/clips/{id}/manifest` | Prepared catalog; full manifest |
+| GET | `/api/clips`, `/api/clips/{id}/manifest` | Prepared catalog (each clip has `synthetic` and `reviewed` flags); full manifest |
 | GET | `/api/clips/{id}/audio` | Instrumental only, supports `Range` |
 | POST | `/api/guests` | Create guest `{display_name}`; sets the cookie |
 | POST | `/api/auth/claim` | After login, send bearer token + guest cookie to move guest history to the account |
-| POST | `/api/matches` | `{clip_id}` for solo, plus `players: ["A","B"]` for local battle |
-| POST | `/api/turns/{attempt_id}/begin` | `{register, calibration_offset?}` |
+| POST | `/api/matches` | `{clip_id}` for solo; add `players: ["A","B"], duet: true` for continuous local multiplayer |
+| GET | `/api/time` | Current server epoch seconds, for monotonic client clock estimation |
+| POST | `/api/matches/{id}/duet/ready` | Loaded microphone/audio barrier; `{players: [{slot, register, calibration_offset?}]}` |
+| POST | `/api/matches/{id}/duet/stop` | Stop the shared duet; restart the whole match together |
+| POST | `/api/turns/{attempt_id}/begin` | `{register, calibration_offset?, range?: {start,end}}` |
 | POST | `/api/turns/{attempt_id}/result` | Final phrase results; needs an `Idempotency-Key` header |
 | GET | `/api/matches/{id}` | Match, players, attempts, scores, `winner_slot` |
 | POST | `/api/matches/{id}/retry` | Replace a lost or abandoned turn with a fresh attempt |
@@ -123,9 +129,9 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | GET | `/api/history`, `/api/leaderboard?clip_id=` | One row per match: `total` is your own score (null in a local battle; see `players`). Leaderboard: best solo totals of logged-in players on the current clip version |
 | POST | `/api/turns/{attempt_id}/coach` | Coaching blurb for a finished turn: `{status: ok\|unavailable, coach_blurb}`. Generated once, then cached. |
 | POST | `/api/practice` | Multipart: `clip_id`, `phrase_id`, `audio` (WAV/MP3/WebM/Ogg, max 5 MB and 15 s) |
-| POST | `/api/rooms`, `/api/rooms/join` | Create `{clip_id}`; join `{code}` |
+| POST | `/api/rooms`, `/api/rooms/join` | Create `{clip_id, duet: true}`; join `{code}` |
 | GET | `/api/rooms/{id}` | Snapshot (members only) |
-| POST | `/api/rooms/{id}/ready`, `/clip`, `/start`, `/rematch`, `/abort` | Lobby and lifecycle (`clip`, `start`, `rematch`, `abort` are host-only) |
+| POST | `/api/rooms/{id}/ready`, `/clip`, `/range`, `/start`, `/rematch`, `/abort` | Lobby and lifecycle (`clip`, `range`, `start`, `rematch`, `abort` are host-only) |
 | WS | `/ws/rooms/{id}` | Presence, snapshots, provisional progress |
 
 ## Example: a solo game
@@ -144,42 +150,81 @@ curl -b jar -X POST localhost:8000/api/turns/88a2.../begin -H 'content-type: app
 # ...the client plays, rates each phrase locally, then submits once:
 curl -b jar -X POST localhost:8000/api/turns/88a2.../result -H 'content-type: application/json' \
   -H 'Idempotency-Key: abc-1' \
-  -d '{"phrases":[{"phrase_id":"p1","rating":"great","pitch":82,"timing":70,"coverage":0.9}]}'
+  -d '{"phrases":[{"phrase_id":"p1","pitch":82,"timing":70,"coverage":0.9}]}'
 # {"mode":"solo","clip_id":"synthetic-demo","clip_version":1,"scoring_version":"0.1.0","register":0,
 #  "total":79.6,"pitch":82.0,"timing":70.0,"phrases":[...],"coach_blurb":null}
 ```
 
 Rules worth knowing:
-- The result must contain **every phrase of the clip exactly once** (`phrase_mismatch` otherwise).
+- Send per phrase `{phrase_id, pitch, timing, coverage}` (`timing` may be `null` when no note starts inside the phrase; it is then
+  scored on pitch alone). The response phrases are `{phrase_id, pitch, timing|null, score, coverage, rating}`, all server-computed.
+- The result must contain **every phrase of the clip exactly once** (`phrase_mismatch` otherwise), or, for a practice
+  section, exactly the phrases of the range.
+- **Practice section** (solo, or a host-selected online section): `POST /api/turns/{id}/begin` with `{"register":0,"range":{"start":12.0,"end":30.5}}`.
+  The scored phrases are those with `start >= range.start - 0.05` and `end <= range.end + 0.05` (seconds from clip start);
+  none or no scoreable reference frames -> 422 `invalid_range` (also for non-finite/out-of-clip values, or any range in a local battle). The range is
+  normalized to first-phrase start .. last-phrase end, fixed for the attempt (repeat begin with another range -> 409
+  `attempt_already_started`), and the result must contain exactly those phrase IDs; totals are weighted over them only.
+  Responses (`Score`, `GET /api/matches/{id}`, `/api/history` rows) carry `range: {start,end} | null` (null = full clip).
+  Practice runs are excluded from the leaderboard. No migration: while started the range sits in `phrase_results` as
+  `{"range":...}`; once accepted it is derived from the scored phrase IDs.
+- **Guide vocals:** `POST /api/turns/{id}/result` takes an optional `guide_used: bool` (the guide vocals were audible at
+  any time during the turn). It is client-reported, so not cheat-proof. `Score`, the `GET /api/matches/{id}` attempts and
+  `/api/history` rows carry `guided: bool` (false for old rows), and guided runs are excluded from the leaderboard. No
+  migration: the flag is stored on each saved phrase dict inside `phrase_results`. Winners in battle/online are unchanged.
 - Sending the **same** `Idempotency-Key` again returns the same result and changes nothing, so retry freely after a
   lost response. A **different** key on a finished attempt gets `already_submitted`.
-- Local battle (`players` with two names): the second player's attempt appears in `GET /api/matches/{id}` after the
-  first result is saved. `winner_slot` is the higher total at one decimal, or `null` for a tie.
+- Continuous local multiplayer (`players` with two names and `duet: true`) creates both attempts immediately. Each
+  score aggregates only that player's assigned phrases. `winner_slot` compares totals at one decimal, or is `null` for a tie.
+  Legacy API clients omitting `duet` retain sequential full-song turns; the current web UI always requests continuous duets.
 
-## Example: an online room
+## Continuous multiplayer: local or online
 
-1. Host `POST /api/rooms {clip_id}` and shares the returned `code`; the friend `POST /api/rooms/join {code}`.
-2. Each calls `POST /api/rooms/{id}/ready {ready: true}`; the host calls `/start` (returns `match_id`, `attempt_id`).
-3. Both open `ws://host/ws/rooms/{id}` (guest cookie, or `?access_token=` for Auth0). The server sends `room_snapshot`
-   immediately and after every durable change.
-4. The singer runs `begin` then `result` exactly as in solo. Only the active seat may call them (`not_your_seat` otherwise).
-5. The other player sees `result_saved`, then their own turn opens; after the last result, `match_finished`. Both read the
-   same winner from `GET /api/rooms/{id}` (`match.winner_slot`).
+The web UI plays the song once, with automatic singer changes. Authored `duet_sections` contain section IDs,
+explicit slots `0|1`, and existing phrase IDs. Timings and lyrics come from the original phrases/lines. See
+[`../contracts/duet-sections.md`](../contracts/duet-sections.md) for validation and the three-line legacy fallback.
 
-WebSocket messages (all JSON with a `type` and an `id`):
+1. Local: create `/api/matches` with `{clip_id, players: ["A","B"], duet: true}`. Online: create `/api/rooms`
+   with `{clip_id, duet: true}`, join by code, ready in the lobby, then let the host call `/start`.
+2. Both attempts exist in a `preparing` match. Load instrumental/vocals and open microphones before calling
+   `/api/matches/{id}/duet/ready`. Online each browser sends only its own slot; local sends both players with
+   their chosen registers, using the same microphone and one playback.
+3. After **both** loaded acknowledgments, the server freezes `duet.start_at` to a future epoch time (five-second
+   scheduling lead, including the three-second count-in). Repeated ready calls preserve it and the voice settings.
+   Clients sample `/api/time`, choose the shortest round trip, and estimate server time from the midpoint and
+   monotonic `performance.now()`. The local wall-clock setting does not control synchronization.
+4. Schedule one WebAudio playback at the shared timestamp, with instrumental/guide offsets aligned to the full
+   clip or selected practice range. Singer cues change on the clip clock; the music and microphone never restart
+   at a handoff. Each client rates only assigned phrases (local rates both players with their separate targets).
+5. Submit `/api/turns/{id}/result` with exactly the slot's frozen phrase IDs and a stable idempotency key. Either
+   player may finish first; the match becomes `finished` only when both results are accepted. There is no second
+   full-song turn. Both clients read the same winner from the match/room snapshot.
 
-| Direction | Types |
-|---|---|
-| Client → server | `heartbeat`, `progress` (`data`), `phrase_rating` (`data`). Progress and ratings are accepted only from the active singer. |
-| Server → client | `room_snapshot` (includes `state_version`; ignore older versions), `heartbeat_ack`, `turn_progress`, `phrase_rating`, `result_saved`, `match_finished`, `error` |
+`GET /api/matches/{id}` returns `duet: {sections, range, start_at}` with derived section times and `server_time`.
+`Score` and history carry `duet: true`; their `range` is the shared practice range, **not** the bounds of a player's
+assigned subset. Full-song duets have `range: null`. Multiplayer stays off the solo leaderboard.
 
-Limits: messages over 2 KB or more than 30 per second get an `error`; a socket silent for 45 s is closed (send a
-`heartbeat` every ~15 s); browsers sending a foreign `Origin` are refused. **Live progress and badges are provisional;
-only a committed `result` counts.** After a reconnect, trust the fresh snapshot, not what you buffered.
+Online host `/api/rooms/{id}/range` edits clear both lobby ready flags, persist across reconnects/rematches, and
+retain the authored slot of each phrase. Reject a range without scoreable assigned phrases for either player
+with `422 invalid_duet_range`. Local multiplayer stays on the full clip.
 
-**Lost turns:** a started turn that is not finished within the clip length + grace period is invalidated and the match
-becomes `retry_required`. Call `POST /api/matches/{id}/retry` for a fresh `attempt_id`. A tab that is still open after a
-network blip can submit the same attempt with the same `Idempotency-Key` as long as the deadline has not passed.
+No migration: lobby/loaded attempts freeze arrangement, range and schedule inside JSON `phrase_results.duet`.
+Accepted rows retain that metadata under `_duet` on their first phrase. This keeps history independent of later
+manifest timing changes. Draft matches remain hidden from lobby `match` and from history until results exist.
+
+**Recovery:** an existing page can continue scheduled WebAudio through a temporary network outage and retry a
+failed save using the same key. Reloading after the shared start must never replay the song for just that player:
+it shows `missed_start`. A stopped mic/audio context or explicit `/duet/stop` marks the shared match
+`retry_required`. Individual `/retry` returns `restart_duet`. Local rematch or host room `/rematch` creates a
+fresh, unscheduled duet and requires both loaded acknowledgments again. Accepted results are never overwritten.
+
+Legacy clients without `duet: true` keep the original `/begin` and sequential turn API. The public smoke script
+still exercises that compatibility path. New multiplayer clients use the shared barrier, not `/begin`.
+
+WebSocket snapshots retain `state_version` ordering and presence. `heartbeat`, `progress` and `phrase_rating`
+remain supported; duet participants may both relay provisional updates while active. Only committed results
+count. Send a heartbeat every ~15 seconds; foreign origins, messages over 2 KB, and more than 30 messages per
+second are refused. After reconnecting, trust the fresh durable snapshot.
 
 ## Where things live
 
@@ -188,11 +233,30 @@ network blip can submit the same attempt with the same `Idempotency-Key` as long
 | `main.py` | App, health/ready, catalog and audio routes, error handlers |
 | `play.py` | Guests, Auth0 identity, matches, turns, history, leaderboard, claim |
 | `rooms.py` | Rooms, WebSocket hub, snapshots |
+| `duets.py`, `duet_play.py` | Authored/fallback ownership, loaded barrier, shared schedule and stop |
 | `practice.py` | Spoken-practice upload and the pluggable scorer |
 | `models.py`, `tables.py` | Pydantic contracts; SQLAlchemy tables |
 | `retention.py` | Hourly guest cleanup; lost-turn recovery every 15 s |
-| `clip_catalog.py`, `catalog/<id>/manifest.json` | Validated manifests (audio files go next to them, gitignored) |
+| `clip_catalog.py`, `catalog/<id>/song.json` | Song loading and validation; the synthetic fixture lives in `catalog/` |
 | `migrations/` | Alembic migrations (committed) |
+
+## Songs from the ML pipeline
+
+`python -m ml.pipeline.run` writes `ml/data/<id>/song.json` (the `contracts/song.example.json` shape) with its audio
+beside it, plus `song.review.json`. The API reads those folders directly, with no copying:
+
+```bash
+python -m api.seed                      # records each song's metadata and checksum in the database
+uvicorn api.main:app                    # restart to pick up new songs
+```
+
+- **Draft vs reviewed:** `GET /api/clips` returns `reviewed: true` only when `song.review.json` says `"reviewed": true`.
+  Drafts are served too, so they can be played and tried, and the UI should label them. A song with no review file counts as
+  not reviewed.
+- **`practice_text`:** a line cut off at the clip edge has `practice_text: ""` and no phrase, and that is fine. A line that
+  has a phrase must have `practice_text`, or the song fails to load.
+- **Errors name the folder:** an invalid `song.json`, or two songs with the same `id`, stop the server at startup with the path.
+- **Audio:** `audio.instrumental` is a path relative to the song's folder. Only the instrumental is served.
 
 ## Coaching blurb
 
@@ -204,19 +268,25 @@ saved and also appears as `coach_blurb` on the attempt's score in `GET /api/matc
 
 ## Hooks for other roles
 
-- **ML A (pronunciation):** set `api.practice.scorer` to an object with a `provider` string and
-  `assess(wav_path, expected_text) -> [{"text": ..., "score": 0-100}]`. It receives 16 kHz mono WAV. Raise on failure;
+- **Pronunciation:** with `PRONUNCIATION_SCORER=1`, startup sets `api.practice.scorer` (see `practice.attach_scorer`).
+  Any scorer is an object with a `provider` string and
+  `assess(wav_path, expected_text) -> [{"text": ..., "score": 0-100}]`; it may also expose `last_overall` (0-100),
+  read right after `assess` and returned as the nullable `overall` on the practice response (automated, not validated
+  by a fluent reviewer). It receives 16 kHz mono WAV. Raise on failure;
   the API reports `status: "error"` (never a score). Only one assessment runs at a time.
-- **ML B (scoring):** `play.py` recomputes totals with a **stand-in** (duration-weighted mean of phrase pitch and timing).
-  The weights, tie precision and `scoring_version` are read from [`contracts/scoring.config.json`](../contracts/scoring.config.json),
-  the one file the Python engine and the TypeScript port should read too. Replace the stand-in with a call into
-  `ml/scoring` once that exists; change values only in that file, and bump `scoring_version` when you do.
-- **Real clips:** put `manifest.json` and the instrumental in `api/catalog/<id>/`, then run `python -m api.seed`.
-  Audio is gitignored; never commit copyrighted audio.
+- **ML B (scoring):** `play.py` scores through `ml.scoring.score.finalize_turn`. The version, weights (80/20) and rating
+  bands live only in [`ml/scoring/config.py`](../ml/scoring/config.py); the API imports them (needs `numpy`, and the
+  repo root on the path). Phrase weights come from the server's own manifest (scoreable reference frames), the client's
+  `rating`/`score` are ignored and recomputed, and the total is the weighted mean of the phrase scores. A bad value is a
+  422 `invalid_result`. Battle `tie_decimals` is an API constant in `play.py`. Change scoring values only in
+  `ml/scoring/config.py` and bump `SCORING_VERSION`; `web/src/scoring/config.ts` and `/api/scoring-config` of the demo
+  app are separate copies that the shared fixtures must keep honest.
+- **Real clips:** see "Songs from the ML pipeline" below. Audio is gitignored; never commit copyrighted audio.
 
 ## Known limits
 
-- Scoring is a placeholder; ratings are stored as the client submitted them, not recomputed.
+- Scoring uses the reference engine but is not validated on real recordings; weights and bands are unvalidated defaults.
+- Result rows saved before the engine was wired in lack the phrase `score`; reads fall back to the phrase `pitch`.
 - Client-submitted phrase results are validated, not cheat-proof.
 - One Uvicorn worker only: socket handles and the join rate limiter are in memory. More workers need shared event delivery.
 - Not yet verified: Python 3.11, two real computers over HTTPS, an Electron PKCE login, restart mid-turn recovery.

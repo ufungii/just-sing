@@ -1,0 +1,71 @@
+{
+  "id": "synthetic-demo",
+  "version": 1,
+  "title": "Synthetic Demo (no audio)",
+  "artist": "Test Fixture",
+  "language": "ko",
+  "duration": 30.0,
+  "provenance": {
+    "source_url": null,
+    "source_version": "synthetic",
+    "crop_start": 0.0,
+    "crop_end": 30.0
+  },
+  "audio": {
+    "instrumental": "instrumental.mp3",
+    "vocals": "vocals.mp3"
+  },
+  "lines": [
+    {
+      "start": 12.3,
+      "end": 15.8,
+      "text": "안녕 내 사랑",
+      "romanized": "annyeong nae sarang",
+      "translation": "Hello, my love",
+      "practice_text": "안녕 내 사랑",
+      "words": [
+        {
+          "text": "안녕",
+          "start": 12.3,
+          "end": 12.9
+        },
+        {
+          "text": "내",
+          "start": 13.0,
+          "end": 13.4
+        },
+        {
+          "text": "사랑",
+          "start": 13.5,
+          "end": 15.8
+        }
+      ]
+    }
+  ],
+  "phrases": [
+    {
+      "id": "p1",
+      "line_index": 0,
+      "start": 12.3,
+      "end": 15.8
+    }
+  ],
+  "reference": {
+    "hop_seconds": 0.02,
+    "hz": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 261.6, 261.6, 261.6, 261.6, 261.6, 261.6, 261.6, 261.6, 261.6, 261.6, 261.6, 261.6, 261.6, 261.6, 261.6, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 293.7, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, 329.6, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "notes": [
+      {
+        "start": 12.3,
+        "end": 12.9,
+        "hz": 261.6
+      }
+    ],
+    "excluded": [
+      {
+        "start": 20.0,
+        "end": 22.5,
+        "reason": "backing vocals"
+      }
+    ]
+  }
+}
