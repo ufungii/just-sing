@@ -37,7 +37,49 @@ Without a pronunciation scorer, `/api/practice` answers `status: "unavailable"`.
 | `COOKIE_SECURE` | `1` on public HTTPS so the guest cookie is Secure. Leave `0` on `http://localhost`. |
 | `GUEST_TTL_DAYS` | Guest session lifetime, default 7. Expired guests and their data are deleted hourly. |
 | `ALLOWED_ORIGINS` | Extra browser origins allowed to open WebSockets. The server's own host is always allowed. |
+| `GEMINI_API_KEY` | Server-side only. Enables coaching blurbs; without it they answer `unavailable`. |
+| `GEMINI_MODEL` | Model for blurbs, default `gemini-3.5-flash-lite`. Google retires older models for new accounts, so if blurbs go `unavailable`, check this first. |
+| `WEB_DIST` | Folder with the built frontend. Default `web/dist`. |
 | `RECONNECT_GRACE_SECONDS` | Extra time after a clip ends before a started turn is treated as lost, default 60. |
+
+## Frontend: one origin
+
+The server also serves the built frontend, so the browser (and Electron, which loads the server's URL) talks to one
+origin: the guest cookie works and no CORS setup is needed.
+
+```bash
+cd web && npm run build        # produces web/dist
+uvicorn api.main:app           # now http://localhost:8000/ is the app, /api and /ws are the backend
+```
+
+Rules: a real file in `web/dist` is served as is; any other non-API path returns `index.html` so client-side routes
+survive a reload; unknown `/api/...` paths return the normal JSON error. If `web/dist` does not exist, `/` answers
+`frontend_not_built`.
+
+For hot-reload development, run `npm run dev` and proxy the backend so the page is still same-origin (otherwise the
+cookie will not be sent). In `web/vite.config.ts`:
+
+```ts
+server: { proxy: { "/api": "http://localhost:8000", "/ws": { target: "ws://localhost:8000", ws: true } } }
+```
+
+## Public demo through a Cloudflare tunnel
+
+Microphones need HTTPS, and remote players need a public URL. A Quick Tunnel gives both from a laptop, no account needed.
+
+```bash
+sudo pacman -S cloudflared                                   # Arch; other OS: developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads
+COOKIE_SECURE=1 .venv/bin/uvicorn api.main:app --port 8000   # terminal 1: Secure cookie, because the public URL is HTTPS
+cloudflared tunnel --protocol http2 --url http://localhost:8000   # terminal 2: prints https://<random>.trycloudflare.com
+python -m api.scripts.smoke_public https://<random>.trycloudflare.com   # terminal 3: end-to-end check
+```
+
+`--protocol http2` matters on campus or corporate Wi-Fi, which often blocks the UDP that `cloudflared` tries first (the log shows `Failed to dial a quic connection` and the public URL answers error 1033). Look for `Registered tunnel connection` in its output.
+
+The smoke script plays a full two-player room over the public URL and checks the cookie flags, WebSockets, the
+origin check, live progress, turns and the winner. The URL changes every time the tunnel restarts, and it is
+public: do not put it in the README or Devpost. Real copyrighted clips are served from this laptop only.
+The script leaves `smoke-*` guests in the database; they expire with the 7-day cleanup.
 
 ## Conventions
 
@@ -78,7 +120,8 @@ Without a pronunciation scorer, `/api/practice` answers `status: "unavailable"`.
 | GET | `/api/matches/{id}` | Match, players, attempts, scores, `winner_slot` |
 | POST | `/api/matches/{id}/retry` | Replace a lost or abandoned turn with a fresh attempt |
 | POST | `/api/matches/{id}/rematch` | New local/solo match with the same players (online: use the room) |
-| GET | `/api/history`, `/api/leaderboard?clip_id=` | Your saved results; best totals of logged-in players |
+| GET | `/api/history`, `/api/leaderboard?clip_id=` | One row per match: `total` is your own score (null in a local battle; see `players`). Leaderboard: best solo totals of logged-in players on the current clip version |
+| POST | `/api/turns/{attempt_id}/coach` | Coaching blurb for a finished turn: `{status: ok\|unavailable, coach_blurb}`. Generated once, then cached. |
 | POST | `/api/practice` | Multipart: `clip_id`, `phrase_id`, `audio` (WAV/MP3/WebM/Ogg, max 5 MB and 15 s) |
 | POST | `/api/rooms`, `/api/rooms/join` | Create `{clip_id}`; join `{code}` |
 | GET | `/api/rooms/{id}` | Snapshot (members only) |
@@ -151,13 +194,23 @@ network blip can submit the same attempt with the same `Idempotency-Key` as long
 | `clip_catalog.py`, `catalog/<id>/manifest.json` | Validated manifests (audio files go next to them, gitignored) |
 | `migrations/` | Alembic migrations (committed) |
 
+## Coaching blurb
+
+After a turn is scored, call `POST /api/turns/{attempt_id}/coach`. Gemini gets only the measured numbers (totals,
+per-phrase rating, pitch, timing, coverage, register) and writes 2-3 friendly sentences. It never changes a score,
+rating or winner. If there is no key, or Gemini fails or times out (10 s), the answer is
+`{"status": "unavailable", "coach_blurb": null}`: show the results without it and retry later. A successful blurb is
+saved and also appears as `coach_blurb` on the attempt's score in `GET /api/matches/{id}`.
+
 ## Hooks for other roles
 
 - **ML A (pronunciation):** set `api.practice.scorer` to an object with a `provider` string and
   `assess(wav_path, expected_text) -> [{"text": ..., "score": 0-100}]`. It receives 16 kHz mono WAV. Raise on failure;
   the API reports `status: "error"` (never a score). Only one assessment runs at a time.
-- **ML B (scoring):** `play.py` recomputes totals with a **stand-in** (duration-weighted mean of phrase pitch and timing,
-  80/20). Replace it with a call into `ml/scoring` once that exists, and keep `scoring_version` in step.
+- **ML B (scoring):** `play.py` recomputes totals with a **stand-in** (duration-weighted mean of phrase pitch and timing).
+  The weights, tie precision and `scoring_version` are read from [`contracts/scoring.config.json`](../contracts/scoring.config.json),
+  the one file the Python engine and the TypeScript port should read too. Replace the stand-in with a call into
+  `ml/scoring` once that exists; change values only in that file, and bump `scoring_version` when you do.
 - **Real clips:** put `manifest.json` and the instrumental in `api/catalog/<id>/`, then run `python -m api.seed`.
   Audio is gitignored; never commit copyrighted audio.
 
@@ -168,3 +221,12 @@ network blip can submit the same attempt with the same `Idempotency-Key` as long
 - One Uvicorn worker only: socket handles and the join rate limiter are in memory. More workers need shared event delivery.
 - Not yet verified: Python 3.11, two real computers over HTTPS, an Electron PKCE login, restart mid-turn recovery.
 - `connected` in a snapshot only counts sockets open on this server process; after any reconnect, fetch `GET /api/rooms/{id}` for the truth.
+
+## Local lyric and audio preview
+
+The main backend mounts the offline ML preview at `/karaoke/live/`.
+Set `JUST_SING_LOCAL_DEMO_AUDIO=1` on the team machine to enable prepared-song
+audio and provisional scoring. The home screen's SOLO SING button opens it.
+It can also run separately with `uvicorn api.local_demo:app`.
+See [LOCAL_DEMO.md](LOCAL_DEMO.md) for the local song picker, vocal guide and
+lyric-timing workflow. This entry point does not replace the backend above.

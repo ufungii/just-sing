@@ -1,11 +1,5 @@
-# Offline song-prep environment (laptop/Colab GPU, never the prod server). Python 3.11.
-# Keep isolated: Demucs pins an older torchaudio, and RTX 5070 needs a Blackwell-compatible
-# PyTorch build. Verify a real separation run on the actual machine.
--r ../requirements.txt
-torch
-torchaudio
-demucs>=4.0        # vocal / instrumental separation (original repo is archived)
-torchcrepe>=0.0.22 # reference pitch contour
-google-genai>=0.3  # Gemini: translation, romanization cross-check
-yt-dlp             # song acquisition on the prep machine only
-# Optional lyric-timing assist (not an MVP dependency): whisperx
+# Main offline environment. Install a matching CPU/GPU PyTorch build first.
+# Demucs belongs in its separate environment; see docs/SETUP.md.
+-r requirements-pitch.txt
+-r requirements-alignment.txt
+-r requirements-download.txt

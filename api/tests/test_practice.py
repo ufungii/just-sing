@@ -79,3 +79,21 @@ def test_bad_input_is_rejected(env, tmp_path):
     assert post(c, tone(tmp_path / "long.wav", seconds=20)).json()["error"]["code"] == "audio_too_long"
     assert post(c, b"0" * (practice.MAX_BYTES + 1)).status_code == 413
     assert post(c, b"x", phrase="nope").status_code == 404
+
+
+def streamed_webm(path, seconds):
+    """Like Chrome's MediaRecorder: WebM written as a stream, so the header has no duration."""
+    with path.open("wb") as f:
+        subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-f", "lavfi", "-i", f"sine=duration={seconds}",
+                        "-c:a", "libopus", "-f", "webm", "pipe:1"], stdout=f, check=True)
+    return path.read_bytes()
+
+
+def test_browser_style_webm_without_duration(env, tmp_path, monkeypatch):
+    """Regression: the duration came from the container header, which is N/A for streamed WebM,
+    so every browser recording was rejected as unreadable."""
+    c, _ = env
+    monkeypatch.setattr(practice, "scorer", FakeScorer())
+    r = post(c, streamed_webm(tmp_path / "rec.webm", 2))
+    assert r.status_code == 200 and r.json()["status"] == "ok", r.text
+    assert post(c, streamed_webm(tmp_path / "long.webm", 20)).json()["error"]["code"] == "audio_too_long"
