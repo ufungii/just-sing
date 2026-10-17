@@ -63,6 +63,7 @@ def coach(attempt_id: uuid.UUID, guest=Depends(current_guest), s: Session = Depe
     prompt = build_prompt({"total": attempt.total, "pitch": attempt.pitch, "timing": attempt.timing,
                            "register": attempt.register, "phrases": attempt.phrase_results},
                           len(attempt.phrase_results))
+    s.rollback()  # give the connection back to the pool; the Gemini call below can take seconds
     try:
         text = " ".join(_generate(prompt).split())[:MAX_BLURB_CHARS]
     except Exception as e:  # key, network, quota, bad response: all just "unavailable"
@@ -71,6 +72,6 @@ def coach(attempt_id: uuid.UUID, guest=Depends(current_guest), s: Session = Depe
     if not text:
         return {"status": "unavailable", "coach_blurb": None}
     # ponytail: two simultaneous requests may both call Gemini; the last write wins. Add a lock if cost matters.
-    attempt.coach_blurb = text
+    s.get(TurnAttempt, attempt_id).coach_blurb = text  # a fresh transaction, re-read after the wait
     s.commit()
     return {"status": "ok", "coach_blurb": text}
