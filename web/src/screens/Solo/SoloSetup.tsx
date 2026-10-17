@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ApiError, asGuest, createMatch, getClips, savedName } from '../../lib/api';
+import { ApiError, asGuest, createMatch, getClips } from '../../lib/api';
 import type { Register, TimeRange } from '../../lib/types';
 import { useNav } from '../../routes';
 import type { SingSetup } from '../../routes';
@@ -8,19 +8,19 @@ import { MicCheck } from './MicCheck';
 import { TimingCheck, loadCalibration } from './TimingCheck';
 import { PracticeRangePicker } from '../../components/timeline/PracticeRangePicker';
 import { SongJacket } from '../../components/songs/SongJacket';
+import { PlayerPicker } from '../../components/players/PlayerPicker';
+import { getPlayer, usePlayers } from '../../lib/players';
 import { SongWheel, useSongEntries } from '../../components/songs/SongWheel';
 import type { Clips } from '../../components/songs/SongWheel';
 import './SoloSetup.css';
 
 export type { Clips };
 
-/** The server's display-name limit. */
-export const NAME_MAX = 40;
-
+/** Voice range choices, high to low. HIGH and LOW move the target notes one octave. */
 export const REGISTERS: { value: Register; label: string }[] = [
-  { value: -12, label: 'LOW 8VA' },
+  { value: 12, label: 'HIGH' },
   { value: 0, label: 'ORIGINAL' },
-  { value: 12, label: 'HIGH 8VA' },
+  { value: -12, label: 'LOW' },
 ];
 
 type Start = { kind: 'idle' } | { kind: 'starting' } | { kind: 'unsaved'; message: string };
@@ -34,7 +34,9 @@ export function SoloSetup() {
   const nav = useNav();
   const [clipId, setClipId] = useState<string | null>(null);
   const [range, setRange] = useState<TimeRange | null>(null);
-  const [name, setName] = useState(savedName);
+  const { lastId } = usePlayers();
+  const [playerId, setPlayerId] = useState<string | null>(lastId);
+  const player = getPlayer(playerId);
   const [register, setRegister] = useState<Register>(0);
   const [micOk, setMicOk] = useState(false);
   const [offset, setOffset] = useState<number | null>(loadCalibration);
@@ -49,8 +51,8 @@ export function SoloSetup() {
   }, [entries]);
   const chosen = entries.find((e) => e.clip?.id === clipId) ?? null;
 
-  const trimmed = name.trim();
-  const missing = [!clipId && 'a song', !trimmed && 'your name', !micOk && 'a mic check'].filter(Boolean) as string[];
+  const trimmed = player?.name ?? '';
+  const missing = [!clipId && 'a song', !player && 'a player', !micOk && 'a mic check'].filter(Boolean) as string[];
   const ready = missing.length === 0 && start.kind !== 'starting';
 
   function sing(match: SingSetup['match']) {
@@ -92,19 +94,8 @@ export function SoloSetup() {
 
       <div className="solo-grid solo-grid--setup">
         <div className="solo-side">
-          <Panel label="2 · YOU" className="solo-you">
-            <label className="solo-field">
-              <span className="solo-field__label">YOUR NAME</span>
-              <input
-                className="solo-input"
-                value={name}
-                maxLength={NAME_MAX}
-                required
-                autoComplete="nickname"
-                placeholder="e.g. Mina"
-                onChange={(e) => setName(e.target.value)}
-              />
-            </label>
+          <Panel label="2 · WHO'S SINGING" className="solo-you">
+            <PlayerPicker label="PLAYER" value={playerId} onChange={setPlayerId} />
             <div className="solo-field">
               <span className="solo-field__label">VOICE RANGE</span>
               <Segmented label="Voice range" options={REGISTERS} value={register} onChange={setRegister} />
