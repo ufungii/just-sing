@@ -97,3 +97,12 @@ def test_browser_style_webm_without_duration(env, tmp_path, monkeypatch):
     r = post(c, streamed_webm(tmp_path / "rec.webm", 2))
     assert r.status_code == 200 and r.json()["status"] == "ok", r.text
     assert post(c, streamed_webm(tmp_path / "long.webm", 20)).json()["error"]["code"] == "audio_too_long"
+
+
+def test_oversize_upload_is_rejected_before_it_is_read_or_authenticated():
+    """Regression: the size limit ran inside the handler, after Starlette had already received and
+    parsed the whole multipart body (and after the login check), so a big upload cost full bandwidth."""
+    from fastapi.testclient import TestClient
+    r = TestClient(app).post("/api/practice", data={"clip_id": "synthetic-demo", "phrase_id": "p1"},
+                             files={"audio": ("a.bin", b"0" * (practice.MAX_BYTES + 200_000))})  # no guest cookie
+    assert r.status_code == 413 and r.json()["error"]["code"] == "audio_too_large"
