@@ -3,6 +3,10 @@ import type { KeyboardEvent } from 'react';
 import { BoomboxKun, MicChan, PixelSky } from '../../components/pixel';
 import { useAccount } from '../../lib/auth';
 import { PixelButton } from '../../ui';
+import { PixelIcon } from '../../ui/PixelIcon';
+import type { IconName } from '../../ui/PixelIcon';
+import { ProfileDialog } from '../../components/players/ProfileDialog';
+import { SettingsDialog } from '../../components/settings/SettingsDialog';
 import type { Screen } from '../../screens';
 import { KeyCard } from './KeyCard';
 import type { KeyCardProps } from './KeyCard';
@@ -45,16 +49,15 @@ const CARDS: CardDef[] = [
     sub: 'make a room, send the code, sing against a friend',
     kao: '(＾▽＾)ﾉ ⇄ ヽ(＾▽＾)',
     icon: 'versus',
-    color: 'pink',
-  },
-  {
-    to: 'history',
-    title: 'HISTORY',
-    sub: 'your saved scores from this session',
-    kao: '(っ＾▽＾)っ ★',
-    icon: 'trophy',
     color: 'lav',
   },
+];
+
+/** Top-right corner buttons, left to right. History is a screen; the other two open dialogs. */
+const CORNER: { icon: IconName; label: string }[] = [
+  { icon: 'profile', label: 'PLAYERS' },
+  { icon: 'history', label: 'HISTORY' },
+  { icon: 'settings', label: 'SETTINGS' },
 ];
 
 /** Long enough for the keycap to visibly press in before the screen changes. */
@@ -66,9 +69,14 @@ function columnCount(grid: HTMLElement | null): number {
   return Math.max(1, getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length);
 }
 
-/** Title menu: logo, mascots, and four keycap cards. */
+/** Title menu: logo, mascots, four keycap cards, and the players / history / settings corner. */
 export function Home({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
   const account = useAccount();
+  const [dialog, setDialog] = useState<'players' | 'settings' | null>(null);
+  const onCorner = (icon: IconName) => {
+    if (icon === 'history') onNavigate('history');
+    else setDialog(icon === 'profile' ? 'players' : 'settings');
+  };
   const [sel, setSel] = useState(0);
   const [pressed, setPressed] = useState<number | null>(null);
   const gridRef = useRef<HTMLElement>(null);
@@ -122,6 +130,17 @@ export function Home({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
     <main className="home">
       <PixelSky />
       <div className="home-frame" aria-hidden="true" />
+
+      <nav className="home-corner" aria-label="Players, history and settings">
+        {CORNER.map((c) => (
+          <button key={c.icon} type="button" className="home-corner__btn" title={c.label} onClick={() => onCorner(c.icon)}>
+            <PixelIcon name={c.icon} size={30} />
+            <span className="home-corner__label">{c.label}</span>
+          </button>
+        ))}
+      </nav>
+      <ProfileDialog open={dialog === 'players'} onClose={() => setDialog(null)} />
+      <SettingsDialog open={dialog === 'settings'} onClose={() => setDialog(null)} />
 
       <div className="home-inner">
         <header className="home-header">
