@@ -1,0 +1,18 @@
+.clip-timeline { margin: 20px 0; min-width: 0; }
+.clip-timeline__scroll { overflow-x: auto; padding: 8px 20px; border: 2px solid var(--ink, #30283e); background: #fffaf0; }
+.clip-timeline__canvas { position: relative; }
+.clip-timeline__lyrics { position: relative; margin-bottom: 12px; }
+.clip-timeline__line { position: absolute; height: 48px; padding: 3px 5px; border: 1px solid #b6a4bf; background: #eee1f6; color: #30283e; font: inherit; text-align: left; overflow: hidden; }
+.clip-timeline__line:disabled { opacity: 1; }
+.clip-timeline__line small, .clip-timeline__line span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clip-timeline__line small { font-size: 12px; }
+.clip-timeline__track { position: relative; height: 66px; background: #e8dfd5; }
+.clip-timeline__selection { position: absolute; inset-block: 0; background: #a8e9d4; border-block: 3px solid #367b69; }
+.clip-timeline__phrase { position: absolute; top: 14px; height: 38px; border: 1px solid #89818d; background: #c9c1c9; overflow: hidden; text-align: center; color: #30283e; }
+.clip-timeline__phrase.is-selected { background: #6dcab2; border-color: #367b69; }
+.clip-timeline__handle { position: absolute; z-index: 3; top: -7px; height: 80px; width: 28px; transform: translateX(-50%); border: 2px solid #30283e; background: #fa96b8; color: #30283e; font-size: 24px; cursor: ew-resize; touch-action: none; }
+.clip-timeline__handle:disabled { opacity: 1; background: #ddd1e8; cursor: default; }
+.clip-timeline__handle:focus-visible { outline: 4px solid #4176da; outline-offset: 3px; }
+.clip-timeline__playhead { position: absolute; z-index: 2; top: 0; bottom: 26px; border-left: 3px solid #d12258; pointer-events: none; }
+.clip-timeline__ruler { display: flex; justify-content: space-between; font-size: 13px; padding-top: 8px; }
+.range-picker__actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }

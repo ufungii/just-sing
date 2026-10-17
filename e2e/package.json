@@ -1,0 +1,13 @@
+{
+  "name": "just-sing-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Dev-only end-to-end test of solo play in real Chromium with a fake microphone",
+  "scripts": {
+    "wavs": "../.venv/bin/python make_takes.py",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}

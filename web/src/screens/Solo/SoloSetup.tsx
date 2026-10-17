@@ -1,23 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, asGuest, createMatch, getClips, savedName } from '../../lib/api';
-import type { ClipSummary, Register } from '../../lib/types';
+import type { ClipSummary, Register, TimeRange } from '../../lib/types';
 import { useNav } from '../../routes';
 import type { SingSetup } from '../../routes';
 import { Notice, Panel, PixelButton, ScreenShell, Segmented } from '../../ui';
 import { MicCheck } from './MicCheck';
 import { TimingCheck, loadCalibration } from './TimingCheck';
+import { PracticeRangePicker } from '../../components/timeline/PracticeRangePicker';
 import './SoloSetup.css';
 
 /** The server's display-name limit. */
-const NAME_MAX = 40;
+export const NAME_MAX = 40;
 
-const REGISTERS: { value: Register; label: string }[] = [
+export const REGISTERS: { value: Register; label: string }[] = [
   { value: -12, label: 'LOW 8VA' },
   { value: 0, label: 'ORIGINAL' },
   { value: 12, label: 'HIGH 8VA' },
 ];
 
-type Clips = { kind: 'loading' } | { kind: 'error'; detail: string | null } | { kind: 'ok'; clips: ClipSummary[] };
+export type Clips = { kind: 'loading' } | { kind: 'error'; detail: string | null } | { kind: 'ok'; clips: ClipSummary[] };
 type Start = { kind: 'idle' } | { kind: 'starting' } | { kind: 'unsaved'; message: string };
 
 function formatDuration(seconds: number): string {
@@ -32,27 +33,19 @@ function formatDuration(seconds: number): string {
  */
 export function SoloSetup() {
   const nav = useNav();
-  const [clips, setClips] = useState<Clips>({ kind: 'loading' });
   const [clipId, setClipId] = useState<string | null>(null);
+  const [range, setRange] = useState<TimeRange | null>(null);
   const [name, setName] = useState(savedName);
   const [register, setRegister] = useState<Register>(0);
   const [micOk, setMicOk] = useState(false);
   const [offset, setOffset] = useState<number | null>(loadCalibration);
   const [start, setStart] = useState<Start>({ kind: 'idle' });
 
-  const loadClips = useCallback(() => {
-    setClips({ kind: 'loading' });
-    getClips().then(
-      (list) => {
-        setClips({ kind: 'ok', clips: list });
-        // One clip: nothing to choose, so pick it.
-        if (list.length === 1) setClipId(list[0].id);
-      },
-      // A plain network failure needs no detail; a server error message might help.
-      (e: Error) => setClips({ kind: 'error', detail: e instanceof ApiError && e.code === 'network' ? null : e.message }),
-    );
-  }, []);
-  useEffect(loadClips, [loadClips]);
+  const { clips, loadClips } = useClips();
+  // One clip: nothing to choose, so pick it.
+  useEffect(() => {
+    if (clips.kind === 'ok' && clips.clips.length === 1) setClipId(clips.clips[0].id);
+  }, [clips]);
 
   const trimmed = name.trim();
   const missing = [!clipId && 'a song', !trimmed && 'your name', !micOk && 'a mic check'].filter(Boolean) as string[];
@@ -62,7 +55,7 @@ export function SoloSetup() {
     if (!clipId) return;
     nav.go({
       name: 'sing',
-      setup: { runId: crypto.randomUUID(), clipId, register, calibrationOffset: offset, playerName: trimmed, match },
+      setup: { runId: crypto.randomUUID(), clipId, range, register, calibrationOffset: offset, playerName: trimmed, match },
     });
   }
 
@@ -81,7 +74,8 @@ export function SoloSetup() {
     <ScreenShell title="SOLO SING" kao="(ﾉ≧▽≦)ﾉ">
       <div className="solo-grid">
         <Panel tone="pink" label="1 · PICK A SONG" className="solo-songs">
-          <ClipList clips={clips} selected={clipId} onSelect={setClipId} onRetry={loadClips} />
+          <ClipList clips={clips} selected={clipId} onSelect={(id) => { setClipId(id); setRange(null); }} onRetry={loadClips} />
+          {clipId && <PracticeRangePicker clipId={clipId} range={range} onChange={setRange} disabled={start.kind === 'starting'} />}
         </Panel>
 
         <div className="solo-side">
@@ -150,7 +144,22 @@ export function SoloSetup() {
   );
 }
 
-function ClipList({
+/** Loads the clip catalog (shared with battle setup). */
+export function useClips() {
+  const [clips, setClips] = useState<Clips>({ kind: 'loading' });
+  const loadClips = useCallback(() => {
+    setClips({ kind: 'loading' });
+    getClips().then(
+      (list) => setClips({ kind: 'ok', clips: list }),
+      // A plain network failure needs no detail; a server error message might help.
+      (e: Error) => setClips({ kind: 'error', detail: e instanceof ApiError && e.code === 'network' ? null : e.message }),
+    );
+  }, []);
+  useEffect(loadClips, [loadClips]);
+  return { clips, loadClips };
+}
+
+export function ClipList({
   clips,
   selected,
   onSelect,

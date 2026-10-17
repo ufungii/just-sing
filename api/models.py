@@ -85,9 +85,9 @@ class Song(BaseModel):
                 raise ValueError(f"phrase {p.id} outside clip duration")
             if p.line_index >= len(self.lines):
                 raise ValueError(f"phrase {p.id} points at a missing line")
-        for line in self.lines:
-            if not line.practice_text.strip():
-                raise ValueError("line missing practice_text")
+        for p in self.phrases:  # a gradeable line must be practicable; clip-edge lines have no phrase
+            if not self.lines[p.line_index].practice_text.strip():
+                raise ValueError(f"phrase {p.id} has a line without practice_text")
         return self
 
 
@@ -98,14 +98,29 @@ class ClipSummary(BaseModel):
     artist: str
     duration: float
     synthetic: bool
+    reviewed: bool  # false for drafts: timings and notes not yet checked by ear
+
+
+class PhraseResultIn(BaseModel):
+    """What the browser submits per phrase. Any `rating` or `score` it also sends is ignored."""
+    phrase_id: str
+    pitch: float = Score100
+    timing: float | None = Field(default=None, ge=0, le=100)
+    coverage: float = Field(ge=0, le=1)
 
 
 class PhraseScore(BaseModel):
     phrase_id: str
     rating: Rating
     pitch: float = Score100
-    timing: float = Score100
+    timing: float | None = Field(default=None, ge=0, le=100)  # null: phrase starts mid-note, scored on pitch alone
+    score: float = Score100  # this phrase's 0-100 score; ratings and totals derive from it
     coverage: float = Field(ge=0, le=1)
+
+
+class TimeRange(BaseModel):
+    start: float
+    end: float
 
 
 class Score(BaseModel):
@@ -119,6 +134,8 @@ class Score(BaseModel):
     timing: float = Score100
     phrases: list[PhraseScore]
     coach_blurb: str | None = None  # filled by Gemini later
+    guided: bool = False  # guide vocals were audible during the turn (client-reported); such runs skip the leaderboard
+    range: TimeRange | None = None  # practice section (first phrase start .. last phrase end); null = full clip
 
 
 class WordFeedback(BaseModel):
@@ -132,6 +149,7 @@ class Practice(BaseModel):
     locale: str
     provider: str
     status: Literal["ok", "unavailable", "error"]
+    overall: float | None = None  # 0-100, automated and not validated by a fluent reviewer; null unless status ok
     words: list[WordFeedback]
 
 
