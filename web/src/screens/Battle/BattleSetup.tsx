@@ -1,3 +1,4 @@
+import { nameEasterEgg } from '../EasterEgg/name';
 import { useState } from 'react';
 import { asGuest, createMatch, savedName } from '../../lib/api';
 import type { Register } from '../../lib/types';
@@ -28,6 +29,7 @@ export function BattleSetup() {
   const missing = [!clipId && 'a song', (!n1 || !n2) && 'both names', !micOk && 'a mic check'].filter(Boolean) as string[];
 
   async function onStart() {
+    if (nameEasterEgg(nav, n1, n2)) return;
     if (!clipId || !n1 || !n2) return;
     setBusy(true);
     setError(null);
@@ -47,6 +49,7 @@ export function BattleSetup() {
         id={`battle-name-${i}`}
         className="solo-input"
         value={names[i]}
+        onBlur={(e) => { nameEasterEgg(nav, e.currentTarget.value); }}
         maxLength={NAME_MAX}
         placeholder={i ? 'e.g. Jisoo' : 'e.g. Mina'}
         onChange={(e) => setNames((n) => (i ? [n[0], e.target.value] : [e.target.value, n[1]]))}

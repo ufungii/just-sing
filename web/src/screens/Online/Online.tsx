@@ -1,3 +1,4 @@
+import { nameEasterEgg } from '../EasterEgg/name';
 import { useEffect, useState } from 'react';
 import { ApiError, asGuest, retryTurn, savedName } from '../../lib/api';
 import {
@@ -38,6 +39,7 @@ function Entry() {
   const who = name.trim();
 
   async function enter(call: () => Promise<RoomSnapshot>) {
+    if (nameEasterEgg(nav, who)) return;
     setBusy(true);
     setError(null);
     try {
@@ -70,6 +72,7 @@ function Entry() {
               maxLength={NAME_MAX}
               placeholder="e.g. Mina"
               onChange={(e) => setName(e.target.value)}
+              onBlur={(e) => { nameEasterEgg(nav, e.currentTarget.value); }}
             />
           </Panel>
           <Panel tone="sky" label="2 · JOIN A FRIEND">

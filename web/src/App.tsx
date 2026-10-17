@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { NavContext } from './routes';
 import type { Nav, Route, SingSetup } from './routes';
+import { Zibran } from './screens/EasterEgg/Zibran';
 import { Home } from './screens/Home/Home';
 import { SoloSetup } from './screens/Solo/SoloSetup';
 import { Sing } from './screens/Sing/Sing';
@@ -65,6 +66,8 @@ function devStartRoute(): Route {
 
 function renderRoute(route: Route, go: (r: Route) => void) {
   switch (route.name) {
+    case 'zibran':
+      return <Zibran />;
     case 'home':
       return <Home onNavigate={(screen) => go({ name: screen })} />;
     case 'solo':
