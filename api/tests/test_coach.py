@@ -76,3 +76,17 @@ def test_coach_guards(guests, monkeypatch):  # noqa: F811
     m = a_client.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
     assert a_client.post(f"/api/turns/{m['attempt_id']}/coach").json()["error"]["code"] == "attempt_not_scored"
     assert b_client.post(f"/api/turns/{m['attempt_id']}/coach").status_code == 404  # not their match
+
+
+@needs_db
+def test_coach_does_not_hold_a_database_connection_during_the_gemini_call(guests, monkeypatch):  # noqa: F811
+    """Regression: the request's session kept its connection checked out for the whole 10 s Gemini call,
+    so a few slow blurbs could exhaust the small connection pool."""
+    from api.db import get_engine
+    c = new_guest(guests)
+    mid, a = finished_attempt(c)
+    seen = []
+    monkeypatch.setenv("GEMINI_API_KEY", "fake")
+    monkeypatch.setattr(coach, "_generate", lambda p: seen.append(get_engine().pool.checkedout()) or "Nice work.")
+    assert c.post(f"/api/turns/{a}/coach").json()["coach_blurb"] == "Nice work."
+    assert seen == [0], f"{seen[0]} connection(s) held during the Gemini call"
