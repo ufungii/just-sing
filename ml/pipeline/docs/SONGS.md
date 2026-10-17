@@ -1,0 +1,175 @@
+# Prepared songs and review notes
+
+## Selected audio
+
+Russian Roulette uses:
+
+- `ml/data/russian-roulette/vocals.mp3`: original htdemucs vocal estimate, without enhancement filters.
+- `ml/data/russian-roulette/instrumental.mp3`: the improved residual instrumental selected by the user.
+
+Both decode to 9,332,736 stereo samples at 44.1 kHz (211.626667 seconds).
+`preparation.json` contains the active paths, provenance, hashes, and review status.
+Cleanup copies the selected exports without re-encoding, preserving their sound.
+
+Downloaded source audio, intermediate WAVs, comparison clips, older exports,
+and synthetic test audio are removed during cleanup. Historical JSON reports
+remain as evidence; their old paths are historical, not active references.
+Model caches, virtual environments, and reusable scripts remain installed.
+Decode the selected MP3s to temporary PCM for analysis. Repeating separation
+requires downloading the source again; its URL and hash remain in metadata.
+All song audio, lyric files, and model caches stay in gitignored `ml/data/`.
+
+How Sweet by NewJeans is also prepared in `ml/data/how-sweet/`, with its own
+`vocals.mp3` (original htdemucs estimate) and `instrumental.mp3` (mastered
+fine-tuned residual). Choose it in the song picker or open
+**http://127.0.0.1:8000/live/?song=how-sweet**.
+
+Its selected source is `https://www.youtube.com/watch?v=KNqn_WuV2bE`. The initial
+TJ Karaoke link was superseded because the sample appeared instrumental-only;
+it is not the selected vocal/reference source. All 46 supplied lines match the
+[studio timing source](https://lrclib.net/api/get/37129358) after normalization.
+Ten independent ASR entrance matches indicate a recording offset of about 12 s
+(median 11.99 s), with no meaningful tempo change detected. Fixed line anchors
+therefore add 12 s, and the lyric region ends at 231 s before the video outro.
+There are 406 timed words and eight supplied sections. The 20 ms reference has
+12,411 frames; estimated intro/outro regions are excluded from scoring.
+
+These are unreviewed preparation outputs. Acoustic word timing, melodic octave
+errors, harmonies and the estimated boundaries still need listening review.
+`corrections.json` preserves line entrances and section breaks; provenance and
+the recording-offset diagnostic are retained alongside the prepared timeline.
+
+Blood Sweat & Tears by BTS is prepared in `ml/data/blood-sweat-tears/` from
+`https://www.youtube.com/watch?v=QFcJOvp5Cw0`, using the same original-vocal and
+enhanced-instrumental recipe. It contains 49 supplied lines / 246 timed words
+in 12 sections. The [matched line source](https://lrclib.net/api/get/942277)
+includes explicit instrumental-break cues. Acoustic entrance checks support
+keeping its original timing without a global offset; the estimated last lyric
+ends at 202.50 s, before the recording ends. All timing remains unreviewed.
+Preview: **http://127.0.0.1:8000/live/?song=blood-sweat-tears**.
+
+## Song manifests
+
+Love Language by TOMORROW X TOGETHER uses the same original-vocal and enhanced
+residual-instrumental recipe in `ml/data/love-language/`. Its selected recording
+is `https://www.youtube.com/watch?v=3Rm-_pp3Tjw`; the 52 user-supplied lyric lines
+retain their 12 section breaks. Imported line anchors from
+`https://lrclib.net/api/get/20856783` are checked against independent ASR and
+paired with acoustic word alignment, deterministic romanization and English
+translation drafts. The supplied text is preserved, including ad-libs.
+
+Full-song preview: **http://127.0.0.1:8000/live/?song=love-language**.
+The `love-language-demo` preparation uses 54.30–84.30 s of the parent recording.
+Pitch, harmonies, sustained endings and translations remain unreviewed; the
+manifest and review sidecar record that status. Vocal-guide and romanization
+controls work through the existing song picker without special song code.
+
+Love Scenario by iKON is prepared in `ml/data/love-scenario/` from
+`https://www.youtube.com/watch?v=8pahVbnQhfA` with the same stem recipe. Its 54
+supplied lyric lines, 191 words and 13 sections are preserved. The Hangul timing
+source `https://lrclib.net/api/get/35017417` groups a few lines differently;
+48 acoustic groups map its 49 cues back to the supplied text. Six internal line
+entrances are resolved from word alignment rather than evenly spaced estimates.
+Twenty nearby ASR entrance matches support the arrangement without applying a
+global offset. Fixed opening/outro exclusions use the imported lyric cues.
+
+Full-song preview: **http://127.0.0.1:8000/live/?song=love-scenario**.
+The `love-scenario-demo` crop uses 66.62–96.62 s. Original vocals, enhanced
+instrumental, romanization and English reading drafts use the existing playback
+controls. Listening review of timing, held endings, harmonies and pitch remains
+pending. The 50 Korean-only full-song lines qualify for spoken practice.
+
+### Short demo handoff and text quality
+
+The app demo assets are separate, exactly 30-second preparations:
+
+| ID | Parent source window | Scoreable phrases |
+| --- | --- | --- |
+| `russian-roulette-demo` | 45.00–75.00 s | 11 |
+| `how-sweet-demo` | 56.42–86.42 s | 5 |
+| `blood-sweat-tears-demo` | 66.00–96.00 s | 5 |
+| `love-language-demo` | 54.30–84.30 s | 9 |
+| `love-scenario-demo` | 66.62–96.62 s | 9 |
+
+Full songs are preserved. Each demo directory contains matching MP3s, a rebased
+manifest/reference and review sidecar. Partial boundary lines are for display
+only; their translations retain parent-line context and their practice/grading
+is disabled. The cropper verifies exactly 1,323,000 decoded frames per stem.
+
+```powershell
+ml/pipeline/.venv/Scripts/python.exe -m ml.pipeline.crop --song russian-roulette --id another-demo --start 45 --duration 30
+```
+
+`practice_text` keeps the original whole line only when it contains Hangul and
+no Latin letters. Mixed Korean/English and English-only lines get an empty
+string; partial crop-boundary lines are also ineligible. This is
+spoken-practice eligibility, not a pronunciation score. Original singing lyrics
+and romanization remain available unchanged in the full songs.
+
+All current full-song lines have English reading drafts in `translations.json`
+and the manifests. These were assistant-generated from supplied lyrics, not
+Gemini output, and have not been checked by a fluent reviewer. The translation
+cache is text-hashed and reused on alignment reruns without overwriting existing
+nonempty corrections. Gemini is not configured in this checkout.
+
+Phrases require at least 0.5 s of voiced, non-excluded reference frames. Short or
+empty phrases are listed in `song.review.json` and dropped from `phrases` while
+their lines stay visible. Browser and backend scoring both use this phrase list.
+The original three full-song manifests are v3 and their demo manifests v2 after
+the whole-line practice fix. Love Language and Love Scenario start at full-song
+v2 / demo v1.
+
+**Still pending:** the teammate supplied four candidate backing-vocal ranges
+from the contour (45.8–48.4, 50.0–51.3, 51.8–55.6 and 67.5–73.1 seconds of
+Russian Roulette). The user has not listened yet. They remain recorded in
+`ml/data/russian-roulette/reference.review.json` for review and have not been
+applied as exclusions. Russian Roulette's backing/harmony cleanup still needs
+listening review. No asset is marked reviewed.
+The teammate's branch tools were fetched and copied into the gitignored
+`ml/data/peer-tools/pitch-score/` directory, preserving local scoring code.
+Prepared manifests are checked with the teammate's structural inspector; findings
+and the source commit are in each song's `INSPECTOR_REPORT.json`. Warnings
+remain about note duration and phrase coverage. These checks cannot confirm
+the correct singer or pitch by ear.
+
+The local-only `/api/demo-handoff` download contains the prepared demo packages
+with manifests, audio and review notes. Do not confuse passing mechanical checks
+with having completed the outstanding backing-vocal review.
+
+Each prepared song now contains `song.json` with the exact top-level fields from
+`contracts/song.example.json`: provenance, relative audio paths, timed lines and
+romanization, phrases, reference Hz, display notes and excluded regions. The
+reference is embedded, so this is the single-file ML handoff alongside its MP3s.
+The existing shared contract is unchanged. Media and manifests remain gitignored.
+
+`song.review.json` records review state and hashes separately. Current manifests
+are drafts: phrases use lyric windows and notes are automatic pitch segments.
+Neither those windows nor the imported timings establish reviewed held-note
+boundaries. The API keeps generated draft manifests out of the reviewed-lyrics
+endpoint; local preview still works. Hand-edited or reviewed manifests are not
+overwritten. Existing human-reviewed lyric sidecars take priority when assembling.
+
+New `ml.pipeline.run` preparations create manifests automatically. After changing
+an existing song's timing corrections or reference, rebuild from cached data:
+
+```powershell
+ml/pipeline/.venv/Scripts/python.exe -m ml.pipeline.manifest --all
+# Or: python -m ml.pipeline.manifest --id blood-sweat-tears
+```
+
+No separation or pitch inference is repeated by this command. Rebuilding is
+allowed only for unchanged drafts created by this generator, protecting edits.
+Explicit per-line `line_ends` in `corrections.json` preserve instrumental gaps;
+the LRC exporter includes corresponding blank cues.
+
+
+## Russian Roulette alignment history
+
+Russian Roulette's recorded full-song alignment contains 73 lines / 231 words. These are acoustic
+word estimates inside fixed line windows, not evenly distributed guesses. The
+initial unconstrained alignment drifted within repeated choruses and is retained
+under `alignment/history/`. The replacement uses normalized text matches to
+[LRCLIB line timestamps](https://lrclib.net/api/get/33861377), with the four intro
+entrances retained from the earlier acoustic draft. It remains unreviewed: 205
+words have posterior below the diagnostic 0.2 threshold.
+Speech alignment confidence is not a singing score. Listen and correct it.
