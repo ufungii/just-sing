@@ -40,7 +40,7 @@
 
 .practice-section-view { display: flex; flex: 1; min-height: 0; flex-direction: column; }
 .practice-lyrics-heading {
-  display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 18px 5% 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 10px 5% 8px;
 }
 .practice-lyrics-heading p { font-family: var(--font-display); font-weight: 700; letter-spacing: .06em; font-size: 15px; margin: 0 0 5px; }
 .practice-lyrics-heading > div > span { font-size: 16px; color: var(--ink-rose); }
@@ -51,13 +51,13 @@
 
 /* The lyric list is a paper panel with the arcade bevel. */
 .practice-lyrics {
-  flex: 1 1 0; min-height: max(160px, 30dvh); overflow-y: auto; overscroll-behavior: contain;
-  margin: 0 calc(5% + 10px) 12px 5%; padding: 20px 22px 60px;
+  flex: 1 1 0; min-height: max(160px, 36dvh); overflow-y: auto; overscroll-behavior: contain;
+  margin: 0 calc(5% + 10px) 10px 5%; padding: 10px 16px 24px;
   border: var(--border) solid var(--ink); background: var(--paper);
   box-shadow: inset 5px 5px 0 #fff, inset -5px -7px 0 #f3d5e6, 6px 8px 0 var(--ink);
   scrollbar-width: thin; scrollbar-color: var(--pink-dark) transparent;
 }
-.practice-lyric-row { padding: 10px 12px; margin-bottom: 4px; border: var(--border-thin) solid transparent; color: var(--ink-rose); }
+.practice-lyric-row { padding: 5px 10px; margin-bottom: 2px; border: var(--border-thin) solid transparent; color: var(--ink-rose); }
 .practice-lyric-row[data-in-selection=true] { color: var(--ink); background: var(--mint-light); border-color: var(--mint-dark); }
 .practice-lyric-row[data-current=true] { color: var(--ink); background: var(--lav-light); border-color: var(--lav-dark); }
 .practice-lyric-row[data-current=true][data-in-selection=true] { background: var(--mint-light); border-color: var(--ink); }
@@ -65,27 +65,27 @@
 .crop-workspace--practice .practice-lyric-text {
   display: block; flex: 1; min-width: 0; text-align: left; color: inherit;
   background: none; border: 0; border-radius: 0; padding: 0;
-  font-family: var(--font-ko); font-size: clamp(20px, 2.6vw, 34px); font-weight: 400; line-height: 1.25;
+  font-family: var(--font-ko); font-size: clamp(15px, 1.5vw, 20px); font-weight: 400; line-height: 1.2;
 }
 .practice-lyric-text:hover { color: var(--hot-dark); }
 .practice-lyric-text > span, .practice-lyric-text > small { display: block; }
-.practice-lyric-text > small { font-family: var(--font-body); font-size: .45em; margin-top: 6px; opacity: .85; }
+.practice-lyric-text > small { font-family: var(--font-body); font-size: 12px; margin-top: 2px; opacity: .85; }
 .practice-lyric-actions { display: flex; gap: 12px; opacity: 0; pointer-events: none; flex-shrink: 0; }
 .practice-lyric-row:hover .practice-lyric-actions,
 .practice-lyric-row:focus-within .practice-lyric-actions,
 .practice-lyric-row[data-current=true] .practice-lyric-actions { opacity: 1; pointer-events: auto; }
 .crop-workspace--practice .practice-lyric-actions .ui-key,
 .crop-workspace--practice .practice-zoom .ui-key,
-.crop-workspace--practice .practice-section-controls .ui-key { min-height: 36px; font-size: 12px; padding: 0 12px; }
+.crop-workspace--practice .practice-section-controls .ui-key { min-height: 30px; font-size: 11px; padding: 0 10px; }
 
 /* START / END badges: the same pixel tag in the lyric list and over the timeline handles. */
 .practice-lyric-marker { display: flex; gap: 8px; flex-wrap: wrap; }
-.practice-lyric-marker.is-end { margin-top: 12px; }
+.practice-lyric-marker.is-end { margin-top: 4px; }
 .practice-boundary-label,
 .practice-song-bar__handle > span {
-  display: inline-block; padding: 3px 8px; border: 3px solid var(--ink); box-shadow: 3px 3px 0 var(--ink);
+  display: inline-block; padding: 1px 6px; border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink);
   background: var(--mint); color: var(--ink); font-family: var(--font-display); font-weight: 700;
-  font-size: 11px; letter-spacing: .06em; white-space: nowrap;
+  font-size: 10px; letter-spacing: .06em; white-space: nowrap;
 }
 .practice-boundary-label { margin-bottom: 10px; }
 .practice-boundary-label[data-boundary=end],
@@ -93,7 +93,7 @@
 .practice-no-lyrics { margin: 0; color: var(--ink-rose); }
 
 .practice-transport {
-  flex: 0 1 auto; max-height: 38dvh; overflow-y: auto; background: var(--paper); border-top: var(--border) solid var(--ink); padding: 12px 5% 4px;
+  flex: 0 1 auto; max-height: 30dvh; overflow-y: auto; background: var(--paper); border-top: var(--border) solid var(--ink); padding: 8px 5% 2px;
 }
 .practice-transport-heading { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; font-size: 16px; font-variant-numeric: tabular-nums; }
 .practice-transport-heading strong { font-family: var(--font-display); }
@@ -102,7 +102,7 @@
 .practice-zoom { display: flex; gap: 12px; margin-left: auto; padding-right: 6px; }
 
 .practice-song-bar {
-  position: relative; height: 56px; margin: 36px 18px 8px; touch-action: none;
+  position: relative; height: 30px; margin: 30px 18px 6px; touch-action: none;
   background: var(--lav-light); border: var(--border-thin) solid var(--ink);
 }
 .practice-song-bar__wave-clip { position: absolute; inset: 0; overflow: hidden; }
@@ -116,7 +116,7 @@
 .practice-song-bar__playhead { position: absolute; top: -6px; bottom: -6px; border-left: 4px solid var(--hot); pointer-events: none; z-index: 2; }
 .practice-song-bar__playhead::before { content: ''; position: absolute; width: 12px; height: 12px; left: -8px; top: -8px; background: var(--hot); border: 3px solid var(--ink); }
 .crop-workspace--practice .practice-song-bar__handle {
-  position: absolute; top: -8px; width: 26px; height: 72px; transform: translateX(-50%); z-index: 3;
+  position: absolute; top: -8px; width: 22px; height: 46px; transform: translateX(-50%); z-index: 3;
   background: var(--mint); color: var(--ink); border: var(--border-thin) solid var(--ink); border-radius: 0; padding: 0;
   box-shadow: inset 3px 3px 0 var(--mint-light), inset -3px -4px 0 var(--mint-dark), 3px 4px 0 var(--ink);
   touch-action: none; cursor: ew-resize;
@@ -127,11 +127,11 @@
 .crop-workspace--practice .practice-song-bar__handle:hover:not(:disabled) { transform: translate(-50%, -2px); }
 .crop-workspace--practice .practice-song-bar__handle:disabled { border-style: dashed; opacity: .65; cursor: not-allowed; }
 .practice-song-bar__handle > span { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); text-transform: uppercase; }
-.practice-song-bar__handle > i { display: block; height: 22px; border-inline: 3px solid var(--ink); width: 6px; margin: auto; }
+.practice-song-bar__handle > i { display: block; height: 14px; border-inline: 3px solid var(--ink); width: 6px; margin: auto; }
 .practice-song-bar__handle[hidden] { display: none; }
 .practice-bar-times { display: flex; justify-content: space-between; gap: 12px; color: var(--ink-rose); font-size: 14px; font-variant-numeric: tabular-nums; }
 
-.practice-section-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 10px 12px; margin-top: 10px; padding-right: 6px; }
+.practice-section-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 6px 10px; margin-top: 6px; padding-right: 6px; }
 .practice-set-edges { display: flex; gap: 12px; }
 .practice-section-controls label { font-family: var(--font-display); font-size: 12px; font-weight: 700; }
 .practice-section-controls input { display: block; margin-top: 4px; width: 100px; padding: 6px 8px; font-variant-numeric: tabular-nums; }
@@ -163,7 +163,7 @@
   .practice-lyric-row { padding: 8px 6px; }
   .practice-lyric-actions { display: none; }
   .practice-transport { padding-top: 12px; max-height: 46dvh; }
-  .practice-lyrics { min-height: max(120px, 20dvh); }
+  .practice-lyrics { min-height: max(120px, 24dvh); }
   .practice-zoom { margin-left: 0; width: 100%; flex-wrap: wrap; }
   .practice-selection-summary { margin-left: auto; }
   .practice-section-controls { align-items: center; gap: 8px; }
