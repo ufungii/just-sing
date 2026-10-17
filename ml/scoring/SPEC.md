@@ -17,7 +17,7 @@ Scoring version: `0.3.0` (`SCORING_VERSION` in `ml/scoring/config.py`). Any chan
 
 | Name | Value | Meaning |
 |---|---|---|
-| `full_credit_cents` | 70 | pitch error with full credit |
+| `full_credit_cents` | 50 | pitch error with full credit |
 | `zero_credit_cents` | 200 | pitch error where credit reaches 0 |
 | `time_tolerance_s` | 0.1 | the player's track may be shifted up to this much, earlier or later, **once per phrase** (0 = strict). Section 4. |
 | `full_credit_s` | 0.10 | timing offset with full credit |
@@ -27,7 +27,7 @@ Scoring version: `0.3.0` (`SCORING_VERSION` in `ml/scoring/config.py`). Any chan
 | `stable_cents` | 60 | "steady" means within this of the window median |
 | `min_onset_gap_s` | 0.12 | note starts closer than this are merged |
 | `pitch_weight`, `timing_weight` | 0.8, 0.2 | phrase score blend |
-| `perfect`, `great`, `okay` | 82, 65, 50 | rating bands on the phrase score |
+| `perfect`, `great`, `okay` | 80, 65, 40 | rating bands on the phrase score (0.3.0, from `ml/evals/band_calibration.py`) |
 | `min_coverage` | 0.25 | below this, the phrase is `miss` |
 
 ## 3. Preparing the player track

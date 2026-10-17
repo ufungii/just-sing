@@ -3,7 +3,7 @@
  * and one row per phrase with its lyric and rating. Display only: every number shown here was
  * computed by the scoring engine (locally or on the server), never by an LLM.
  */
-import type { PhraseScore, Rating, Song, TimeRange } from '../../lib/types';
+import type { LyricStatus, PhraseScore, Rating, Song, TimeRange } from '../../lib/types';
 import { rangeLabel } from '../../components/timeline/range';
 import './PhraseChips.css';
 
@@ -67,24 +67,37 @@ export function ScoreSummary({ total, pitch, timing, guided, range }: { total: n
   );
 }
 
+/** Lyric-check tags. "unclear" is a soft hint, never "wrong": the check is automated and line level. */
+const LYRIC_TAG: Partial<Record<LyricStatus, { label: string; title: string }>> = {
+  match: { label: 'LYRICS ♪', title: 'Sounded like the original singer’s words for this line' },
+  unclear: { label: 'words?', title: 'The words on this line were hard to make out' },
+  not_sung: { label: 'not sung', title: 'We didn’t hear singing on this line' },
+};
+
 /**
  * One row per phrase. `song` supplies the lyric for each phrase id; while it is loading (or if it
- * failed) rows fall back to the phrase number so the scores are still readable.
+ * failed) rows fall back to the phrase number so the scores are still readable. `lyrics` (optional)
+ * is the lyric check by manifest line index; it only decorates the lyric and never touches the score.
  */
-export function PhraseChips({ phrases, song }: { phrases: PhraseScore[]; song: Song | null }) {
+export function PhraseChips({ phrases, song, lyrics }: { phrases: PhraseScore[]; song: Song | null; lyrics?: Map<number, LyricStatus> }) {
   if (phrases.length === 0) return <p className="results-empty">No phrases were rated in this turn.</p>;
   return (
     <ol className="results-phrases">
       {phrases.map((p, i) => {
         const phrase = song?.phrases.find((ph) => ph.id === p.phrase_id);
         const line = phrase ? song?.lines[phrase.line_index] : undefined;
+        const lyric = phrase ? lyrics?.get(phrase.line_index) : undefined;
+        const tag = lyric ? LYRIC_TAG[lyric] : undefined;
         return (
           <li key={p.phrase_id} className={`results-phrase results-phrase--${p.rating}`}>
             <span className="results-phrase__n">{String(i + 1).padStart(2, '0')}</span>
             <span className="results-phrase__lyric">
               {line ? (
                 <>
-                  <span className="results-phrase__ko" lang="ko">{line.text}</span>
+                  <span className="results-phrase__ko-row">
+                    <span className={lyric ? `results-phrase__ko results-lyric--${lyric}` : 'results-phrase__ko'} lang="ko">{line.text}</span>
+                    {tag && <span className={`results-lyric-tag results-lyric-tag--${lyric}`} title={tag.title}>{tag.label}</span>}
+                  </span>
                   <span className="results-phrase__rom">{line.romanized}</span>
                 </>
               ) : (

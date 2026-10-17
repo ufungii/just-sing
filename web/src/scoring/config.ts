@@ -25,7 +25,7 @@ export const SCORING_CONFIG = {
 
   // ---------- pitch ----------
   /** Full credit within this many cents of the target. */
-  pitchFullCents: 70,
+  pitchFullCents: 50,
   /** Credit falls linearly to zero at this many cents. */
   pitchZeroCents: 200,
   /** Pitch may match the target this many seconds early/late (0 = strict). Implemented, off by default. */
@@ -47,9 +47,10 @@ export const SCORING_CONFIG = {
   // ---------- phrase score and rating ----------
   pitchWeight: 0.8,
   timingWeight: 0.2,
-  perfect: 82,
+  // Set in 0.3.0 from real takes through the live tracker (ml/evals/band_calibration.py).
+  perfect: 80,
   great: 65,
-  okay: 50,
+  okay: 40,
   /** Below this share of scoreable frames sung, a phrase is a miss (never for a mic failure). */
   minCoverage: 0.25,
 

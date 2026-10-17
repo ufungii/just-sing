@@ -41,3 +41,29 @@ test('a longer name containing zibran can still be added', async ({ page }) => {
   await page.getByRole('button', { name: 'ADD PLAYER', exact: true }).click();
   await expect(page.locator('.players-row__name', { hasText: 'zibran123' })).toBeVisible();
 });
+
+for (const name of ['lorelei', 'leila', 'rudra', 'kareem', 'beefy kyogre', 'alen', 'BOT alfred', 'ojas']) {
+  test(`custom joke name ${name} is intercepted before saving`, async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'PLAYERS', exact: true }).click();
+    await page.getByRole('button', { name: '+ ADD PLAYER', exact: true }).click();
+    const input = page.getByRole('textbox', { name: 'NAME', exact: true });
+    await input.fill(name);
+    await input.press('Enter');
+    await expect(page.getByText(`${name.toUpperCase()} HAS BEEN BANNED.`, { exact: true })).toBeVisible();
+  });
+}
+
+test('obfuscated slur is blocked without echoing or saving it', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'PLAYERS', exact: true }).click();
+  await page.getByRole('button', { name: '+ ADD PLAYER', exact: true }).click();
+  const name = 'n.1.g.g.3.r';
+  await page.getByRole('textbox', { name: 'NAME', exact: true }).fill(name);
+  await page.getByRole('textbox', { name: 'NAME', exact: true }).press('Enter');
+  await expect(page.getByText('THIS NAME IS NOT ALLOWED.', { exact: true })).toBeVisible();
+  await expect(page.locator('body')).not.toContainText(name);
+  expect(await page.evaluate(() => localStorage.getItem('just-sing.players'))).not.toContain(name);
+  await page.getByRole('button', { name: 'CHANGE NAME', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'PLAYERS', exact: true })).toBeVisible();
+});
