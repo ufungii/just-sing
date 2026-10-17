@@ -1,5 +1,33 @@
 # Prepared songs and review notes
 
+## Additional local songs
+
+The following songs use the same original htdemucs vocal estimate and enhanced
+fine-tuned residual instrumental recipe. Each local folder contains matching
+`song.json`, `song.review.json`, `vocals.mp3`, and `instrumental.mp3` files;
+the corresponding `-demo` folder contains a matching 30-second crop.
+
+| Folder | Title | Artist | Selected YouTube video |
+| --- | --- | --- | --- |
+| `love-keyshia-cole` | Love | Keyshia Cole | `YKuHdOxj46I` |
+| `party-in-the-usa` | Party in the U.S.A. | Miley Cyrus | `vA2Lc9c3qN0` |
+| `soda-pop` | Soda Pop | Saja Boys | `_uu_izpVSEc` |
+| `last-christmas` | Last Christmas | Wham! | `KhqNTjbQ71A` |
+
+English songs use `--language en`; their singing phrases remain available while
+Korean pronunciation exercises are disabled. Soda Pop retains Korean-only
+practice lines. Acoustic timestamps, stems, reference pitch, and translations
+remain drafts requiring listening review. `QUALITY_HANDOFF.json`,
+`INSPECTOR_REPORT.json`, and `TIMING_CROSSCHECK.json` record local checks.
+
+For the selected Last Christmas recording, the user chose to trim unsupported
+extended outro lyrics from the active timeline. All 88 supplied lines remain in
+`lyrics.supplied.txt`; `lyrics.active.txt` contains 67 active lines and
+`lyrics.unsupported-outro.txt` preserves the other 21. `OUTRO_REVIEW.json` records
+the selection, and audio/text-bound `corrections.json` preserves alignment windows.
+This decision is based on source comparisons and an automatic transcription,
+with listening review still pending. These lyric-bearing files stay outside Git.
+
 ## Selected audio
 
 Russian Roulette uses:
