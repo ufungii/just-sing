@@ -6,6 +6,7 @@ it can appear in the catalog. Run with the pipeline Python environment.
 
 import argparse
 import json
+import os
 from math import isfinite
 from pathlib import Path
 import re
@@ -42,10 +43,10 @@ def parser():
     result.add_argument("--vocals", type=Path, help="Reuse a selected vocal stem instead of separation")
     result.add_argument("--instrumental", type=Path, help="Reuse a selected instrumental, without mastering again")
     result.add_argument("--source-url", default="")
-    result.add_argument("--separation-python", type=Path,
-                        help="Interpreter in the separate Demucs environment (platform default if omitted)")
     result.add_argument("--start", type=float, default=0)
     result.add_argument("--duration", type=float)
+    result.add_argument("--data-dir", type=Path, help="Output catalog root (defaults to ml/data)")
+    result.add_argument("--separation-python", type=Path, help="Python interpreter with Demucs installed")
     return result
 
 
@@ -66,12 +67,15 @@ def validate_inputs(args):
             raise ValueError(f"Input file does not exist: {path}")
     if not args.lyrics.read_text(encoding="utf-8-sig").strip():
         raise ValueError("Supplied lyric text is empty")
-    destination = DATA / args.id
+    destination = (args.data_dir or DATA).resolve() / args.id
     if destination.exists():
         raise ValueError("Song ID already exists; choose a new ID to preserve audio and hand corrections")
-    separation_python = args.separation_python or ROOT / 'ml/pipeline/separation/.venv' / (
-        'Scripts/python.exe' if sys.platform == 'win32' else 'bin/python')
-    if not selected and not separation_python.exists():
+    configured = args.separation_python or os.getenv("JUST_SING_SEPARATION_PYTHON")
+    candidates = [ROOT / "ml/pipeline/separation/.venv/bin/python",
+                  ROOT / "ml/pipeline/separation/.venv/Scripts/python.exe"]
+    separation_python = Path(configured).expanduser().absolute() if configured else next(
+        (path for path in candidates if path.is_file()), candidates[-1])
+    if not selected and not separation_python.is_file():
         raise ValueError("Install the separate Demucs environment first (see ml/pipeline/README.md)")
     return inputs, destination, separation_python
 
@@ -107,9 +111,10 @@ def select_stems(args, workspace, separation_python):
 
 def prepare(args):
     inputs, destination, separation_python = validate_inputs(args)
-    work_root = (DATA / ".preparing").resolve()
-    if not work_root.is_relative_to(DATA.resolve()):
-        raise ValueError("Preparation directory must stay inside ml/data")
+    data = destination.parent
+    work_root = (data / ".preparing").resolve()
+    if not work_root.is_relative_to(data):
+        raise ValueError("Preparation directory must stay inside the output catalog")
     work_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=f"{args.id}-", dir=work_root) as temporary:
         workspace = Path(temporary).resolve()
@@ -117,7 +122,9 @@ def prepare(args):
             raise ValueError("Invalid temporary workspace")
         output = workspace / args.id
         output.mkdir()
+        print("JUST_SING_STAGE:separating", flush=True)
         vocal_input, backing_input, processing = select_stems(args, workspace, separation_python)
+        print("JUST_SING_STAGE:encoding", flush=True)
         for role, source in [("vocals", vocal_input), ("instrumental", backing_input)]:
             export_mp3(source, output / f"{role}.mp3")
         counts = {role: decoded_frames(output / f"{role}.mp3") for role in ("vocals", "instrumental")}
@@ -125,9 +132,11 @@ def prepare(args):
             raise ValueError("Selected stems have different decoded lengths; align/crop them before preparation")
         duration = counts["vocals"] / 44100
         shutil.copyfile(args.lyrics, output / "lyrics.supplied.txt")
+        print("JUST_SING_STAGE:aligning", flush=True)
         command(sys.executable, "-m", "ml.pipeline.align_lyrics", "--audio", output / "vocals.mp3",
                 "--instrumental", output / "instrumental.mp3", "--lyrics", output / "lyrics.supplied.txt",
                 "--output", output / "alignment", "--language", args.language)
+        print("JUST_SING_STAGE:pitch", flush=True)
         command(sys.executable, "-m", "ml.pipeline.reference", "--audio", output / "vocals.mp3",
                 "--output", output / "reference.pitch.json")
         metadata = {"id": args.id, "version": 1, "title": args.title, "artist": args.artist,
@@ -142,9 +151,12 @@ def prepare(args):
                     "review_status": {"lyrics": "supplied_text_automatic_alignment_needs_listening_review",
                                       "reference_pitch": "unreviewed", "separation": "needs_listening_review"}}
         (output / "preparation.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+        print("JUST_SING_STAGE:manifest", flush=True)
         from .manifest import write_manifest
         write_manifest(output)
         # Publish only after both offline jobs succeed. No overwrite of existing releases.
+        if destination.exists():
+            raise ValueError("Song ID already exists; choose a new ID")
         output.rename(destination)
     return destination
 

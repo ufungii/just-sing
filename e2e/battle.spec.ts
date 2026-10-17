@@ -9,7 +9,7 @@ test('local duet: one song and microphone session, automatic handoffs, disjoint 
     await page.goto('/');
     const song = await manifest(page);
     await page.getByText('1P VS 2P', { exact: true }).first().click();
-    await page.getByRole('button', { name: new RegExp(song.title, 'i') }).click();
+    await page.getByRole('button').filter({ has: page.getByText(song.title, { exact: true }) }).click();
     await page.getByPlaceholder('e.g. Mina').fill('E2E-Bot-duet-local');
     await page.getByPlaceholder('e.g. Jisoo').fill('E2E-Rival-duet-local');
     await page.getByRole('group', { name: 'Player 2 voice range' }).getByRole('button', { name: 'HIGH 8VA', exact: true }).click();

@@ -14,5 +14,10 @@
 .clip-timeline__handle:disabled { opacity: 1; background: #ddd1e8; cursor: default; }
 .clip-timeline__handle:focus-visible { outline: 4px solid #4176da; outline-offset: 3px; }
 .clip-timeline__playhead { position: absolute; z-index: 2; top: 0; bottom: 26px; border-left: 3px solid #d12258; pointer-events: none; }
-.clip-timeline__ruler { display: flex; justify-content: space-between; font-size: 13px; padding-top: 8px; }
+.clip-timeline__ruler { position:relative;height:30px;font-size:13px;padding-top:8px; }
+.clip-timeline__ruler span{position:absolute;border-left:1px solid #928b98;padding-left:4px;white-space:nowrap}.clip-timeline__ruler .clip-timeline__ruler-end{right:0;left:auto;border:0;background:#fffaf0}
+.clip-timeline__drag-origin{position:absolute;height:78px;border:2px dashed #73519d;opacity:.5;pointer-events:none}
+.clip-timeline__line[data-dragging]{z-index:4;box-shadow:0 8px 18px #30283e55;cursor:grabbing;outline:3px solid #4176da}
+.clip-timeline__line[data-dragging=invalid]{outline-color:#b02030;background:#ffcece!important}
+.clip-timeline__drag-readout{padding:8px;background:#e6efff;color:#30283e;font-variant-numeric:tabular-nums}.clip-timeline__drag-readout.is-invalid{background:#ffe0df;color:#812411}
 .range-picker__actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
