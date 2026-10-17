@@ -43,6 +43,18 @@ def test_clip_edge_line_without_a_phrase_does_not_reject_the_song(tmp_path):
     assert "ml-song" in songs and folders["ml-song"] == tmp_path / "ml-song" and reviewed["ml-song"] is False
 
 
+@pytest.mark.parametrize("lyric", ["Hello world", "안녕 hello"])
+def test_singing_phrases_do_not_require_korean_spoken_practice_text(tmp_path, lyric):
+    """Pipeline keeps English/mixed singing lines and opts them out of Korean practice."""
+    def edit(data):
+        data["lines"][0].update(text=lyric, practice_text="")
+    write_song(tmp_path, "mixed-song", edit=edit)
+    songs, _, _ = clip_catalog.load_catalog([tmp_path])
+    song = songs["mixed-song"]
+    assert any(p.line_index == 0 for p in song.phrases)
+    assert song.lines[0].text == lyric and song.lines[0].practice_text == ""
+
+
 def test_singing_phrase_can_have_no_korean_practice_text():
     data = json.loads(FIXTURE.read_text(encoding="utf-8"))
     data["lines"][0]["practice_text"] = " "

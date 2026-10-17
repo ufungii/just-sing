@@ -4,6 +4,7 @@ import { getManifest } from '../../lib/api';
 import type { Song, TimeRange } from '../../lib/types';
 import { Notice, PixelButton } from '../../ui';
 import { ClipTimeline } from './ClipTimeline';
+import { CropWorkspace } from './CropWorkspace';
 import { includedPhrases, normalizeRange, rangeLabel } from './range';
 
 type RangeChange = (range: TimeRange | null) => void | Promise<boolean>;
@@ -20,6 +21,7 @@ function Picker({ clipId, range: savedRange, onChange, disabled }: { clipId: str
   const [retry, setRetry] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [playhead, setPlayhead] = useState<number | null>(null);
+  const [workspace, setWorkspace] = useState(false);
   const preview = useRef<{ ctx: AudioContext; raf: number } | null>(null);
   function stop() {
     const p = preview.current;
@@ -36,7 +38,7 @@ function Picker({ clipId, range: savedRange, onChange, disabled }: { clipId: str
   }, [clipId, retry]);
   useEffect(() => { stop(); return stop; }, [range?.start, range?.end]);
 
-  async function play(from?: number) {
+  async function play(from?: number, previewRange: TimeRange | null = range) {
     stop();
     if (!song) return;
     const ctx = new AudioContext();
@@ -50,8 +52,8 @@ function Picker({ clipId, range: savedRange, onChange, disabled }: { clipId: str
         loadBacking(ctx, clipId, song.duration), loadVocals(ctx, clipId),
       ]);
       if (preview.current !== p) return;
-      const start = Math.max(range?.start ?? 0, from ?? range?.start ?? 0);
-      const end = range?.end ?? song.duration;
+      const start = Math.max(previewRange?.start ?? 0, from ?? previewRange?.start ?? 0);
+      const end = previewRange?.end ?? song.duration;
       if (start >= end) return stop();
       const t0 = ctx.currentTime;
       for (const [index, buffer] of [backing.buffer, ...(vocals ? [vocals] : [])].entries()) {
@@ -73,10 +75,12 @@ function Picker({ clipId, range: savedRange, onChange, disabled }: { clipId: str
     const normalized = normalizeRange(song!.phrases, next);
     setRange(normalized);
     try {
-      if (await onChange?.(normalized) === false) setRange(savedRange);
+      if (await onChange?.(normalized) === false) { setRange(savedRange); return false; }
+      return true;
     } catch {
       setRange(savedRange);
       setError('Could not save the section. The previous selection is restored.');
+      return false;
     }
   }
   return (
@@ -85,11 +89,16 @@ function Picker({ clipId, range: savedRange, onChange, disabled }: { clipId: str
       <ClipTimeline duration={song.duration} phrases={song.phrases} lines={song.lines} range={range}
         onChange={onChange ? setRange : undefined} onCommit={commit} disabled={disabled} playhead={playhead} onSeek={(time) => void play(time)} />
       <div className="range-picker__actions">
+        <PixelButton size="sm" tone="hot" onClick={() => { stop(); setWorkspace(true); }}>OPEN SECTION EDITOR</PixelButton>
         <PixelButton size="sm" tone="sky" onClick={() => playing ? stop() : void play()}>{playing ? 'STOP PREVIEW' : 'PLAY PREVIEW ▶'}</PixelButton>
         {onChange && <PixelButton size="sm" tone="paper" disabled={disabled || !range} onClick={() => commit(null)}>FULL CLIP</PixelButton>}
       </div>
       {range && <p className="solo-hint">Only whole phrases inside this section count. Practice sections stay off the leaderboard.</p>}
       {error && <Notice tone="error">{error}</Notice>}
+      {workspace && <CropWorkspace song={song} range={range} readOnly={!onChange || disabled}
+        onClose={() => { stop(); setWorkspace(false); }} onApply={onChange && !disabled ? commit : undefined}
+        onPreview={(selected,from) => void play(from,selected)} onStop={stop} playing={playing} playhead={playhead}
+        waveformUrls={[`/api/clips/${clipId}/vocals`,`/api/clips/${clipId}/audio`]}/>}
     </section>
   );
 }
