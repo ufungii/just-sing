@@ -84,7 +84,7 @@ function Picker({ clipId, range: savedRange, onChange, disabled }: { clipId: str
     }
   }
   return (
-    <section aria-label="Practice section">
+    <section className="range-picker" aria-label="Practice section">
       <p className="solo-hint">{range ? `Practice section · ${rangeLabel(range)}` : 'Full clip'} · {selected.length} phrases · {((range?.end ?? song.duration) - (range?.start ?? 0)).toFixed(1)} seconds</p>
       <ClipTimeline duration={song.duration} phrases={song.phrases} lines={song.lines} range={range}
         onChange={onChange ? setRange : undefined} onCommit={commit} disabled={disabled} playhead={playhead} onSeek={(time) => void play(time)} />
