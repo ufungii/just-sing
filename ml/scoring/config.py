@@ -7,7 +7,7 @@ saved results are never silently reinterpreted.
 """
 from dataclasses import dataclass
 
-SCORING_VERSION = "0.1.0"
+SCORING_VERSION = "0.2.0"
 
 
 @dataclass(frozen=True)
@@ -20,7 +20,7 @@ class PitchConfig:
     # Pitch may match the target up to this many seconds early or late without
     # losing pitch credit (lateness is then penalized by timing only). 0 = strict,
     # the current default. See ml/evals/results/tolerance.md before changing it.
-    time_tolerance_s: float = 0.0
+    time_tolerance_s: float = 0.1
 
 
 @dataclass(frozen=True)
@@ -52,3 +52,12 @@ class ScoreConfig:
     # Below this share of scoreable frames sung, a phrase is a Miss. Miss is
     # reserved for insufficient coverage, never for a mic failure.
     min_coverage: float = 0.25
+
+
+@dataclass(frozen=True)
+class WordFeedbackConfig:
+    """Display-only defaults, pending calibration on real player recordings."""
+    sung_coverage: float = 0.5
+    partly_coverage: float = 0.2
+    # First detected voiced frame more than this after the first scoreable frame.
+    late_after_s: float = 0.12

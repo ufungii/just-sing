@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from api import clip_catalog
 from api.main import app
+from api.models import Song
 
 FIXTURE = Path(__file__).parents[1] / "catalog" / "synthetic-demo" / "song.json"
 client = TestClient(app)
@@ -52,6 +53,14 @@ def test_singing_phrases_do_not_require_korean_spoken_practice_text(tmp_path, ly
     song = songs["mixed-song"]
     assert any(p.line_index == 0 for p in song.phrases)
     assert song.lines[0].text == lyric and song.lines[0].practice_text == ""
+
+
+def test_singing_phrase_can_have_no_korean_practice_text():
+    data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    data["lines"][0]["practice_text"] = " "
+    song = Song.model_validate(data)
+    assert song.phrases[0].line_index == 0
+    assert not song.lines[0].practice_text.strip()
 
 
 def test_reviewed_flag_comes_from_the_review_file(tmp_path):

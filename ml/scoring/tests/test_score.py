@@ -68,7 +68,7 @@ def test_calibrated_device_latency_costs_nothing_on_pitch_or_timing(ref):
 
 
 def test_uncalibrated_lateness_is_penalized(ref):
-    assert run(_late(ref, 0.3), ref)["total"] < 60
+    assert run(_late(ref, 0.3), ref)["total"] < 70   # inside tolerance only for the first 0.1 s of lateness
 
 
 def test_garbage_in_excluded_region_does_not_cost_timing(ref):
