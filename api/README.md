@@ -103,7 +103,7 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | 409 | `not_your_turn`, `attempt_not_started`, `attempt_closed`, `attempt_invalidated`, `already_submitted`, `cannot_retry`, `use_room_rematch`, `room_full`, `room_started`, `not_ready`, `not_finished` |
 | 410 | `room_expired` |
 | 411 | `length_required` (practice uploads must send a `Content-Length`; browsers do this for `FormData`) |
-| 413 / 422 | `audio_too_large`, `audio_too_long`, `unsupported_audio`, `phrase_mismatch`, `invalid_register`, `invalid_request` |
+| 413 / 422 | `audio_too_large`, `audio_too_long`, `unsupported_audio`, `phrase_mismatch`, `invalid_result`, `invalid_register`, `invalid_request` |
 | 429 | `pronunciation_busy` (retryable), `too_many_joins` (retryable) |
 | 503 | `catalog_not_seeded`, `auth_unavailable`, `room_code_unavailable` |
 
@@ -146,12 +146,14 @@ curl -b jar -X POST localhost:8000/api/turns/88a2.../begin -H 'content-type: app
 # ...the client plays, rates each phrase locally, then submits once:
 curl -b jar -X POST localhost:8000/api/turns/88a2.../result -H 'content-type: application/json' \
   -H 'Idempotency-Key: abc-1' \
-  -d '{"phrases":[{"phrase_id":"p1","rating":"great","pitch":82,"timing":70,"coverage":0.9}]}'
+  -d '{"phrases":[{"phrase_id":"p1","pitch":82,"timing":70,"coverage":0.9}]}'
 # {"mode":"solo","clip_id":"synthetic-demo","clip_version":1,"scoring_version":"0.1.0","register":0,
 #  "total":79.6,"pitch":82.0,"timing":70.0,"phrases":[...],"coach_blurb":null}
 ```
 
 Rules worth knowing:
+- Send per phrase `{phrase_id, pitch, timing, coverage}` (`timing` may be `null` when no note starts inside the phrase; it is then
+  scored on pitch alone). The response phrases are `{phrase_id, pitch, timing|null, score, coverage, rating}`, all server-computed.
 - The result must contain **every phrase of the clip exactly once** (`phrase_mismatch` otherwise).
 - Sending the **same** `Idempotency-Key` again returns the same result and changes nothing, so retry freely after a
   lost response. A **different** key on a finished attempt gets `already_submitted`.
@@ -227,15 +229,19 @@ saved and also appears as `coach_blurb` on the attempt's score in `GET /api/matc
 - **ML A (pronunciation):** set `api.practice.scorer` to an object with a `provider` string and
   `assess(wav_path, expected_text) -> [{"text": ..., "score": 0-100}]`. It receives 16 kHz mono WAV. Raise on failure;
   the API reports `status: "error"` (never a score). Only one assessment runs at a time.
-- **ML B (scoring):** `play.py` recomputes totals with a **stand-in** (duration-weighted mean of phrase pitch and timing).
-  The weights, tie precision and `scoring_version` are read from [`contracts/scoring.config.json`](../contracts/scoring.config.json),
-  the one file the Python engine and the TypeScript port should read too. Replace the stand-in with a call into
-  `ml/scoring` once that exists; change values only in that file, and bump `scoring_version` when you do.
+- **ML B (scoring):** `play.py` scores through `ml.scoring.score.finalize_turn`. The version, weights (80/20) and rating
+  bands live only in [`ml/scoring/config.py`](../ml/scoring/config.py); the API imports them (needs `numpy`, and the
+  repo root on the path). Phrase weights come from the server's own manifest (scoreable reference frames), the client's
+  `rating`/`score` are ignored and recomputed, and the total is the weighted mean of the phrase scores. A bad value is a
+  422 `invalid_result`. Battle `tie_decimals` is an API constant in `play.py`. Change scoring values only in
+  `ml/scoring/config.py` and bump `SCORING_VERSION`; `web/src/scoring/config.ts` and `/api/scoring-config` of the demo
+  app are separate copies that the shared fixtures must keep honest.
 - **Real clips:** see "Songs from the ML pipeline" below. Audio is gitignored; never commit copyrighted audio.
 
 ## Known limits
 
-- Scoring is a placeholder; ratings are stored as the client submitted them, not recomputed.
+- Scoring uses the reference engine but is not validated on real recordings; weights and bands are unvalidated defaults.
+- Result rows saved before the engine was wired in lack the phrase `score`; reads fall back to the phrase `pitch`.
 - Client-submitted phrase results are validated, not cheat-proof.
 - One Uvicorn worker only: socket handles and the join rate limiter are in memory. More workers need shared event delivery.
 - Not yet verified: Python 3.11, two real computers over HTTPS, an Electron PKCE login, restart mid-turn recovery.

@@ -101,11 +101,20 @@ class ClipSummary(BaseModel):
     reviewed: bool  # false for drafts: timings and notes not yet checked by ear
 
 
+class PhraseResultIn(BaseModel):
+    """What the browser submits per phrase. Any `rating` or `score` it also sends is ignored."""
+    phrase_id: str
+    pitch: float = Score100
+    timing: float | None = Field(default=None, ge=0, le=100)
+    coverage: float = Field(ge=0, le=1)
+
+
 class PhraseScore(BaseModel):
     phrase_id: str
     rating: Rating
     pitch: float = Score100
-    timing: float = Score100
+    timing: float | None = Field(default=None, ge=0, le=100)  # null: phrase starts mid-note, scored on pitch alone
+    score: float = Score100  # this phrase's 0-100 score; ratings and totals derive from it
     coverage: float = Field(ge=0, le=1)
 
 

@@ -1,13 +1,11 @@
 """Guest sessions and solo matches. A solo run is a match with one player slot; the browser
 rates phrases locally and submits the final phrase results once, with an idempotency key."""
 import hashlib
-import json
 import logging
 import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, Request, Response
 from pydantic import BaseModel, Field
@@ -20,7 +18,10 @@ from .auth import verify_bearer
 from .db import get_engine
 from .errors import ApiError
 from .clip_catalog import CATALOG
-from .models import PhraseScore, Score
+from .models import PhraseResultIn, PhraseScore, Score
+from ml.scoring.config import SCORING_VERSION  # the one source of truth for the scoring version
+from ml.scoring.pitch import to_track
+from ml.scoring.score import finalize_turn, phrase_weights
 from .tables import Clip, GuestSession, Match, MatchPlayer, PracticeAttempt, Room, RoomMember, TurnAttempt
 
 log = logging.getLogger(__name__)
@@ -38,14 +39,24 @@ def notify(s: Session, match: Match, event: str, attempt: TurnAttempt | None = N
         except Exception:
             log.exception("match hook failed")
 
-# Scoring numbers come from the shared contracts file, never from code (CLAUDE.md), so the API, the
-# Python reference engine and the TypeScript port cannot drift apart.
-SCORING = json.loads((Path(__file__).parents[1] / "contracts" / "scoring.config.json").read_text(encoding="utf-8"))
-assert abs(sum(SCORING["total_weights"].values()) - 1) < 1e-9, "total_weights must sum to 1"
-SCORING_VERSION = SCORING["scoring_version"]
+# Scoring numbers (version, weights, rating bands) live only in ml/scoring/config.py (CLAUDE.md).
 GUEST_TTL = timedelta(days=int(os.getenv("GUEST_TTL_DAYS", "7")))
-TIE_DECIMALS = SCORING["battle"]["tie_decimals"]  # totals equal at this display precision are a tie
+TIE_DECIMALS = 1  # API-level battle rule, not scoring math: totals equal at this display precision are a tie
 RECONNECT_GRACE = timedelta(seconds=int(os.getenv("RECONNECT_GRACE_SECONDS", "60")))
+
+
+_weight_cache: dict[tuple[str, int], list[int]] = {}
+
+
+def _weights(song) -> list[int]:
+    """Scoreable reference frames per phrase, from the server's own manifest (never from the client).
+    Cached per clip version; rests and excluded regions have no weight."""
+    key = (song.id, song.version)
+    if key not in _weight_cache:
+        _weight_cache[key] = phrase_weights(
+            to_track(song.reference.hz), [(p.id, p.start, p.end) for p in song.phrases],
+            hop_seconds=song.reference.hop_seconds, excluded=[(e.start, e.end) for e in song.reference.excluded])
+    return _weight_cache[key]
 
 
 def get_db():
@@ -108,7 +119,7 @@ class BeginIn(BaseModel):
 
 
 class ResultIn(BaseModel):
-    phrases: list[PhraseScore]
+    phrases: list[PhraseResultIn]
 
 
 @router.post("/guests")
@@ -236,7 +247,7 @@ def _check_turn(s: Session, guest: GuestSession, match: Match, attempt: TurnAtte
 def _score(match: Match, a: TurnAttempt) -> Score:
     return Score(mode="solo" if match.mode == "solo" else "battle", clip_id=match.clip_id, clip_version=match.clip_version,
                  scoring_version=match.scoring_version, register=a.register, total=a.total,
-                 pitch=a.pitch, timing=a.timing, phrases=[PhraseScore(**p) for p in a.phrase_results],
+                 pitch=a.pitch, timing=a.timing, phrases=[PhraseScore(**{"score": p.get("score", p["pitch"]), **p}) for p in a.phrase_results],
                  coach_blurb=a.coach_blurb)
 
 
@@ -261,18 +272,19 @@ def submit_result(attempt_id: uuid.UUID, body: ResultIn, idempotency_key: str = 
         notify(s, match, "retry_required")
         raise ApiError(409, "attempt_invalidated", "This turn ran out of time; start a new one.")
 
-    durations = {p.id: p.end - p.start for p in _frozen_song(match).phrases}
-    if sorted(p.phrase_id for p in body.phrases) != sorted(durations):
+    song = _frozen_song(match)
+    if sorted(p.phrase_id for p in body.phrases) != sorted(p.id for p in song.phrases):
         raise ApiError(422, "phrase_mismatch", "Results must cover each phrase of the clip exactly once.")
 
-    # ponytail: stand-in for ml/scoring (empty today). Duration-weighted mean of phrase scores;
-    # swap for the reference engine once ML B lands it. Ratings are stored as submitted.
-    total_time = sum(durations.values())
-    mean = lambda f: sum(f(p) * durations[p.phrase_id] for p in body.phrases) / total_time
-    attempt.pitch, attempt.timing = round(mean(lambda p: p.pitch), 2), round(mean(lambda p: p.timing), 2)
-    w = SCORING["total_weights"]
-    attempt.total = round(w["pitch"] * attempt.pitch + w["timing"] * attempt.timing, 2)  # no float noise
-    attempt.phrase_results = [p.model_dump() for p in body.phrases]
+    # Reference engine (ml/scoring): ignores any client-claimed score or rating and recomputes phrase
+    # scores, ratings and totals with weights from our own manifest copy.
+    try:
+        result = finalize_turn([p.model_dump() for p in body.phrases], _weights(song),
+                               expected_phrase_ids=[p.id for p in song.phrases], register=attempt.register)
+    except ValueError as e:
+        raise ApiError(422, "invalid_result", str(e))
+    attempt.pitch, attempt.timing, attempt.total = result["pitch"], result["timing"], result["total"]
+    attempt.phrase_results = result["phrases"]
     attempt.idempotency_key, attempt.state = idempotency_key, "accepted"
     attempt.completed_at = datetime.now(timezone.utc)
     # Result and turn transition commit together: next player's attempt, or the match is finished.

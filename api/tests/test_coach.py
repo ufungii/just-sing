@@ -90,3 +90,8 @@ def test_coach_does_not_hold_a_database_connection_during_the_gemini_call(guests
     monkeypatch.setattr(coach, "_generate", lambda p: seen.append(get_engine().pool.checkedout()) or "Nice work.")
     assert c.post(f"/api/turns/{a}/coach").json()["coach_blurb"] == "Nice work."
     assert seen == [0], f"{seen[0]} connection(s) held during the Gemini call"
+
+
+def test_prompt_handles_phrase_without_timing():
+    p = coach.build_prompt({**SCORE, "phrases": [{"rating": "okay", "pitch": 60, "timing": None, "coverage": 1.0}]}, 1)
+    assert "no timing score" in p
