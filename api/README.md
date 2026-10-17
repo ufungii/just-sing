@@ -303,3 +303,22 @@ audio and provisional scoring. The home screen's SOLO SING button opens it.
 It can also run separately with `uvicorn api.local_demo:app`.
 See [LOCAL_DEMO.md](LOCAL_DEMO.md) for the local song picker, vocal guide and
 lyric-timing workflow. This entry point does not replace the backend above.
+
+### Player names
+
+`contracts/player-name-policy.json` is shared with the browser. New guest names,
+local-battle names, and names used to create/join online rooms are checked against
+it. The custom joke list uses exact names after Unicode/case/whitespace
+normalization. The English language filter matches configured words/phrases,
+including tested punctuation, repeated-letter, leetspeak, zero-width and common
+lookalike substitutions. Whole-word matching keeps ordinary longer names from
+being blocked just because they contain a short term. This curated list is not
+exhaustive multilingual moderation and may need additions as evasions are found.
+
+Blocked names are rejected before creating new matches/room memberships; existing
+history and profiles are not deleted. Selecting/renaming a profile in the browser
+opens either the joke screen or a neutral name-blocked screen; offensive input
+is never repeated on the latter. This is name validation, not an account ban.
+If an old guest cookie carries a now-blocked name, choosing an allowed profile
+lets the browser create a fresh guest session and retry once. Account-authenticated
+requests keep their existing bearer identity.

@@ -56,8 +56,8 @@ synchronization; test those with two computers/headphones. `E2E_CLIP` does not o
 ## Player-name Easter egg regression
 
 These UI-only checks cover the Players dialog (add/rename by blur or Enter),
-selection of an already-saved Zibran profile, returning home, and ordinary longer
-names. They mock API requests and use isolated browser storage; no database or mic
+selection of an already-saved Zibran profile, the configured joke names, an
+obfuscated slur, returning home, and ordinary longer names. They mock API requests and use isolated browser storage; no database or mic
 is needed. Run from `e2e/`:
 
 ```sh
