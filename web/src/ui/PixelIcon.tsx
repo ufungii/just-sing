@@ -39,6 +39,31 @@ const ICONS = {
     '.oo.oo.oo.',
     '....oo....',
   ],
+  // speaker with sound waves (guide vocals on) and with a cross (off)
+  speaker: [
+    '..........',
+    '....o..o..',
+    '...oo...o.',
+    'ooooo.o.o.',
+    'owwwo.o.o.',
+    'owwwo.o.o.',
+    'ooooo.o.o.',
+    '...oo...o.',
+    '....o..o..',
+    '..........',
+  ],
+  speakerOff: [
+    '..........',
+    '....o.....',
+    '...oo.o.o.',
+    'ooooo..o..',
+    'owwwo.o.o.',
+    'owwwo.o.o.',
+    'ooooo..o..',
+    '...oo.o.o.',
+    '....o.....',
+    '..........',
+  ],
 } as const;
 
 export type IconName = keyof typeof ICONS;

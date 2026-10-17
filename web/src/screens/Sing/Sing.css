@@ -258,13 +258,3 @@
   .sing-lyrics__ko { font-size: 32px; }
 }
 
-.sing-guide {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sing-guide input[type='range'] {
-  width: 110px;
-  accent-color: currentColor;
-}
