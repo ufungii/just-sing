@@ -133,3 +133,9 @@ Each is 0 if its weight sum is 0. Round to 1 decimal. Totals use the **rounded**
 ## 10. What the server does
 
 The browser submits each phrase's `phrase_id`, `pitch`, `timing` and `coverage`. The API calls `finalize_turn`, which ignores any client-claimed `score` or `rating` and recomputes sections 7 and 8 using weights from its own copy of the manifest. Recomputed phrase scores can differ from the browser's by about 0.1, because the submitted inputs are rounded.
+
+## 11. Display-only word activity
+
+See [WORD_FEEDBACK.md](WORD_FEEDBACK.md) for the independent word-activity contract,
+version 1.0.0, and `contracts/fixtures/word_feedback.json` for shared Python/TypeScript
+cases. This does not modify the scoring rubric above or scoring version 0.2.0.

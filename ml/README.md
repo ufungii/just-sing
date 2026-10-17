@@ -11,6 +11,7 @@ We have no labeled singing or pronunciation data, and nobody on the team is flue
 | `scoring/pitch.py` | The shared pitch extractor (`pitch_contour` → array for evals; `reference_contour` → manifest-form dict for the pipeline) and pitch scoring |
 | `scoring/timing.py` | Note-onset detection and timing scoring |
 | `scoring/score.py` | Per-phrase scores, ratings, and totals (`score_turn`, `finalize_turn`, `phrase_weights`) |
+| `scoring/words.py` | Display-only word-window singing coverage, pitch, and late detected starts ([spec and frontend patch](scoring/WORD_FEEDBACK.md)); never word recognition |
 | `scoring/config.py` | Every tunable threshold, plus `SCORING_VERSION` |
 | `pronunciation/` | Spoken Korean scorer (`assess`) and the two baselines it was chosen from |
 | `evals/` | Synthetic data, eval scripts, the manifest inspector, results |
@@ -49,6 +50,16 @@ Tests: `.venv/bin/python -m pytest ml` (speech tests skip themselves there) and 
 - **Timing:** reference note starts vs the player's note starts, after subtracting one device-latency offset measured in setup. Full credit within 0.1 s, zero by 0.4 s. A player's note start only counts if the pitch is steady for ~80 ms, which keeps tracker noise from earning points.
 - **Phrase score** = 80% pitch + 20% timing, rated perfect / great / okay / bad, or miss if under 25% of the phrase was sung. **Total** = phrase scores weighted by scoreable duration, so it always agrees with the badges the player saw.
 - All of these are defaults in `config.py`, pending calibration on real recordings.
+
+## Word-window singing activity
+
+Option 1 is implemented on the ML side in `scoring/words.py`, with shared fixtures
+and a tested TypeScript handoff patch. See [WORD_FEEDBACK.md](scoring/WORD_FEEDBACK.md).
+`score_take` now returns and prints this feedback for local recordings. It detects
+singing during each scheduled word window, not which words were sung. It never
+changes total scores. Defaults still need calibration on real player takes; frontend
+results-screen wiring is pending. Option 2 (reference/player speech embeddings)
+remains an unproven research direction and is not implemented.
 
 ## Evaluation results
 

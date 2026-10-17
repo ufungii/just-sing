@@ -52,3 +52,12 @@ class ScoreConfig:
     # Below this share of scoreable frames sung, a phrase is a Miss. Miss is
     # reserved for insufficient coverage, never for a mic failure.
     min_coverage: float = 0.25
+
+
+@dataclass(frozen=True)
+class WordFeedbackConfig:
+    """Display-only defaults, pending calibration on real player recordings."""
+    sung_coverage: float = 0.5
+    partly_coverage: float = 0.2
+    # First detected voiced frame more than this after the first scoreable frame.
+    late_after_s: float = 0.12
