@@ -11,6 +11,7 @@ We have no labeled singing or pronunciation data, and nobody on the team is flue
 | `scoring/pitch.py` | The shared pitch extractor (`pitch_contour` → array for evals; `reference_contour` → manifest-form dict for the pipeline) and pitch scoring |
 | `scoring/timing.py` | Note-onset detection and timing scoring |
 | `scoring/score.py` | Per-phrase scores, ratings, and totals (`score_turn`, `finalize_turn`, `phrase_weights`) |
+| `scoring/words.py` | Display-only word-window singing coverage, pitch, and late detected starts ([spec and frontend patch](scoring/WORD_FEEDBACK.md)); never word recognition |
 | `scoring/config.py` | Every tunable threshold, plus `SCORING_VERSION` |
 | `pronunciation/` | Spoken Korean scorer (`assess`) and the two baselines it was chosen from |
 | `evals/` | Synthetic data, eval scripts, the manifest inspector, results |
@@ -50,6 +51,16 @@ Tests: `.venv/bin/python -m pytest ml` (speech tests skip themselves there) and 
 - **Phrase score** = 80% pitch + 20% timing, rated perfect / great / okay / bad, or miss if under 25% of the phrase was sung. **Total** = phrase scores weighted by scoreable duration, so it always agrees with the badges the player saw.
 - All of these are defaults in `config.py`, pending calibration on real recordings.
 
+## Word-window singing activity
+
+Option 1 is implemented on the ML side in `scoring/words.py`, with shared fixtures
+and a tested TypeScript handoff patch. See [WORD_FEEDBACK.md](scoring/WORD_FEEDBACK.md).
+`score_take` now returns and prints this feedback for local recordings. It detects
+singing during each scheduled word window, not which words were sung. It never
+changes total scores. Defaults still need calibration on real player takes; frontend
+results-screen wiring is pending. Option 2 (reference/player speech embeddings)
+remains an unproven research direction and is not implemented.
+
 ## Evaluation results
 
 ### Singing score under controlled damage (`run_evals.py` → `results/degradation.md`)
@@ -57,13 +68,13 @@ A synthetic voice-like melody is damaged at increasing severity, rendered to aud
 
 | Damage | Score trend | ρ |
 |---|---|---|
-| Every note detuned ±N cents | 98 → 70 at 100 cents → ~18 at 200+ | −0.96 |
+| Every note detuned ±N cents | 99.7 → 71 at 100 cents → 22 at 200 | −0.95 |
 | Notes skipped | steady fall to 0 | −0.99 |
-| Late entrance | 98 → 74 at 0.2 s → 37 at 0.4 s | −0.99 |
-| White noise | ~97 down to 5 dB SNR, then collapses | −0.86 |
-| Slower tempo | 70 at 5% slower; non-monotonic at extremes | −0.82 |
+| Late entrance | ~99 → 86 at 0.2 s → 48 at 0.4 s (lateness up to the 0.1 s tolerance is forgiven, more is not) | −0.98 |
+| White noise | ~97 down to 5 dB SNR, then collapses | −0.92 |
+| Slower tempo | 76 at 5% slower; non-monotonic at extremes | −0.82 |
 
-Sanity checks pass: silence 0, noise only 3.5, octave up 96 with the right register and 20 without, identical input gives identical output.
+Sanity checks pass: silence 0, noise only 3.5, octave up 97 with the right register and 20 without, identical input gives identical output.
 
 ### Trackers: browser vs reference (`tracker_eval.py` → `results/trackers.md`)
 The live game compares the browser's tracker (Pitchy, McLeod Pitch Method) with a CREPE reference. With our MPM reimplementation standing in for Pitchy:
@@ -71,7 +82,7 @@ The live game compares the browser's tracker (Pitchy, McLeod Pitch Method) with 
 | Take | Same tracker (CREPE vs CREPE) | Live pairing (CREPE vs MPM) |
 |---|---|---|
 | clean | 99.7 | 94.1 |
-| 10 dB noise | 99.4 | 87.4 |
+| 10 dB noise | 99.4 | 87.8 |
 | 5 dB noise | 99.4 | **0.0** (MPM rejects every frame) |
 
 That was a clean synthetic voice. On a **real vocal stem** the picture is different (`real_tracker_eval.py` → `results/real_tracker_<clip>.md`): a real voice is breathy, has vibrato and fast notes, so the browser tracker is much less sure than CREPE.
@@ -85,12 +96,14 @@ That was a clean synthetic voice. On a **real vocal stem** the picture is differ
 
 - **The threshold is the main lever, and 0.8 is too strict for real voices.** Use about **0.6-0.7**. Noise-only and silence still score 0 at every threshold, and bad takes stay well separated from good ones.
 - **Gap filling and octave correction (`track_cleanup.py`) did not help** (within about 3 points, mostly slightly worse), so they are not adopted.
-- **Tracker disagreement caps a perfect take at about 80-83 (clarity 0.6-0.7; only 69 at 0.8)** when the reference comes from CREPE and the live track from Pitchy-style MPM. If the reference is instead built with the same tracker family as the live one, the same near-perfect take scores about 97 and a detuned or late take still scores 43-62. This is an upper bound (our "perfect take" is the same audio plus noise, so tracker errors are more correlated than they would be for a different human performance), but it is a strong argument for either extracting the reference with the browser's own tracker (then reviewing it by hand) or recalibrating the rating bands against the live path. **Do not ship the 90/75/50 rating bands until they are calibrated on a real take**: with a CREPE reference, a perfect live take would never reach "perfect".
+- **Tracker disagreement caps a perfect take at about 80-83 (clarity 0.6-0.7; only 69 at 0.8)** when the reference comes from CREPE and the live track from Pitchy-style MPM. If the reference is instead built with the same tracker family as the live one, the same near-perfect take scores about 97 and a detuned take 58-62 and a late take 51-53. This is an upper bound (our "perfect take" is the same audio plus noise, so tracker errors are more correlated than they would be for a different human performance), but it is a strong argument for either extracting the reference with the browser's own tracker (then reviewing it by hand) or recalibrating the rating bands against the live path. **Do not ship the 90/75/50 rating bands until they are calibrated on a real take**: with a CREPE reference, a perfect live take would never reach "perfect".
 
 **Frontend:** use Pitchy clarity 0.6-0.7, and show a "we can't hear you" warning when almost no frames are voiced so a mic problem is never scored as bad singing.
 
+**Checked against the real Pitchy.** `pitchy_parity.py` runs pitchy@4.1.0 in Node on the same audio with the same settings: the emulation agrees on 99-100% of pitch values and 89-100% of voicing decisions, and perfect-take scores are within about 1.5 points at clarity 0.8 (a few points optimistic at 0.65). APR's live demo setting (48 kHz, 4096-sample window, clarity 0.8, RMS gate 0.008) scores a perfect take 35-55 against the CREPE reference with the real library (`results/pitchy_parity.md`).
+
 ### Real-voice degradation (`real_audio_eval.py` → `results/real_audio_<clip>.md`)
-The same controlled damage as above, applied to a real vocal stem instead of a synthetic melody (local-only audio; only aggregated numbers are committed). With CREPE tracking, scores still fall in order for local detuning (100 → 84 → 63), lateness (100 → 81 → 61 → 37), dropped seconds, and noise (99 at 30 dB, 76 at 5 dB). The scorer is not an artifact of clean synthetic voices.
+The same controlled damage as above, applied to a real vocal stem instead of a synthetic melody (local-only audio; only aggregated numbers are committed). With CREPE tracking, scores still fall in order for local detuning (99 → 84 → 63), lateness (about 100 at 0.1 s, 75 at 0.2 s, 42 at 0.4 s), dropped seconds, and noise (98 at 30 dB, 77 at 5 dB). The scorer is not an artifact of clean synthetic voices.
 
 ### Pronunciation (`pronunciation_eval.py`, `pronunciation_nearmiss.py`)
 Test speech is generated locally with Meta's MMS-TTS Korean voice.
@@ -105,7 +118,17 @@ Test speech is generated locally with Meta's MMS-TTS Korean voice.
 **Whisper autocorrects.** On 25 of 39 clips where one sound was changed, Whisper's transcript contained the *correct* word; it reported the sound actually said only twice. So `assess()` uses B, which scores the expected text against the audio and cannot autocorrect. Both methods are weak on single-sound errors (n = 39, so the top-1 rates carry roughly ±0.15 uncertainty).
 
 ### Pitch time tolerance (`tolerance_eval.py` → `results/tolerance.md`)
-Strict frame-by-frame pitch scoring counts lateness twice (pitch and timing). An optional `time_tolerance_s` (default 0, off) fixes that: at 0.1 s, a 0.1 s-late take goes from 87.9 to 100 and a 0.2 s-late take from 69.1 to 81.2, while a 100-cent-detuned take stays at 73.3. Not enabled yet; it is a team decision.
+Strict frame-by-frame pitch scoring counts lateness twice (pitch and timing). `PitchConfig.time_tolerance_s` (**default 0.1 s since scoring version 0.2.0**) lets the player's pitch track shift by up to that much, **once per phrase**; the timing score still measures the lateness. Synthetic melody: a take 0.1 s late goes from 87.9 to 100, 0.2 s late from 69.1 to 81.2, while a 100-cent-detuned take stays at 73.3. With the real Pitchy at the recommended tracker settings (48 kHz, 2048-sample window, clarity 0.65, gate 0.005), mean of the three real clips:
+
+| Take | strict | tolerance 0.1 s |
+|---|---|---|
+| perfect | 62.7 | 62.9 |
+| 0.05 s late | 53.0 | 61.6 |
+| 0.1 s late | 43.6 | 62.4 |
+| 0.2 s late | 31.8 | 42.1 |
+| 0.3 s late | 26.4 | 32.0 |
+
+So it forgives small lateness (up to 0.1 s scores like a perfect take) and nothing else. **Why one shift per phrase, not the best frame at each position:** our first version took the best-matching user frame in the window at every position; it scored random pitches at 42 and inflated every take (it made a perfect real take look like 74-81 when it is about 63). One shift per phrase scores random pitches near 0.
 
 ## Design decisions and tradeoffs
 

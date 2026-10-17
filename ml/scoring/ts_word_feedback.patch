@@ -1,0 +1,94 @@
+diff --git a/web/src/scoring/words.ts b/web/src/scoring/words.ts
+new file mode 100644
+--- /dev/null
++++ b/web/src/scoring/words.ts
+@@ -0,0 +1,89 @@
++/** Display-only singing activity; cannot recognize the words being sung. See WORD_FEEDBACK.md. */
++export const WORD_FEEDBACK_VERSION = '1.0.0';
++export const WORD_FEEDBACK_CONFIG = { sung_coverage: 0.5, partly_coverage: 0.2, late_after_s: 0.12 };
++export const WORD_PITCH_CONFIG = { full_credit_cents: 50, zero_credit_cents: 200 };
++
++type Word = { text: string; start: number; end: number };
++export interface SingingWordFeedback extends Word {
++  status: 'sung' | 'partly' | 'missed' | 'not_graded';
++  coverage: number | null;
++  pitch: number | null;
++  onset_delay_s: number | null;
++  late: boolean | null;
++}
++export interface WordFeedbackInput {
++  user_hz: (number | null)[];
++  /** Unshifted reference, before applying the register. */
++  ref_hz: (number | null)[];
++  lines: { words?: Word[] }[];
++  hop_seconds?: number;
++  register?: number;
++  excluded?: [number, number][];
++  /** Pass raw tracks; this function applies the fixed device correction once. */
++  latency_offset_s?: number;
++}
++
++const voiced = (hz: number | null | undefined): hz is number =>
++  typeof hz === 'number' && Number.isFinite(hz) && hz > 0;
++
++// Python round: nearest integer, exact ties to even (also for negative boundaries).
++function halfEven(value: number): number {
++  const lower = Math.floor(value);
++  const fraction = value - lower;
++  return fraction === 0.5 ? (lower % 2 === 0 ? lower : lower + 1) : Math.round(value);
++}
++const rounded = (value: number, digits: number) => halfEven(value * 10 ** digits) / 10 ** digits;
++
++export function wordFeedback(
++  input: WordFeedbackInput,
++  cfg = WORD_FEEDBACK_CONFIG,
++  pitchCfg = WORD_PITCH_CONFIG,
++): SingingWordFeedback[][] {
++  const { user_hz, ref_hz, lines, hop_seconds: hop = 0.02,
++    register = 0, excluded = [], latency_offset_s: latency = 0 } = input;
++  if (!Number.isFinite(hop) || hop <= 0) throw new Error('hop_seconds must be finite and positive');
++  if (![-12, 0, 12].includes(register)) throw new Error('register must be -12, 0, or 12');
++  if (!Number.isFinite(latency) || latency < 0) throw new Error('invalid latency_offset_s');
++  if (!(0 <= cfg.partly_coverage && cfg.partly_coverage <= cfg.sung_coverage && cfg.sung_coverage <= 1))
++    throw new Error('invalid coverage thresholds');
++  if (!Number.isFinite(cfg.late_after_s) || cfg.late_after_s < 0) throw new Error('invalid late_after_s');
++  if (!(0 <= pitchCfg.full_credit_cents && pitchCfg.full_credit_cents < pitchCfg.zero_credit_cents
++      && Number.isFinite(pitchCfg.zero_credit_cents))) throw new Error('invalid pitch thresholds');
++  const offset = halfEven(latency / hop);
++  const excludedFrames = new Array<boolean>(ref_hz.length).fill(false);
++  for (const [start, end] of excluded) {
++    const lo = Math.max(0, halfEven(start / hop));
++    const hi = Math.min(ref_hz.length, Math.max(0, halfEven(end / hop)));
++    for (let i = lo; i < hi; i++) excludedFrames[i] = true;
++  }
++  return lines.map(line => (line.words ?? []).map(word => {
++    if (!Number.isFinite(word.start) || !Number.isFinite(word.end) || word.end < word.start)
++      throw new Error('invalid word boundaries');
++    let count = 0, sung = 0, credit = 0;
++    let firstRef: number | null = null, firstUser: number | null = null;
++    const lo = Math.max(0, halfEven(word.start / hop));
++    const hi = Math.min(ref_hz.length, halfEven(word.end / hop));
++    for (let i = lo; i < hi; i++) {
++      const ref = ref_hz[i];
++      if (!voiced(ref) || excludedFrames[i]) continue;
++      count++;
++      firstRef ??= i;
++      const user = user_hz[i + offset];
++      if (!voiced(user)) continue;
++      sung++;
++      firstUser ??= i;
++      const error = Math.abs(1200 * Math.log2(user / (ref * 2 ** (register / 12))));
++      credit += Math.max(0, Math.min(1, (pitchCfg.zero_credit_cents - error)
++        / (pitchCfg.zero_credit_cents - pitchCfg.full_credit_cents)));
++    }
++    if (!count) return { ...word, status: 'not_graded', coverage: null, pitch: null,
++      onset_delay_s: null, late: null };
++    const coverage = sung / count;
++    const delay = firstUser === null ? null : (firstUser - (firstRef as number)) * hop;
++    return { ...word,
++      status: coverage >= cfg.sung_coverage ? 'sung' : coverage >= cfg.partly_coverage ? 'partly' : 'missed',
++      coverage: rounded(coverage, 3), pitch: rounded(100 * credit / count, 1),
++      onset_delay_s: delay === null ? null : rounded(delay, 3),
++      late: delay === null ? null : delay > cfg.late_after_s + 1e-12 };
++  }));
++}
