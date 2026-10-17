@@ -156,7 +156,7 @@ function MatchDetail({ detail, clipId, onRetry }: { detail: Detail; clipId: stri
       )}
       {detail.state === 'ok' && (
         <>
-          <ScoreSummary total={detail.score.total} pitch={detail.score.pitch} timing={detail.score.timing} />
+          <ScoreSummary total={detail.score.total} pitch={detail.score.pitch} timing={detail.score.timing} guided={detail.score.guided} />
           <PhraseChips phrases={detail.score.phrases} song={song} />
         </>
       )}

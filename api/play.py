@@ -153,6 +153,7 @@ class BeginIn(BaseModel):
 
 class ResultIn(BaseModel):
     phrases: list[PhraseResultIn]
+    guide_used: bool = False  # client-reported (not cheat-proof): guide vocals were audible during the turn
 
 
 @router.post("/guests")
@@ -283,11 +284,16 @@ def _check_turn(s: Session, guest: GuestSession, match: Match, attempt: TurnAtte
         raise ApiError(403, "not_your_seat", "Only the player whose turn it is can do that.")
 
 
+def _guided(phrase_results) -> bool:
+    """Stored as a flag on each saved phrase dict (no migration); old rows have none."""
+    return bool(isinstance(phrase_results, list) and phrase_results and phrase_results[0].get("guided"))
+
+
 def _score(match: Match, a: TurnAttempt) -> Score:
     song = CATALOG.get(match.clip_id)
     rng = _range_of(song, [p["phrase_id"] for p in a.phrase_results]) \
         if song and song.version == match.clip_version else None
-    return Score(range=rng, mode="solo" if match.mode == "solo" else "battle", clip_id=match.clip_id, clip_version=match.clip_version,
+    return Score(range=rng, guided=_guided(a.phrase_results), mode="solo" if match.mode == "solo" else "battle", clip_id=match.clip_id, clip_version=match.clip_version,
                  scoring_version=match.scoring_version, register=a.register, total=a.total,
                  pitch=a.pitch, timing=a.timing, phrases=[PhraseScore(**{"score": p.get("score", p["pitch"]), **p}) for p in a.phrase_results],
                  coach_blurb=a.coach_blurb)
@@ -329,7 +335,7 @@ def submit_result(attempt_id: uuid.UUID, body: ResultIn, idempotency_key: str = 
     except ValueError as e:
         raise ApiError(422, "invalid_result", str(e))
     attempt.pitch, attempt.timing, attempt.total = result["pitch"], result["timing"], result["total"]
-    attempt.phrase_results = result["phrases"]
+    attempt.phrase_results = [{**p, "guided": body.guide_used} for p in result["phrases"]]
     attempt.idempotency_key, attempt.state = idempotency_key, "accepted"
     attempt.completed_at = datetime.now(timezone.utc)
     # Result and turn transition commit together: next player's attempt, or the match is finished.
@@ -413,7 +419,7 @@ def history(guest=Depends(current_guest), s: Session = Depends(get_db)):
             TurnAttempt.match_id == m.id, TurnAttempt.slot == own_slot, TurnAttempt.state == "accepted"))
         rng = _range_of(song, [p["phrase_id"] for p in pr]) if pr and song and song.version == m.clip_version else None
         rows.append({"match_id": m.id, "clip_id": m.clip_id, "mode": m.mode, "created_at": m.created_at,
-                     "total": totals.get(own_slot), "range": rng,
+                     "total": totals.get(own_slot), "range": rng, "guided": _guided(pr),
                      "players": [{"slot": k, "display_name": names[k], "total": totals.get(k)} for k in sorted(names)]})
     return rows
 
@@ -454,6 +460,8 @@ def leaderboard(clip_id: str, s: Session = Depends(get_db)):
         .join(Match, Match.guest_id == GuestSession.id).join(TurnAttempt, TurnAttempt.match_id == Match.id)
         .where(Match.clip_id == clip_id, Match.clip_version == song.version, Match.mode == "solo",
                TurnAttempt.state == "accepted", GuestSession.auth0_sub.is_not(None),
+               # runs with the guide vocals audible are kept off the board (client-reported flag)
+               func.coalesce(TurnAttempt.phrase_results[0]["guided"].astext, "false") != "true",
                # practice-section runs score a subset of phrases: not comparable, so full-clip results only
                case((func.jsonb_typeof(TurnAttempt.phrase_results) == "array",
                      func.jsonb_array_length(TurnAttempt.phrase_results)), else_=0) == len(song.phrases))

@@ -52,9 +52,10 @@ export function ScoreBar({ label, value, tone }: { label: string; value: number;
 }
 
 /** Total plus pitch and timing bars, as one block. */
-export function ScoreSummary({ total, pitch, timing }: { total: number; pitch: number; timing: number }) {
+export function ScoreSummary({ total, pitch, timing, guided }: { total: number; pitch: number; timing: number; guided?: boolean }) {
   return (
     <div className="results-summary">
+      {guided && <p className="solo-hint">Guide vocals on: this run is kept off the leaderboard.</p>}
       <BigScore total={total} />
       <div className="results-summary__bars">
         <ScoreBar label="PITCH" value={pitch} tone="sky" />

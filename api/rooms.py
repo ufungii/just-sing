@@ -332,15 +332,18 @@ def _snapshot_event(room_id: uuid.UUID) -> dict | None:
 async def room_socket(ws: WebSocket, room_id: uuid.UUID):
     if not _origin_ok(ws):
         return await ws.close(code=4403)
+    # Auth0 users send the token as a subprotocol pair ["bearer", token]: browsers cannot set headers, and a
+    # query string would end up in server access logs.
+    protos = [p.strip() for p in ws.headers.get("sec-websocket-protocol", "").split(",")]
+    bearer = protos[1] if len(protos) == 2 and protos[0] == "bearer" else None
     try:
-        slot = await asyncio.to_thread(_ws_slot, ws.cookies.get("guest_token"),
-                                       ws.query_params.get("access_token"), room_id)
+        slot = await asyncio.to_thread(_ws_slot, ws.cookies.get("guest_token"), bearer, room_id)
     except ApiError:
         slot = None
     if slot is None:
         return await ws.close(code=4403)  # not logged in, or not in this room
 
-    await ws.accept()
+    await ws.accept(subprotocol="bearer" if bearer else None)
     hub.sockets[room_id][id(ws)] = (ws, slot)
     await hub.broadcast(room_id, await asyncio.to_thread(_snapshot_event, room_id))  # presence changed
     recent: deque = deque()

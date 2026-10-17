@@ -74,7 +74,14 @@ export class SingEngine {
    * Start the turn (call from a user gesture so the context may resume). Schedules the count-in beeps
    * and the backing track on the master clock and returns t0, the context time of clip time 0.
    */
-  async start(): Promise<number> {
+  start(): Promise<number> {
+    if (this.started) return this.started; // a double click must not schedule the sources twice
+    this.started = this.startOnce();
+    return this.started;
+  }
+  private started: Promise<number> | null = null;
+
+  private async startOnce(): Promise<number> {
     await this.ctx.resume();
     this.t0 = this.ctx.currentTime + COUNT_IN + 0.15;
     scheduleCountIn(this.ctx, [3, 2, 1].map((n) => this.t0 - n));

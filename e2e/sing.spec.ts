@@ -10,7 +10,7 @@ const CLIP = process.env.E2E_CLIP ?? 'synthetic-demo';
 const LEAD = Number(process.env.E2E_LEAD ?? 6); // seconds of prefix in the WAVs (make_takes.py)
 const COUNT_IN = 3.15; // engine.ts: clip t=0 is this long after START is handled
 const GOOD_FLOOR = Number(process.env.E2E_GOOD_FLOOR ?? 60);
-const NAME = 'E2E Bot';
+const NAME = `E2E-Bot-${Date.now().toString(36).slice(-4)}`; // cleanup_db.py only deletes names starting "E2E-"
 const totals: Record<string, number> = {};
 
 for (const take of ['good', 'wrong', 'silence'] as const) {

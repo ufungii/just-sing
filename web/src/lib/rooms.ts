@@ -5,7 +5,7 @@
  * result counts: after any reconnect the fresh snapshot is the truth.
  */
 import { useSyncExternalStore } from 'react';
-import { ApiError } from './api';
+import { bearerToken, request } from './api';
 import type { MatchView, NewMatch, Rating } from './types';
 
 export interface RoomSnapshot {
@@ -20,22 +20,8 @@ export interface RoomSnapshot {
   you?: number;
 }
 
-async function call<T>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST'): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(path, {
-      credentials: 'same-origin',
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-  } catch {
-    throw new ApiError(0, 'network', 'Could not reach the server.', true);
-  }
-  if (res.ok) return (await res.json()) as T;
-  const e = (await res.json().catch(() => ({}))).error as { code: string; message: string; retryable: boolean } | undefined;
-  throw new ApiError(res.status, e?.code ?? 'http_' + res.status, e?.message ?? `Server answered ${res.status}.`, e?.retryable ?? res.status >= 500);
-}
+const call = <T>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST') =>
+  request<T>(path, { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
 
 export const createRoom = (clipId: string) => call<RoomSnapshot>('/api/rooms', { clip_id: clipId });
 export const joinRoom = (code: string) => call<RoomSnapshot>('/api/rooms/join', { code });
@@ -74,10 +60,14 @@ function set(patch: Partial<RoomLive>) {
   listeners.forEach((l) => l());
 }
 
-function open() {
+async function open() {
   if (!roomId) return;
   const id = roomId;
-  const sock = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/rooms/${id}`);
+  // Logged-in players authenticate with the Auth0 token as a subprotocol (a query string would reach server logs).
+  const token = await bearerToken();
+  if (roomId !== id) return; // left while the token was being fetched
+  const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/rooms/${id}`;
+  const sock = token ? new WebSocket(url, ['bearer', token]) : new WebSocket(url);
   ws = sock;
   let opened = false;
   sock.onopen = () => {
@@ -103,7 +93,7 @@ function open() {
     // The server closes with 4403 when we are not in the room (any pre-accept failure): do not loop.
     if (!opened && retry >= 3) return set({ conn: 'refused' });
     set({ conn: 'reconnecting' });
-    timers.push(window.setTimeout(open, Math.min(5000, 500 * 2 ** retry++)));
+    timers.push(window.setTimeout(() => void open(), Math.min(5000, 500 * 2 ** retry++)));
   };
 }
 
@@ -114,7 +104,7 @@ export function connectRoom(id: string, initial?: RoomSnapshot) {
   roomId = id;
   state = { ...IDLE, conn: 'connecting', snapshot: initial ?? null };
   listeners.forEach((l) => l());
-  open();
+  void open();
 }
 
 export function leaveRoom() {

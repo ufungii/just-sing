@@ -22,7 +22,8 @@ type Track = (number | null | undefined)[];
 export const isVoiced = (v: number | null | undefined): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0;
 
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
-const round = (x: number, dp: number) => Math.round(x * 10 ** dp) / 10 ** dp;
+/** Output rounding, half-even like Python's round() in ml/scoring/score.py (1.25 -> 1.2, not 1.3). */
+export const round = (x: number, dp: number) => roundHalfEven(x * 10 ** dp) / 10 ** dp;
 
 /** Soft pitch credit in [0, 1] for one frame. */
 export function pitchCredit(cents: number, cfg: ScoringConfig = SCORING_CONFIG): number {

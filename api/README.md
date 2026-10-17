@@ -165,6 +165,10 @@ Rules worth knowing:
   Responses (`Score`, `GET /api/matches/{id}`, `/api/history` rows) carry `range: {start,end} | null` (null = full clip).
   Practice runs are excluded from the leaderboard. No migration: while started the range sits in `phrase_results` as
   `{"range":...}`; once accepted it is derived from the scored phrase IDs.
+- **Guide vocals:** `POST /api/turns/{id}/result` takes an optional `guide_used: bool` (the guide vocals were audible at
+  any time during the turn). It is client-reported, so not cheat-proof. `Score`, the `GET /api/matches/{id}` attempts and
+  `/api/history` rows carry `guided: bool` (false for old rows), and guided runs are excluded from the leaderboard. No
+  migration: the flag is stored on each saved phrase dict inside `phrase_results`. Winners in battle/online are unchanged.
 - Sending the **same** `Idempotency-Key` again returns the same result and changes nothing, so retry freely after a
   lost response. A **different** key on a finished attempt gets `already_submitted`.
 - Local battle (`players` with two names): the second player's attempt appears in `GET /api/matches/{id}` after the
@@ -174,7 +178,7 @@ Rules worth knowing:
 
 1. Host `POST /api/rooms {clip_id}` and shares the returned `code`; the friend `POST /api/rooms/join {code}`.
 2. Each calls `POST /api/rooms/{id}/ready {ready: true}`; the host calls `/start` (returns `match_id`, `attempt_id`).
-3. Both open `ws://host/ws/rooms/{id}` (guest cookie, or `?access_token=` for Auth0). The server sends `room_snapshot`
+3. Both open `ws://host/ws/rooms/{id}` (guest cookie, or for Auth0 the WebSocket subprotocols `bearer, <token>`; never a query string, which would reach access logs). The server sends `room_snapshot`
    immediately and after every durable change.
 4. The singer runs `begin` then `result` exactly as in solo. Only the active seat may call them (`not_your_seat` otherwise).
 5. The other player sees `result_saved`, then their own turn opens; after the last result, `match_finished`. Both read the

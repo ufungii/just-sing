@@ -12,8 +12,9 @@ import path from 'node:path';
 const CLIP = process.env.E2E_CLIP ?? 'synthetic-demo';
 const LEAD = Number(process.env.E2E_LEAD ?? 6);
 const COUNT_IN = 3.15;
-const GOOD = 'E2E Bot'; // first player = the guest creating the match, so cleanup_db.py removes it
-const WRONG = 'E2E Rival';
+const RUN = Date.now().toString(36).slice(-4); // cleanup_db.py only deletes names starting "E2E-"
+const GOOD = `E2E-Bot-${RUN}`; // first player = the guest creating the match, so cleanup_db.py removes it
+const WRONG = `E2E-Rival-${RUN}`;
 
 test('battle: good take beats wrong notes', async ({ baseURL }) => {
   test.setTimeout(240_000);

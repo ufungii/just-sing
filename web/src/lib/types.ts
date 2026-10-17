@@ -85,6 +85,7 @@ export interface Score {
   timing: number;
   phrases: PhraseScore[];
   coach_blurb: string | null;
+  guided?: boolean; // guide vocals were audible (client-reported); such runs skip the leaderboard
 }
 
 export interface WordFeedback {
@@ -106,6 +107,7 @@ export interface HistoryItem {
   clip_id: string;
   created_at: string;
   total: number;
+  guided?: boolean;
 }
 
 export interface MatchView {

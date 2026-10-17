@@ -23,7 +23,7 @@ export const setAccessTokenProvider = (fn: typeof accessToken) => {
   accessToken = fn;
 };
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   try {
     const token = await accessToken?.();
@@ -46,6 +46,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   const e = body.error;
   throw new ApiError(res.status, e?.code ?? 'http_' + res.status, e?.message ?? `Server answered ${res.status}.`, e?.retryable ?? res.status >= 500);
+}
+
+/** The Auth0 access token for the current login, or undefined for guests (used by the room WebSocket). */
+export async function bearerToken(): Promise<string | undefined> {
+  try {
+    return await accessToken?.();
+  } catch {
+    return undefined;
+  }
 }
 
 const json = (body: unknown): RequestInit => ({
@@ -110,15 +119,16 @@ export const beginTurn = (attemptId: string, register: Register, calibrationOffs
     json({ register, calibration_offset: calibrationOffset }),
   );
 /** Submit the finished phrase results once. Reuse the same key on retry so nothing is counted twice. */
-export const submitResult = (attemptId: string, phrases: PhraseScore[], idempotencyKey: string) =>
+export const submitResult = (attemptId: string, phrases: PhraseScore[], idempotencyKey: string, guideUsed = false) =>
   request<Score>(`/api/turns/${attemptId}/result`, {
-    ...json({ phrases }),
+    ...json({ phrases, guide_used: guideUsed }),
     headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
   });
 export const getCoach = (attemptId: string) =>
   request<{ status: 'ok' | 'unavailable'; coach_blurb: string | null }>(`/api/turns/${attemptId}/coach`, { method: 'POST' });
 export const rematch = (matchId: string) => request<NewMatch>(`/api/matches/${matchId}/rematch`, { method: 'POST' });
 export const getMatch = (matchId: string) => request<MatchView>(`/api/matches/${matchId}`);
+export const retryTurn = (matchId: string) => request<{ attempt_id: string }>(`/api/matches/${matchId}/retry`, { method: 'POST' });
 /** After login: attach this browser's guest history to the account (needs the bearer token and the guest cookie). */
 export const claimGuest = () => request<{ id: string; claimed_guest_history: boolean }>('/api/auth/claim', { method: 'POST' });
 export const getHistory = () => request<HistoryItem[]>('/api/history');

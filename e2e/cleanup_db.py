@@ -1,4 +1,4 @@
-"""Delete the rows the e2e runs created (guests 'E2E Bot' and 'E2E Rival', their matches and rooms) and print
+"""Delete the rows the e2e runs created (guests named "E2E-Bot-<run>" / "E2E-Rival-<run>", their matches and rooms; a real player's name never matches) and print
 remaining row counts.   PYTHONPATH=. .venv/bin/python e2e/cleanup_db.py        (uses the DB from .env)"""
 from dotenv import load_dotenv
 
@@ -10,7 +10,7 @@ from api.db import get_engine  # noqa: E402
 from api.tables import GuestSession, Match, MatchPlayer, Room, RoomMember, TurnAttempt  # noqa: E402
 
 with Session(get_engine()) as s:
-    g = select(GuestSession.id).where(GuestSession.display_name.in_(["E2E Bot", "E2E Rival"]))
+    g = select(GuestSession.id).where(GuestSession.display_name.regexp_match(r"^E2E-(Bot|Rival)-[0-9a-z]{1,4}$"), GuestSession.auth0_sub.is_(None))
     rooms = select(Room.id).where(Room.host_guest_id.in_(g))
     m = select(Match.id).where(or_(Match.guest_id.in_(g), Match.room_id.in_(rooms)))
     s.execute(delete(TurnAttempt).where(TurnAttempt.match_id.in_(m)))
