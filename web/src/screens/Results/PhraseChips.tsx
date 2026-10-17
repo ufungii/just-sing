@@ -3,7 +3,8 @@
  * and one row per phrase with its lyric and rating. Display only: every number shown here was
  * computed by the scoring engine (locally or on the server), never by an LLM.
  */
-import type { PhraseScore, Rating, Song } from '../../lib/types';
+import type { PhraseScore, Rating, Song, TimeRange } from '../../lib/types';
+import { rangeLabel } from '../../components/timeline/range';
 import './PhraseChips.css';
 
 export const RATING_LABEL: Record<Rating, string> = {
@@ -52,9 +53,11 @@ export function ScoreBar({ label, value, tone }: { label: string; value: number;
 }
 
 /** Total plus pitch and timing bars, as one block. */
-export function ScoreSummary({ total, pitch, timing }: { total: number; pitch: number; timing: number }) {
+export function ScoreSummary({ total, pitch, timing, guided, range }: { total: number; pitch: number; timing: number; guided?: boolean; range?: TimeRange | null }) {
   return (
     <div className="results-summary">
+      {range && <p className="solo-hint">Practice section · {rangeLabel(range)} · kept off the leaderboard.</p>}
+      {guided && <p className="solo-hint">Guide vocals on: this run is kept off the leaderboard.</p>}
       <BigScore total={total} />
       <div className="results-summary__bars">
         <ScoreBar label="PITCH" value={pitch} tone="sky" />
@@ -90,7 +93,7 @@ export function PhraseChips({ phrases, song }: { phrases: PhraseScore[]; song: S
             </span>
             <span className="results-phrase__stats">
               <span title="pitch">P {whole(p.pitch)}</span>
-              <span title="timing">T {whole(p.timing)}</span>
+              <span title="timing">T {p.timing === null ? '–' : whole(p.timing)}</span>
               <span title="sung coverage">C {whole(p.coverage * 100)}%</span>
             </span>
             <span className={`results-rating results-rating--${p.rating}`}>{RATING_LABEL[p.rating]}</span>

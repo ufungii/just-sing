@@ -35,10 +35,10 @@ def test_unknown_clip_uses_error_envelope():
 
 
 def test_audio_served_with_range_and_missing_is_actionable():
-    from api.main import CATALOG_DIR
+    from api.clip_catalog import SONG_DIR
     r = client.get("/api/clips/synthetic-demo/audio")
     assert r.status_code == 404 and r.json()["error"]["code"] == "audio_missing"
-    f = CATALOG_DIR / "synthetic-demo" / "instrumental.mp3"  # *.mp3 is gitignored
+    f = SONG_DIR["synthetic-demo"] / "instrumental.mp3"  # *.mp3 is gitignored
     f.write_bytes(b"0123456789")
     try:
         assert client.get("/api/clips/synthetic-demo/audio").content == b"0123456789"
@@ -76,11 +76,31 @@ def test_missing_frontend_build_is_an_actionable_error(tmp_path, monkeypatch):
     assert r.status_code == 404 and r.json()["error"]["code"] == "frontend_not_built"
 
 
-def test_scoring_numbers_come_from_the_shared_config():
-    """The API must not hard-code scoring weights (CLAUDE.md): they live in contracts/scoring.config.json."""
+def test_scoring_numbers_come_from_the_reference_engine():
+    """The API must not hard-code scoring numbers (CLAUDE.md): they live in ml/scoring/config.py."""
     from api import play
-    config = json.loads((CONTRACTS / "scoring.config.json").read_text(encoding="utf-8"))
-    assert play.SCORING == config and play.SCORING_VERSION == config["scoring_version"]
-    assert abs(sum(config["total_weights"].values()) - 1) < 1e-9
-    source = (Path(play.__file__)).read_text(encoding="utf-8")
+    from ml.scoring import config
+    assert play.SCORING_VERSION == config.SCORING_VERSION
+    source = Path(play.__file__).read_text(encoding="utf-8")
     assert "0.8" not in source and "PITCH_WEIGHT" not in source
+
+
+def test_guest_cookie_works_when_auth0_is_not_configured(monkeypatch):
+    """Regression: any Authorization header got a 503 when Auth0 was not configured, even with a valid
+    guest cookie (a stale bearer token from an earlier login, for example)."""
+    import os
+    if not os.getenv("DATABASE_URL"):
+        import pytest
+        pytest.skip("needs DATABASE_URL")
+    monkeypatch.delenv("AUTH0_DOMAIN", raising=False)
+    monkeypatch.delenv("AUTH0_AUDIENCE", raising=False)
+    c = TestClient(app)
+    gid = c.post("/api/guests", json={"display_name": "stale-bearer"}).json()["id"]
+    try:
+        r = c.get("/api/history", headers={"Authorization": "Bearer left-over-token"})
+        assert r.status_code == 200, r.text
+    finally:
+        from sqlalchemy import text
+        from api.db import get_engine
+        with get_engine().begin() as conn:
+            conn.execute(text("delete from guest_session where id=:g"), {"g": gid})

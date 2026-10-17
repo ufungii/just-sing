@@ -9,7 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
 from sqlalchemy import text
 
-from .clip_catalog import CATALOG, CATALOG_DIR
+from .clip_catalog import CATALOG, REVIEWED, SONG_DIR
 from .db import get_engine
 from .errors import ApiError, error_response
 from .models import ClipSummary, Song
@@ -21,6 +21,7 @@ async def lifespan(_):
     from .rooms import hub
     hub.loop = asyncio.get_running_loop()
     task = asyncio.create_task(cleanup_loop())
+    await asyncio.to_thread(practice.attach_scorer)  # no-op unless PRONUNCIATION_SCORER=1
     yield
     task.cancel()
 
@@ -65,7 +66,8 @@ def ready():
 def clips():
     return [
         ClipSummary(id=s.id, version=s.version, title=s.title, artist=s.artist,
-                    duration=s.duration, synthetic=s.provenance.source_version == "synthetic")
+                    duration=s.duration, synthetic=s.provenance.source_version == "synthetic",
+                    reviewed=REVIEWED[s.id])
         for s in CATALOG.values()
     ]
 
@@ -78,28 +80,56 @@ def manifest(clip_id: str):
     return CATALOG[clip_id]
 
 
+def _audio_file(clip_id: str, role: str) -> FileResponse:
+    """Path comes from the validated manifest, never the URL. FileResponse handles Range requests."""
+    song = manifest(clip_id)
+    folder = SONG_DIR[song.id].resolve()
+    path = (folder / getattr(song.audio, role)).resolve()
+    if not path.is_relative_to(folder) or not path.is_file():
+        raise ApiError(404, "audio_missing", f"The {role} for '{clip_id}' is not installed on this server.")
+    return FileResponse(path)
+
+
 @app.get("/api/clips/{clip_id}/audio")
 def instrumental(clip_id: str):
-    """Instrumental only (vocals stay offline). Path comes from the validated manifest, never the URL.
-    FileResponse handles Range requests, which browsers use for seeking."""
-    song = manifest(clip_id)
-    path = (CATALOG_DIR / song.id / song.audio.instrumental).resolve()
-    if not path.is_relative_to((CATALOG_DIR / song.id).resolve()) or not path.is_file():
-        raise ApiError(404, "audio_missing", f"Instrumental for '{clip_id}' is not installed on this server.")
-    return FileResponse(path)
+    return _audio_file(clip_id, "instrumental")
+
+
+@app.get("/api/clips/{clip_id}/vocals")
+def vocals(clip_id: str):
+    """Guide vocals the singer can mix in while practising. Same files and rules as the instrumental."""
+    return _audio_file(clip_id, "vocals")
 
 
 from .play import router  # noqa: E402  (play.py imports CATALOG from this module)
 
 app.include_router(router)
 
-from .practice import router as practice_router  # noqa: E402
+from . import practice  # noqa: E402
 
-app.include_router(practice_router)
+app.include_router(practice.router)
+
+
+@app.middleware("http")
+async def limit_practice_upload(request: Request, call_next):
+    """Refuse an oversize practice upload from its Content-Length header, before the body is read
+    (the handler's own check only runs after Starlette has received the whole multipart body)."""
+    if request.method == "POST" and request.url.path == "/api/practice":
+        length = request.headers.get("content-length", "")
+        if not length.isdigit():
+            return error_response(request, 411, "length_required", "Send a Content-Length with the upload.")
+        if int(length) > practice.MAX_BYTES + 64 * 1024:  # a little headroom for the form fields
+            return error_response(request, 413, "audio_too_large",
+                                  f"Audio must be under {practice.MAX_BYTES // 1024 // 1024} MB.")
+    return await call_next(request)
 
 from .rooms import router as rooms_router  # noqa: E402
 
 app.include_router(rooms_router)
+
+from .duet_play import router as duet_router  # noqa: E402
+
+app.include_router(duet_router)
 
 from .coach import router as coach_router  # noqa: E402
 
