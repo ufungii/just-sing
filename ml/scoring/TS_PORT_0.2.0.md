@@ -1,9 +1,9 @@
 # TypeScript port: updating to scoring version 0.2.0
 
-`ts_port_0.2.0.patch` (this folder) brings the `overnight` branch's `web/src/scoring/` port to scoring version 0.2.0. It applies cleanly to `origin/overnight`:
+`ts_port_0.2.0.patch` (this folder) brings the `web/src/scoring/` port to scoring version 0.2.0. It applies cleanly to both `origin/overnight` and `origin/overnight-extra` (their scoring files are identical; verified on each: `tsc -b` clean, 14 of 14 tests pass):
 
 ```bash
-git apply -p1 ml/scoring/ts_port_0.2.0.patch      # from the repo root, on the overnight branch
+git apply -p1 ml/scoring/ts_port_0.2.0.patch      # from the repo root, on the overnight-extra (or overnight) branch
 cd web && npm test && npx tsc -b                   # 14 tests pass, typecheck clean
 ```
 
