@@ -2,7 +2,7 @@
 
 The browser must rate phrases live with exactly the same math as the Python reference in `ml/scoring/`. This page is the language-neutral spec; `contracts/fixtures/` holds the test cases both implementations must pass. If this page and the Python code ever disagree, the code plus fixtures win: tell ML B.
 
-Scoring version: `0.2.0` (`SCORING_VERSION` in `ml/scoring/config.py`). Any change that can change a score bumps it and regenerates the fixtures.
+Scoring version: `0.3.0` (`SCORING_VERSION` in `ml/scoring/config.py`). Any change that can change a score bumps it and regenerates the fixtures.
 
 ## 1. Inputs and conventions
 
@@ -27,7 +27,7 @@ Scoring version: `0.2.0` (`SCORING_VERSION` in `ml/scoring/config.py`). Any chan
 | `stable_cents` | 60 | "steady" means within this of the window median |
 | `min_onset_gap_s` | 0.12 | note starts closer than this are merged |
 | `pitch_weight`, `timing_weight` | 0.8, 0.2 | phrase score blend |
-| `perfect`, `great`, `okay` | 90, 75, 50 | rating bands on the phrase score |
+| `perfect`, `great`, `okay` | 80, 65, 40 | rating bands on the phrase score (0.3.0, from `ml/evals/band_calibration.py`) |
 | `min_coverage` | 0.25 | below this, the phrase is `miss` |
 
 ## 3. Preparing the player track
@@ -138,4 +138,4 @@ The browser submits each phrase's `phrase_id`, `pitch`, `timing` and `coverage`.
 
 See [WORD_FEEDBACK.md](WORD_FEEDBACK.md) for the independent word-activity contract,
 version 1.0.0, and `contracts/fixtures/word_feedback.json` for shared Python/TypeScript
-cases. This does not modify the scoring rubric above or scoring version 0.2.0.
+cases. This does not modify the scoring rubric above or scoring version 0.3.0.
