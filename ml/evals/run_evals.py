@@ -97,6 +97,8 @@ def rating_checks(seeds: int) -> list[tuple[str, dict]]:
     from collections import Counter
     takes = [
         ("Reference-like take", lambda s: render_audio(NOTES, seed=s)),
+        ("Mildly off (every note off by up to 50 cents)", lambda s: render_audio(detune_random(NOTES, 50, s), seed=s)),
+        ("Off (every note off by up to 100 cents)", lambda s: render_audio(detune_random(NOTES, 100, s), seed=s)),
         ("Wrong notes (every note off by up to 200 cents)", lambda s: render_audio(detune_random(NOTES, 200, s), seed=s)),
         ("Wrong notes (every note off by up to 300 cents)", lambda s: render_audio(detune_random(NOTES, 300, s), seed=s)),
         ("Silence", lambda s: np.zeros(len(render_audio(NOTES)), np.float32)),

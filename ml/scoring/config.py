@@ -7,13 +7,13 @@ saved results are never silently reinterpreted.
 """
 from dataclasses import dataclass
 
-SCORING_VERSION = "0.2.0"
+SCORING_VERSION = "0.3.0"
 
 
 @dataclass(frozen=True)
 class PitchConfig:
     # Frames within this many cents of the target earn full credit.
-    full_credit_cents: float = 50.0
+    full_credit_cents: float = 70.0
     # Credit falls linearly to zero at this error. A soft ramp (not a hard
     # pass/fail) keeps the score smooth, which matters for monotonicity evals.
     zero_credit_cents: float = 200.0
@@ -46,8 +46,8 @@ class ScoreConfig:
     timing_weight: float = 0.2
     # Phrase rating bands on the 0-100 phrase score. Placeholders to calibrate
     # against recordings; they are not established accuracy cutoffs.
-    perfect: float = 90.0
-    great: float = 75.0
+    perfect: float = 82.0
+    great: float = 65.0
     okay: float = 50.0
     # Below this share of scoreable frames sung, a phrase is a Miss. Miss is
     # reserved for insufficient coverage, never for a mic failure.
