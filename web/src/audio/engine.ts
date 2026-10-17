@@ -76,18 +76,19 @@ export class SingEngine {
    * Start the turn (call from a user gesture so the context may resume). Schedules the count-in beeps
    * and the backing track on the master clock and returns t0, the context time of clip time 0.
    */
-  start(): Promise<number> {
+  start(at?: number): Promise<number> {
     if (this.started) return this.started; // a double click must not schedule the sources twice
-    this.started = this.startOnce();
+    this.started = this.startOnce(at);
     return this.started;
   }
   private started: Promise<number> | null = null;
 
-  private async startOnce(): Promise<number> {
+  private async startOnce(scheduledAt?: number): Promise<number> {
     await this.ctx.resume();
     const start = this.range?.start ?? 0;
     const end = this.range?.end ?? this.duration;
-    const at = this.ctx.currentTime + COUNT_IN + 0.15;
+    const at = scheduledAt ?? this.ctx.currentTime + COUNT_IN + 0.15;
+    if (at < this.ctx.currentTime + 0.1) throw new Error('The shared start was missed. Restart the duet together.');
     // Keep t0 as the origin of the full clip, including when it lies before context time 0.
     this.t0 = at - start;
     scheduleCountIn(this.ctx, [3, 2, 1].map((n) => at - n));
