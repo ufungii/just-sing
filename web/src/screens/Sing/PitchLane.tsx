@@ -250,7 +250,8 @@ export function PitchLane({ song, notes, sections, target, getTime, userHz, rati
       }
 
       // target notes: pixel pills with dot eyes
-      const pillH = Math.min(pillFor(hi - lo), rowH * 0.95);
+      // wide-range clips cannot trim further: keep bars at least 18 px (30% over the old 14 px floor) even if neighbours near-touch
+      const pillH = Math.max(18, Math.min(pillFor(hi - lo), rowH * 0.95));
       for (const n of notes) {
         const x1 = xOf(n.start);
         const x2 = xOf(n.end);
