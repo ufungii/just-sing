@@ -25,6 +25,7 @@ from scipy.stats import mannwhitneyu
 
 from ml.evals.align_take import align
 from ml.evals.sung_similarity import SR, W2V, cmvn
+from ml.pronunciation.lyric_match import hum as aah
 from ml.scoring.pitch import pitch_contour, to_track
 
 RESULTS = Path(__file__).parent / "results"
@@ -48,22 +49,6 @@ def word_costs(C, wp, spans):
     for j, v in acc.items():
         per_ref[j] = np.mean(v)
     return [float(np.nanmean(per_ref[a:b])) if b - a >= 3 and np.isfinite(per_ref[a:b]).any() else np.nan for a, b in spans]
-
-
-def aah(hz_track: np.ndarray, rms_track: np.ndarray, n_samples: int) -> np.ndarray:
-    """A sung "aah" following a pitch track (20 ms frames, NaN = silent) and loudness envelope."""
-    t = np.arange(n_samples) / SR
-    frames = np.minimum((t / FR).astype(int), len(hz_track) - 1)
-    f0 = np.nan_to_num(hz_track[frames], nan=0.0)
-    amp = np.interp(t, np.arange(len(rms_track)) * FR, rms_track) * (f0 > 0)
-    phase = 2 * np.pi * np.cumsum(f0) / SR
-    out = np.zeros(n_samples)
-    for k in range(1, 25):  # harmonics weighted by /a/ formants (~700, 1200, 2600 Hz)
-        fk = k * np.maximum(f0, 1.0)
-        env = sum(g * np.exp(-0.5 * ((fk - fc) / bw) ** 2) for fc, bw, g in ((700, 130, 1.0), (1200, 150, 0.6), (2600, 250, 0.25)))
-        out += np.where(fk < SR / 2, env * np.sin(k * phase), 0.0)
-    out *= amp / (np.sqrt(np.mean(out ** 2)) + 1e-9)
-    return out.astype(np.float32)
 
 
 def main() -> None:
