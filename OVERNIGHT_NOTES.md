@@ -53,3 +53,15 @@ Branch `overnight`. Everything below was run on this machine; "not verified" mea
 - `ml/pipeline/run.py` hardcodes a Windows separation-venv path (unused when `--vocals/--instrumental` are given).
 - Pipeline venv lives outside the repo at `~/.cache/just-sing-pipeline/venv` (python 3.12, torch 2.8, demucs 4.0.1;
   `av` pinned to 15.1.0 because faster-whisper crashes on newer).
+
+## Branch `overnight-extra` (cut from `overnight` after solo was green)
+
+- **Local battle** (web/): setup, "pass the headphones", winner/tie screen from the server's `winner_slot`, rematch.
+  `e2e/battle.spec.ts` (good take vs wrong notes) passes on the real clip: 85 vs 50.1, slot 0 wins. Tie display and
+  rematch were not exercised in a browser. Online rooms were not touched.
+- **Pronunciation hook** (api/): `PRONUNCIATION_SCORER=1` attaches `ml.pronunciation.api_scorer` lazily and warms it
+  up; practice responses carry nullable `overall`. Tested with fake scorers only; the real models (PyTorch speech
+  environment, ~7 GB) were never loaded, so real warm-up time and real scores are unverified.
+  Also touched `ml/pronunciation/api_scorer.py` (`warmup()`, `last_overall`).
+- Full `pytest api`: 92 passed; both e2e specs re-run green after the battle edits; no leftover DB rows.
+- Not done: second song, leaderboard polish, online rooms, practice screen verified against real models.
