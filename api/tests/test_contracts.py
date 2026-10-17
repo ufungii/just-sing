@@ -35,10 +35,10 @@ def test_unknown_clip_uses_error_envelope():
 
 
 def test_audio_served_with_range_and_missing_is_actionable():
-    from api.main import CATALOG_DIR
+    from api.clip_catalog import SONG_DIR
     r = client.get("/api/clips/synthetic-demo/audio")
     assert r.status_code == 404 and r.json()["error"]["code"] == "audio_missing"
-    f = CATALOG_DIR / "synthetic-demo" / "instrumental.mp3"  # *.mp3 is gitignored
+    f = SONG_DIR["synthetic-demo"] / "instrumental.mp3"  # *.mp3 is gitignored
     f.write_bytes(b"0123456789")
     try:
         assert client.get("/api/clips/synthetic-demo/audio").content == b"0123456789"
