@@ -134,3 +134,9 @@ def test_finalize_allows_null_timing(ref):
     sub[0]["timing"] = None
     out = finalize_turn(sub, phrase_weights(ref, PHRASES), expected_phrase_ids=IDS)
     assert out["phrases"][0]["timing"] is None and out["phrases"][0]["score"] == 100.0
+
+
+def test_finalize_rejects_a_clip_with_nothing_scoreable(ref):
+    sub = _submit(run(ref, ref))
+    with pytest.raises(ValueError, match="no scoreable"):
+        finalize_turn(sub, [0, 0, 0], expected_phrase_ids=IDS)

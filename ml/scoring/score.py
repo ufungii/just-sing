@@ -109,7 +109,8 @@ def finalize_turn(
                Any `score` / `rating` the client sent is ignored and recomputed here.
     weights:   phrase_weights() from the server's own manifest copy.
     Raises ValueError on unknown/missing/duplicate phrase ids, out-of-range or
-    non-finite values, or a register that is not -12/0/12.
+    non-finite values, a register that is not -12/0/12, or a clip whose weights are
+    all zero (nothing scoreable: a manifest problem, not the player's).
 
     Pitch and timing arrive rounded to 0.1, so a recomputed phrase score can differ
     from the browser's by at most about 0.1; compare with that tolerance.
@@ -122,6 +123,10 @@ def finalize_turn(
     ids = [p.get("phrase_id") for p in submitted]
     if sorted(ids, key=str) != sorted(expected_phrase_ids):
         raise ValueError("submitted phrase ids must match the clip's phrases exactly")
+
+    if not any(w > 0 for w in weights):
+        # A manifest with nothing scoreable would otherwise zero every player's score silently.
+        raise ValueError("this clip has no scoreable reference frames; fix its manifest")
 
     by_id = {p["phrase_id"]: p for p in submitted}
     entries = [
