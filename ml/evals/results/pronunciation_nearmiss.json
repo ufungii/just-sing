@@ -1,0 +1,374 @@
+{
+  "summary": {
+    "A": {
+      "word_auc": 0.6206443129520053,
+      "localization": 0.3333333333333333,
+      "mean_drop": 8.202564102564102,
+      "by_kind": {
+        "lead": 0.5260770975056689,
+        "vowel": 0.6834319526627219,
+        "tail": 0.88
+      }
+    },
+    "B": {
+      "word_auc": 0.6426692965154504,
+      "localization": 0.5384615384615384,
+      "mean_drop": 17.387179487179488,
+      "by_kind": {
+        "lead": 0.6213151927437641,
+        "vowel": 0.6331360946745562,
+        "tail": 0.76
+      }
+    },
+    "B-norm": {
+      "word_auc": 0.6617357001972387,
+      "localization": 0.46153846153846156,
+      "mean_drop": 22.640397184831663,
+      "by_kind": {
+        "lead": 0.6258503401360545,
+        "vowel": 0.6982248520710059,
+        "tail": 0.7
+      }
+    },
+    "A+B": {
+      "word_auc": 0.6617357001972387,
+      "localization": 0.46153846153846156,
+      "mean_drop": 12.794871794871796,
+      "by_kind": {
+        "lead": 0.6111111111111112,
+        "vowel": 0.6686390532544378,
+        "tail": 0.8
+      }
+    },
+    "A+B-norm": {
+      "word_auc": 0.6775147928994083,
+      "localization": 0.41025641025641024,
+      "mean_drop": 15.421480643697883,
+      "by_kind": {
+        "lead": 0.6156462585034014,
+        "vowel": 0.6923076923076923,
+        "tail": 0.88
+      }
+    }
+  },
+  "autocorrect": {
+    "correct_word": 25,
+    "said_word": 2,
+    "other": 12
+  },
+  "chance_localization": 0.30769230769230776,
+  "cases": [
+    {
+      "phrase": 0,
+      "word": 0,
+      "kind": "lead",
+      "correct_word": "안녕하세요",
+      "said_word": "안녕아세요",
+      "said_text": "안녕아세요 만나서 반갑습니다"
+    },
+    {
+      "phrase": 0,
+      "word": 1,
+      "kind": "vowel",
+      "correct_word": "만나서",
+      "said_word": "만너서",
+      "said_text": "안녕하세요 만너서 반갑습니다"
+    },
+    {
+      "phrase": 0,
+      "word": 2,
+      "kind": "tail",
+      "correct_word": "반갑습니다",
+      "said_word": "반갑슥니다",
+      "said_text": "안녕하세요 만나서 반갑슥니다"
+    },
+    {
+      "phrase": 1,
+      "word": 0,
+      "kind": "lead",
+      "correct_word": "오늘",
+      "said_word": "오를",
+      "said_text": "오를 날씨가 정말 좋아요"
+    },
+    {
+      "phrase": 1,
+      "word": 1,
+      "kind": "vowel",
+      "correct_word": "날씨가",
+      "said_word": "날쓰가",
+      "said_text": "오늘 날쓰가 정말 좋아요"
+    },
+    {
+      "phrase": 1,
+      "word": 2,
+      "kind": "tail",
+      "correct_word": "정말",
+      "said_word": "정만",
+      "said_text": "오늘 날씨가 정만 좋아요"
+    },
+    {
+      "phrase": 1,
+      "word": 3,
+      "kind": "lead",
+      "correct_word": "좋아요",
+      "said_word": "좋하요",
+      "said_text": "오늘 날씨가 정말 좋하요"
+    },
+    {
+      "phrase": 2,
+      "word": 0,
+      "kind": "vowel",
+      "correct_word": "나는",
+      "said_word": "나눈",
+      "said_text": "나눈 너를 사랑해"
+    },
+    {
+      "phrase": 2,
+      "word": 1,
+      "kind": "tail",
+      "correct_word": "너를",
+      "said_word": "너른",
+      "said_text": "나는 너른 사랑해"
+    },
+    {
+      "phrase": 2,
+      "word": 2,
+      "kind": "lead",
+      "correct_word": "사랑해",
+      "said_word": "사낭해",
+      "said_text": "나는 너를 사낭해"
+    },
+    {
+      "phrase": 3,
+      "word": 0,
+      "kind": "vowel",
+      "correct_word": "우리",
+      "said_word": "우르",
+      "said_text": "우르 함께 노래해요"
+    },
+    {
+      "phrase": 3,
+      "word": 1,
+      "kind": "lead",
+      "correct_word": "함께",
+      "said_word": "함게",
+      "said_text": "우리 함게 노래해요"
+    },
+    {
+      "phrase": 3,
+      "word": 2,
+      "kind": "lead",
+      "correct_word": "노래해요",
+      "said_word": "노래애요",
+      "said_text": "우리 함께 노래애요"
+    },
+    {
+      "phrase": 4,
+      "word": 0,
+      "kind": "vowel",
+      "correct_word": "보고",
+      "said_word": "보거",
+      "said_text": "보거 싶어요 매일 매일"
+    },
+    {
+      "phrase": 4,
+      "word": 1,
+      "kind": "lead",
+      "correct_word": "싶어요",
+      "said_word": "싶허요",
+      "said_text": "보고 싶허요 매일 매일"
+    },
+    {
+      "phrase": 4,
+      "word": 2,
+      "kind": "lead",
+      "correct_word": "매일",
+      "said_word": "매힐",
+      "said_text": "보고 싶어요 매힐 매일"
+    },
+    {
+      "phrase": 4,
+      "word": 3,
+      "kind": "vowel",
+      "correct_word": "매일",
+      "said_word": "매을",
+      "said_text": "보고 싶어요 매일 매을"
+    },
+    {
+      "phrase": 5,
+      "word": 0,
+      "kind": "tail",
+      "correct_word": "사랑이",
+      "said_word": "사란이",
+      "said_text": "사란이 뭐길래 이렇게 아파"
+    },
+    {
+      "phrase": 5,
+      "word": 1,
+      "kind": "lead",
+      "correct_word": "뭐길래",
+      "said_word": "뭐킬래",
+      "said_text": "사랑이 뭐킬래 이렇게 아파"
+    },
+    {
+      "phrase": 5,
+      "word": 2,
+      "kind": "vowel",
+      "correct_word": "이렇게",
+      "said_word": "이롷게",
+      "said_text": "사랑이 뭐길래 이롷게 아파"
+    },
+    {
+      "phrase": 5,
+      "word": 3,
+      "kind": "lead",
+      "correct_word": "아파",
+      "said_word": "아바",
+      "said_text": "사랑이 뭐길래 이렇게 아바"
+    },
+    {
+      "phrase": 6,
+      "word": 0,
+      "kind": "lead",
+      "correct_word": "별이",
+      "said_word": "별히",
+      "said_text": "별히 빛나는 밤에"
+    },
+    {
+      "phrase": 6,
+      "word": 1,
+      "kind": "vowel",
+      "correct_word": "빛나는",
+      "said_word": "빛너는",
+      "said_text": "별이 빛너는 밤에"
+    },
+    {
+      "phrase": 6,
+      "word": 2,
+      "kind": "lead",
+      "correct_word": "밤에",
+      "said_word": "밤헤",
+      "said_text": "별이 빛나는 밤헤"
+    },
+    {
+      "phrase": 7,
+      "word": 0,
+      "kind": "lead",
+      "correct_word": "내",
+      "said_word": "래",
+      "said_text": "래 마음을 받아줘요"
+    },
+    {
+      "phrase": 7,
+      "word": 1,
+      "kind": "vowel",
+      "correct_word": "마음을",
+      "said_word": "마움을",
+      "said_text": "내 마움을 받아줘요"
+    },
+    {
+      "phrase": 7,
+      "word": 2,
+      "kind": "lead",
+      "correct_word": "받아줘요",
+      "said_word": "받아춰요",
+      "said_text": "내 마음을 받아춰요"
+    },
+    {
+      "phrase": 8,
+      "word": 0,
+      "kind": "lead",
+      "correct_word": "다시",
+      "said_word": "다씨",
+      "said_text": "다씨 한번 말해줘요"
+    },
+    {
+      "phrase": 8,
+      "word": 1,
+      "kind": "vowel",
+      "correct_word": "한번",
+      "said_word": "한본",
+      "said_text": "다시 한본 말해줘요"
+    },
+    {
+      "phrase": 8,
+      "word": 2,
+      "kind": "lead",
+      "correct_word": "말해줘요",
+      "said_word": "말해춰요",
+      "said_text": "다시 한번 말해춰요"
+    },
+    {
+      "phrase": 9,
+      "word": 0,
+      "kind": "lead",
+      "correct_word": "너무너무",
+      "said_word": "너무러무",
+      "said_text": "너무러무 행복해요"
+    },
+    {
+      "phrase": 9,
+      "word": 1,
+      "kind": "vowel",
+      "correct_word": "행복해요",
+      "said_word": "행복하요",
+      "said_text": "너무너무 행복하요"
+    },
+    {
+      "phrase": 10,
+      "word": 0,
+      "kind": "lead",
+      "correct_word": "나와",
+      "said_word": "나화",
+      "said_text": "나화 함께 춤을 춰요"
+    },
+    {
+      "phrase": 10,
+      "word": 1,
+      "kind": "lead",
+      "correct_word": "함께",
+      "said_word": "함게",
+      "said_text": "나와 함게 춤을 춰요"
+    },
+    {
+      "phrase": 10,
+      "word": 2,
+      "kind": "vowel",
+      "correct_word": "춤을",
+      "said_word": "춤울",
+      "said_text": "나와 함께 춤울 춰요"
+    },
+    {
+      "phrase": 10,
+      "word": 3,
+      "kind": "lead",
+      "correct_word": "춰요",
+      "said_word": "춰효",
+      "said_text": "나와 함께 춤을 춰효"
+    },
+    {
+      "phrase": 11,
+      "word": 0,
+      "kind": "lead",
+      "correct_word": "영원히",
+      "said_word": "영훤히",
+      "said_text": "영훤히 널 기억할게"
+    },
+    {
+      "phrase": 11,
+      "word": 1,
+      "kind": "vowel",
+      "correct_word": "널",
+      "said_word": "놀",
+      "said_text": "영원히 놀 기억할게"
+    },
+    {
+      "phrase": 11,
+      "word": 2,
+      "kind": "tail",
+      "correct_word": "기억할게",
+      "said_word": "기억한게",
+      "said_text": "영원히 널 기억한게"
+    }
+  ]
+}

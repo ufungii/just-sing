@@ -8,7 +8,7 @@
   "pitch": 0,
   "timing": 0,
   "phrases": [
-    { "phrase_id": "p1", "rating": "miss", "pitch": 0, "timing": 0, "coverage": 0 }
+    { "phrase_id": "p1", "rating": "miss", "score": 0, "pitch": 0, "timing": 0, "coverage": 0 }
   ],
   "coach_blurb": "string"
 }
