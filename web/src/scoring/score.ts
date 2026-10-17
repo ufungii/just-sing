@@ -1,167 +1,202 @@
 /**
  * Live phrase scoring: pure, deterministic functions over a target track and a user pitch track.
  *
- * PROVISIONAL PORT. CLAUDE.md says the Python engine in ml/scoring is the reference implementation and
- * both languages must pass the shared fixtures in contracts/fixtures. Neither exists yet, so this file
- * implements the written spec directly and is meant to be replaced (or corrected) once they land:
+ * Port of the Python reference engine (ml/scoring/score.py, pitch.py, timing.py), written from
+ * ml/scoring/SPEC.md. `npm test` (src/scoring/fixtures.test.ts) runs it against the shared fixtures in
+ * contracts/fixtures. Never change the math here without changing Python and the fixtures together.
  *
- * - Pitch: for every voiced, non-excluded reference frame, error in cents = 1200 * log2(user / target).
- *   Full credit within `pitchFullCents`, linear to zero at `pitchZeroCents`. Missing / unvoiced user
- *   frames earn 0 but stay in the denominator; rests and excluded frames are not in it. Every frame is
- *   one hop long, so the mean over frames is duration-weighted.
- * - Timing: the singer's voiced onsets are matched one-to-one with target onsets (phrase entrance and
- *   note changes). Credit by absolute error, full within `timingFullSeconds`, zero at
- *   `timingZeroSeconds`; an unmatched target onset earns 0. Silence therefore scores 0 here too.
- *   The single device offset is removed before the user track reaches this file; nothing here fits a
- *   per-take offset, and there is no DTW.
- * - Coverage: share of scoreable frames the user voiced. Below `missCoverage` the phrase is a MISS.
- * - Phrase score = pitchWeight * pitch + (1 - pitchWeight) * timing, rated by the config bands.
- *
- * Inputs are already in clip time on the hop grid: userHz[k] is the user's pitch at k * hop seconds.
+ * Inputs are on the hop grid in clip time: userHz[k] is the user's pitch at k * hop seconds, with the
+ * single device latency already removed (the PitchTracker does it while capturing; `applyLatency` is the
+ * same shift for offline use and the fixtures). Nothing here fits a per-take offset, and there is no DTW.
  */
-import type { Phrase, PhraseScore, Rating, Song } from '../lib/types';
+import type { Phrase, PhraseScore, Rating } from '../lib/types';
 import { SCORING_CONFIG, type ScoringConfig } from './config';
 import type { TargetTrack } from './reference';
-import { targetOnsets } from './reference';
-import { centsBetween } from './units';
+import { centsBetween, roundHalfEven } from './units';
 
 export { centsBetween };
 
+type Track = (number | null | undefined)[];
+
+/** Voiced = finite and > 0; null, undefined, NaN and <= 0 all mean unvoiced (SPEC section 1). */
+export const isVoiced = (v: number | null | undefined): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0;
+
+const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+/** Output rounding, half-even like Python's round() in ml/scoring/score.py (1.25 -> 1.2, not 1.3). */
+export const round = (x: number, dp: number) => roundHalfEven(x * 10 ** dp) / 10 ** dp;
+
 /** Soft pitch credit in [0, 1] for one frame. */
 export function pitchCredit(cents: number, cfg: ScoringConfig = SCORING_CONFIG): number {
-  const e = Math.abs(cents);
-  if (e <= cfg.pitchFullCents) return 1;
-  if (e >= cfg.pitchZeroCents) return 0;
-  return (cfg.pitchZeroCents - e) / (cfg.pitchZeroCents - cfg.pitchFullCents);
+  return clamp((cfg.pitchZeroCents - Math.abs(cents)) / (cfg.pitchZeroCents - cfg.pitchFullCents), 0, 1);
 }
 
 /** Soft timing credit in [0, 1] for one matched onset. */
 export function timingCredit(errorSeconds: number, cfg: ScoringConfig = SCORING_CONFIG): number {
-  const e = Math.abs(errorSeconds);
-  if (e <= cfg.timingFullSeconds) return 1;
-  if (e >= cfg.timingZeroSeconds) return 0;
-  return (cfg.timingZeroSeconds - e) / (cfg.timingZeroSeconds - cfg.timingFullSeconds);
+  return clamp((cfg.timingZeroSeconds - Math.abs(errorSeconds)) / (cfg.timingZeroSeconds - cfg.timingFullSeconds), 0, 1);
 }
 
 /** Frame range [from, to) covered by a phrase, on the hop grid. */
-export function phraseFrames(phrase: Phrase, hop: number): [number, number] {
-  return [Math.round(phrase.start / hop), Math.round(phrase.end / hop)];
+export function phraseFrames(phrase: { start: number; end: number }, hop: number): [number, number] {
+  return [roundHalfEven(phrase.start / hop), roundHalfEven(phrase.end / hop)];
+}
+
+/** Undo the fixed device delay: drop the first round(offset / hop) frames, pad the end unvoiced (SPEC 3.1). */
+export function applyLatency(userHz: Track, latencySeconds: number, hop: number): Track {
+  const n = roundHalfEven(latencySeconds / hop);
+  return n > 0 ? [...userHz.slice(n), ...new Array<null>(n).fill(null)] : userHz;
+}
+
+/** Median; for an even count the mean of the two middle values (SPEC section 5). */
+function median(values: number[]): number {
+  const s = [...values].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
 /**
- * Times where the singer starts a new sung note: voice appears after silence, or the pitch jumps by
- * more than `onsetJumpCents` and is then held. Each onset must be followed by `onsetMinFrames` voiced
- * frames, and onsets are at least that many frames apart, so blips and glides do not spray onsets.
+ * Times (s) where a new stable note or voiced stretch begins: `stableFrames` consecutive voiced frames
+ * within `stableCents` of their median, starting a new stable run, at least `minOnsetGapSeconds` apart.
  */
-export function userOnsets(userHz: (number | null)[], hop: number, from = 0, to = userHz.length, cfg: ScoringConfig = SCORING_CONFIG): number[] {
-  const m = cfg.onsetMinFrames;
-  const onsets: number[] = [];
-  let last = -Infinity;
-  for (let k = Math.max(0, from); k < Math.min(to, userHz.length); k++) {
-    const h = userHz[k];
-    if (h === null || k - last < m) continue;
-    const prev = k > 0 ? userHz[k - 1] : null;
-    const isEntry = prev === null || prev === undefined;
-    const isJump = !isEntry && Math.abs(centsBetween(h, prev)) > cfg.onsetJumpCents;
-    if (!isEntry && !isJump) continue;
-    let held = true;
-    for (let j = 1; j < m; j++) {
-      const next = userHz[k + j];
-      if (next === null || next === undefined || Math.abs(centsBetween(next, h)) > cfg.onsetJumpCents) {
-        held = false;
-        break;
-      }
+export function onsetTimes(track: Track, hop: number, cfg: ScoringConfig = SCORING_CONFIG): number[] {
+  const n = track.length;
+  const L = cfg.stableFrames;
+  const stable = new Array<boolean>(n).fill(false);
+  for (let i = 0; i + L <= n; i++) {
+    const w: number[] = [];
+    for (let j = i; j < i + L; j++) {
+      const v = track[j];
+      if (!isVoiced(v)) break;
+      w.push(v);
     }
-    if (held) {
-      onsets.push(k * hop);
-      last = k;
-    }
+    if (w.length < L) continue;
+    const med = median(w);
+    stable[i] = w.every((v) => Math.abs(1200 * Math.log2(v / med)) <= cfg.stableCents);
   }
-  return onsets;
+  const gap = roundHalfEven(cfg.minOnsetGapSeconds / hop);
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    if (stable[i] && (i === 0 || !stable[i - 1]) && (!out.length || i - out[out.length - 1] >= gap)) out.push(i);
+  }
+  return out.map((i) => i * hop);
 }
 
-/** Mean timing credit of target onsets, each matched to the nearest unused user onset within the search window. */
-export function timingScore(targets: number[], user: number[], cfg: ScoringConfig = SCORING_CONFIG): number {
-  if (!targets.length) return 0;
-  const used = new Set<number>();
+/** Mean timing credit of reference onsets, each matched greedily to the nearest unused user onset in the window. */
+function matchOnsets(ref: number[], user: number[], cfg: ScoringConfig): number {
+  const used = new Array<boolean>(user.length).fill(false);
   let sum = 0;
-  for (const t of targets) {
+  for (const r of ref) {
     let best = -1;
-    for (let i = 0; i < user.length; i++) {
-      if (used.has(i) || Math.abs(user[i] - t) > cfg.onsetSearchSeconds) continue;
-      if (best < 0 || Math.abs(user[i] - t) < Math.abs(user[best] - t)) best = i;
+    for (let j = 0; j < user.length; j++) {
+      if (!used[j] && (best < 0 || Math.abs(user[j] - r) < Math.abs(user[best] - r))) best = j;
     }
-    if (best >= 0) {
-      used.add(best);
-      sum += timingCredit(user[best] - t, cfg);
-    }
+    if (best < 0 || Math.abs(user[best] - r) > cfg.matchWindowSeconds) continue; // missed entrance: 0 credit, still counted
+    used[best] = true;
+    sum += timingCredit(user[best] - r, cfg);
   }
-  return sum / targets.length;
+  return sum / ref.length;
 }
 
 export function rate(score: number, coverage: number, cfg: ScoringConfig = SCORING_CONFIG): Rating {
-  if (coverage < cfg.missCoverage) return 'miss';
-  for (const band of cfg.bands) if (score >= band.min) return band.rating;
+  if (coverage < cfg.minCoverage) return 'miss';
+  if (score >= cfg.perfect) return 'perfect';
+  if (score >= cfg.great) return 'great';
+  if (score >= cfg.okay) return 'okay';
   return 'bad';
 }
 
-const round = (x: number, dp: number) => Math.round(x * 10 ** dp) / 10 ** dp;
+/** Scoreable reference frames per phrase id: the weight of that phrase in the totals. */
+export function phraseWeights(phrases: { id: string; start: number; end: number }[], target: TargetTrack): Map<string, number> {
+  return new Map(
+    phrases.map((p) => {
+      const [from, to] = phraseFrames(p, target.hop);
+      let n = 0;
+      for (let k = Math.max(0, from); k < Math.min(to, target.hz.length); k++) if (isVoiced(target.hz[k]) && !target.excluded[k]) n++;
+      return [p.id, n];
+    }),
+  );
+}
 
 /** The last clip time (s) whose user frames a phrase's score depends on; rate the phrase only after this. */
-export const phraseSettlesAt = (phrase: Phrase, cfg: ScoringConfig = SCORING_CONFIG) => phrase.end + cfg.onsetSearchSeconds;
+export const phraseSettlesAt = (phrase: { end: number }, cfg: ScoringConfig = SCORING_CONFIG) =>
+  phrase.end + cfg.matchWindowSeconds + cfg.stableFrames * cfg.hopSeconds + cfg.timeToleranceS;
 
-/** Score one phrase. Pitch and timing are 0-100 (2 dp), coverage 0-1 (4 dp). */
-export function scorePhrase(
-  song: Song,
-  phrase: Phrase,
+/** Score one phrase of a turn (SPEC sections 4-7). pitch/timing/score 1 dp, coverage 3 dp; timing is null with no onset in the phrase. */
+export function scorePhraseSpan(
+  id: string,
+  start: number,
+  end: number,
   target: TargetTrack,
-  userHz: (number | null)[],
+  userHz: Track,
   cfg: ScoringConfig = SCORING_CONFIG,
-): PhraseScore {
-  const [from, to] = phraseFrames(phrase, target.hop);
+): PhraseScore & { weight: number } {
+  const { hop } = target;
+  const n = target.hz.length;
+  const [from, to] = phraseFrames({ start, end }, hop);
+  const k = roundHalfEven(cfg.timeToleranceS / hop);
+
   let scoreable = 0;
   let voiced = 0;
   let credit = 0;
-  for (let k = from; k < to; k++) {
-    const t = target.hz[k];
-    if (t === null || t === undefined || target.excluded[k]) continue; // rests and exclusions: not in the denominator
+  for (let i = Math.max(0, from); i < Math.min(to, n); i++) {
+    const t = target.hz[i];
+    if (!isVoiced(t) || target.excluded[i]) continue; // rests and exclusions: not in the denominator
     scoreable++;
-    const u = userHz[k];
-    if (u === null || u === undefined) continue; // unvoiced: 0 credit, still counted
-    voiced++;
-    credit += pitchCredit(centsBetween(u, t), cfg);
+    let best = 0;
+    let any = false;
+    for (let off = -k; off <= k; off++) {
+      const j = i + off;
+      const u = j >= 0 && j < n ? userHz[j] : null; // pitch uses the track padded/truncated to the reference length
+      if (!isVoiced(u)) continue;
+      any = true;
+      best = Math.max(best, pitchCredit(centsBetween(u, t), cfg));
+    }
+    if (any) voiced++;
+    credit += best;
   }
-  if (scoreable === 0) {
-    // A phrase with nothing to sing is a manifest problem; it earns nothing rather than free points.
-    console.warn(`[scoring] phrase ${phrase.id} has no scoreable reference frames`);
-    return { phrase_id: phrase.id, rating: 'miss', pitch: 0, timing: 0, coverage: 0 };
-  }
+  const pitch = scoreable ? (100 * credit) / scoreable : 0;
+  const coverage = scoreable ? voiced / scoreable : 0;
 
-  const pitch = (100 * credit) / scoreable;
-  const coverage = voiced / scoreable;
-  const search = Math.round(cfg.onsetSearchSeconds / target.hop);
-  const onsets = userOnsets(userHz, target.hop, from - search, to + search, cfg);
-  const timing = 100 * timingScore(targetOnsets(song, phrase, cfg), onsets, cfg);
-  const score = cfg.pitchWeight * pitch + (1 - cfg.pitchWeight) * timing;
+  const refOnsets = target.onsets.filter((t) => t >= start && t < end).sort((a, b) => a - b);
+  const timing = refOnsets.length ? 100 * matchOnsets(refOnsets, onsetTimes(userHz, hop, cfg), cfg) : null;
 
-  return { phrase_id: phrase.id, rating: rate(score, coverage, cfg), pitch: round(pitch, 2), timing: round(timing, 2), coverage: round(coverage, 4) };
+  const score = timing === null ? pitch : cfg.pitchWeight * pitch + cfg.timingWeight * timing;
+  return {
+    phrase_id: id,
+    pitch: round(pitch, 1),
+    timing: timing === null ? null : round(timing, 1),
+    score: round(score, 1),
+    coverage: round(coverage, 3),
+    rating: rate(score, coverage, cfg), // from the unrounded values
+    weight: scoreable,
+  };
 }
 
-/** Combined phrase score (0-100) from a rounded phrase result, for display. */
-export const phraseTotal = (p: PhraseScore, cfg: ScoringConfig = SCORING_CONFIG) => round(cfg.pitchWeight * p.pitch + (1 - cfg.pitchWeight) * p.timing, 2);
+/** Score one manifest phrase for the live game. */
+export function scorePhrase(phrase: Phrase, target: TargetTrack, userHz: Track, cfg: ScoringConfig = SCORING_CONFIG): PhraseScore {
+  const { weight: _weight, ...result } = scorePhraseSpan(phrase.id, phrase.start, phrase.end, target, userHz, cfg);
+  return result;
+}
 
 /**
- * Totals exactly as api/play.py recomputes them: duration-weighted means of the phrase pitch and timing
- * (rounded to 2 dp), then total = pitchWeight * pitch + (1 - pitchWeight) * timing.
- * With only some phrases (a running score mid-song) the mean is over those phrases.
+ * Totals as ml/scoring/score.py aggregate(): the mean of the rounded phrase values weighted by scoreable
+ * reference frames (rests earn nothing); phrases with null timing are left out of the timing mean. With
+ * only some phrases (a running score mid-song) the mean is over those phrases.
  */
-export function aggregate(song: Song, phrases: PhraseScore[], cfg: ScoringConfig = SCORING_CONFIG) {
-  const duration = new Map(song.phrases.map((p) => [p.id, p.end - p.start]));
-  const scored = phrases.filter((p) => duration.has(p.phrase_id));
-  const time = scored.reduce((s, p) => s + (duration.get(p.phrase_id) as number), 0);
-  if (!time) return { total: 0, pitch: 0, timing: 0 };
-  const mean = (f: (p: PhraseScore) => number) => scored.reduce((s, p) => s + f(p) * (duration.get(p.phrase_id) as number), 0) / time;
-  const pitch = round(mean((p) => p.pitch), 2);
-  const timing = round(mean((p) => p.timing), 2);
-  return { total: round(cfg.pitchWeight * pitch + (1 - cfg.pitchWeight) * timing, 2), pitch, timing };
+export function aggregate(phrases: PhraseScore[], weights: Map<string, number>) {
+  const mean = (get: (p: PhraseScore) => number | null) => {
+    let sum = 0;
+    let w = 0;
+    for (const p of phrases) {
+      const v = get(p);
+      const weight = weights.get(p.phrase_id) ?? 0;
+      if (v === null || weight <= 0) continue;
+      sum += v * weight;
+      w += weight;
+    }
+    return w ? round(sum / w, 1) : 0;
+  };
+  return { total: mean((p) => p.score), pitch: mean((p) => p.pitch), timing: mean((p) => p.timing) };
 }
+
+/** Phrase score for display; the engine already computed it. */
+export const phraseTotal = (p: PhraseScore) => p.score;

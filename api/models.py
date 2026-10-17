@@ -43,6 +43,12 @@ class Phrase(BaseModel):
     end: float
 
 
+class DuetSection(BaseModel):
+    id: str = Field(min_length=1)
+    slot: Literal[0, 1]
+    phrase_ids: list[str] = Field(min_length=1)
+
+
 class Note(BaseModel):
     start: float
     end: float
@@ -74,6 +80,7 @@ class Song(BaseModel):
     lines: list[Line]
     phrases: list[Phrase]
     reference: Reference
+    duet_sections: list[DuetSection] | None = None
 
     @model_validator(mode="after")
     def check_timing(self):
@@ -83,11 +90,30 @@ class Song(BaseModel):
         for p in self.phrases:
             if not (0 <= p.start < p.end <= self.duration):
                 raise ValueError(f"phrase {p.id} outside clip duration")
-            if p.line_index >= len(self.lines):
+            if not 0 <= p.line_index < len(self.lines):
                 raise ValueError(f"phrase {p.id} points at a missing line")
-        for line in self.lines:
-            if not line.practice_text.strip():
-                raise ValueError("line missing practice_text")
+        for p in self.phrases:  # a gradeable line must be practicable; clip-edge lines have no phrase
+            if not self.lines[p.line_index].practice_text.strip():
+                raise ValueError(f"phrase {p.id} has a line without practice_text")
+        if self.duet_sections is not None:
+            section_ids = [section.id for section in self.duet_sections]
+            if len(section_ids) != len(set(section_ids)):
+                raise ValueError("duplicate duet section id")
+            ordered = sorted(self.phrases, key=lambda p: (p.start, p.end, p.id))
+            flattened = [pid for section in self.duet_sections for pid in section.phrase_ids]
+            if flattened != [p.id for p in ordered]:
+                raise ValueError("duet sections must cover every known phrase exactly once in time order")
+            line_sections = {}
+            by_id = {p.id: p for p in self.phrases}
+            previous_end = 0.0
+            for section in self.duet_sections:
+                phrases = [by_id[pid] for pid in section.phrase_ids]
+                if min(p.start for p in phrases) < previous_end:
+                    raise ValueError("duet sections cannot overlap in time")
+                previous_end = max(p.end for p in phrases)
+                for phrase in phrases:
+                    if line_sections.setdefault(phrase.line_index, section.id) != section.id:
+                        raise ValueError("all phrases of a lyric line must share one duet section")
         return self
 
 
@@ -98,14 +124,29 @@ class ClipSummary(BaseModel):
     artist: str
     duration: float
     synthetic: bool
+    reviewed: bool  # false for drafts: timings and notes not yet checked by ear
+
+
+class PhraseResultIn(BaseModel):
+    """What the browser submits per phrase. Any `rating` or `score` it also sends is ignored."""
+    phrase_id: str
+    pitch: float = Score100
+    timing: float | None = Field(default=None, ge=0, le=100)
+    coverage: float = Field(ge=0, le=1)
 
 
 class PhraseScore(BaseModel):
     phrase_id: str
     rating: Rating
     pitch: float = Score100
-    timing: float = Score100
+    timing: float | None = Field(default=None, ge=0, le=100)  # null: phrase starts mid-note, scored on pitch alone
+    score: float = Score100  # this phrase's 0-100 score; ratings and totals derive from it
     coverage: float = Field(ge=0, le=1)
+
+
+class TimeRange(BaseModel):
+    start: float
+    end: float
 
 
 class Score(BaseModel):
@@ -119,6 +160,9 @@ class Score(BaseModel):
     timing: float = Score100
     phrases: list[PhraseScore]
     coach_blurb: str | None = None  # filled by Gemini later
+    guided: bool = False  # guide vocals were audible during the turn (client-reported); such runs skip the leaderboard
+    range: TimeRange | None = None  # practice section (first phrase start .. last phrase end); null = full clip
+    duet: bool = False
 
 
 class WordFeedback(BaseModel):
@@ -132,6 +176,7 @@ class Practice(BaseModel):
     locale: str
     provider: str
     status: Literal["ok", "unavailable", "error"]
+    overall: float | None = None  # 0-100, automated and not validated by a fluent reviewer; null unless status ok
     words: list[WordFeedback]
 
 
