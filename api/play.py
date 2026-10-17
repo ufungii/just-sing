@@ -2,6 +2,7 @@
 rates phrases locally and submits the final phrase results once, with an idempotency key."""
 import hashlib
 import logging
+import math
 import os
 import secrets
 import uuid
@@ -9,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, or_, select, text, update
+from sqlalchemy import and_, case, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -18,7 +19,7 @@ from .auth import verify_bearer
 from .db import get_engine
 from .errors import ApiError
 from .clip_catalog import CATALOG
-from .models import PhraseResultIn, PhraseScore, Score
+from .models import PhraseResultIn, PhraseScore, Score, TimeRange
 from ml.scoring.config import SCORING_VERSION  # the one source of truth for the scoring version
 from ml.scoring.pitch import to_track
 from ml.scoring.score import finalize_turn, phrase_weights
@@ -57,6 +58,37 @@ def _weights(song) -> list[int]:
             to_track(song.reference.hz), [(p.id, p.start, p.end) for p in song.phrases],
             hop_seconds=song.reference.hop_seconds, excluded=[(e.start, e.end) for e in song.reference.excluded])
     return _weight_cache[key]
+
+
+RANGE_EPS = 0.05  # seconds of slack when matching phrase edges to the requested range
+
+
+def _included(song, rng: TimeRange | None) -> list:
+    """Phrases scored in this turn: all of them, or those fully inside [start, end] (within RANGE_EPS)."""
+    if rng is None:
+        return list(song.phrases)
+    if not (math.isfinite(rng.start) and math.isfinite(rng.end) and 0 <= rng.start < rng.end <= song.duration):
+        raise ApiError(422, "invalid_range", "range must satisfy 0 <= start < end <= clip duration.")
+    inc = [p for p in song.phrases if p.start >= rng.start - RANGE_EPS and p.end <= rng.end + RANGE_EPS]
+    if not inc:
+        raise ApiError(422, "invalid_range", "range must fully contain at least one phrase.")
+    return inc
+
+
+def _range_of(song, ids) -> TimeRange | None:
+    """Normalized range of a finished attempt, derived from the phrases it scored; null for the full clip."""
+    ids = set(ids)
+    inc = [p for p in song.phrases if p.id in ids]
+    if not inc or len(inc) == len(song.phrases):
+        return None
+    return TimeRange(start=min(p.start for p in inc), end=max(p.end for p in inc))
+
+
+def _started_range(attempt: TurnAttempt) -> TimeRange | None:
+    """The range frozen at begin. A started attempt keeps it in phrase_results as {"range": {...}}
+    (no migration); accepting the result replaces that with the phrase list."""
+    pr = attempt.phrase_results
+    return TimeRange(**pr["range"]) if isinstance(pr, dict) and pr.get("range") else None
 
 
 def get_db():
@@ -116,6 +148,7 @@ class MatchIn(BaseModel):
 class BeginIn(BaseModel):
     register: int = Field(0, description="semitones: -12, 0 or 12")
     calibration_offset: float | None = None  # seconds, from the latency setup step
+    range: TimeRange | None = None  # practice section, solo only; omitted = full clip
 
 
 class ResultIn(BaseModel):
@@ -212,15 +245,21 @@ def begin_turn(attempt_id: uuid.UUID, body: BeginIn, guest=Depends(current_guest
         raise ApiError(422, "invalid_register", "register must be -12, 0 or 12.")
     if attempt.state not in ("pending", "started"):
         raise ApiError(409, "attempt_closed", "This attempt already has a result.")
-    if attempt.state == "started":  # a repeated begin never extends the deadline or changes the register
-        if body.register != attempt.register:
-            raise ApiError(409, "attempt_already_started", "This turn already started with another register.")
+    song = _frozen_song(match)
+    if body.range is not None and match.mode != "solo":
+        raise ApiError(422, "invalid_range", "A practice range is only supported in solo matches.")
+    inc = _included(song, body.range)
+    rng = _range_of(song, [p.id for p in inc]) if body.range else None  # normalized to whole phrases
+    if attempt.state == "started":  # a repeated begin never extends the deadline or changes register/range
+        if body.register != attempt.register or rng != _started_range(attempt):
+            raise ApiError(409, "attempt_already_started", "This turn already started with another register or range.")
         return {"attempt_id": attempt.id, "state": attempt.state}
     now = datetime.now(timezone.utc)
     attempt.state, attempt.register = "started", body.register
     attempt.calibration_offset = body.calibration_offset
+    attempt.phrase_results = {"range": rng.model_dump()} if rng else None
     # Past this deadline the attempt is treated as lost (tab closed, connection gone): see retention.
-    attempt.started_at, attempt.deadline_at = now, now + timedelta(seconds=_frozen_song(match).duration) + RECONNECT_GRACE
+    attempt.started_at, attempt.deadline_at = now, now + timedelta(seconds=song.duration) + RECONNECT_GRACE
     s.commit()
     notify(s, match, "turn_started", attempt)
     return {"attempt_id": attempt.id, "state": attempt.state}
@@ -245,7 +284,10 @@ def _check_turn(s: Session, guest: GuestSession, match: Match, attempt: TurnAtte
 
 
 def _score(match: Match, a: TurnAttempt) -> Score:
-    return Score(mode="solo" if match.mode == "solo" else "battle", clip_id=match.clip_id, clip_version=match.clip_version,
+    song = CATALOG.get(match.clip_id)
+    rng = _range_of(song, [p["phrase_id"] for p in a.phrase_results]) \
+        if song and song.version == match.clip_version else None
+    return Score(range=rng, mode="solo" if match.mode == "solo" else "battle", clip_id=match.clip_id, clip_version=match.clip_version,
                  scoring_version=match.scoring_version, register=a.register, total=a.total,
                  pitch=a.pitch, timing=a.timing, phrases=[PhraseScore(**{"score": p.get("score", p["pitch"]), **p}) for p in a.phrase_results],
                  coach_blurb=a.coach_blurb)
@@ -273,14 +315,17 @@ def submit_result(attempt_id: uuid.UUID, body: ResultIn, idempotency_key: str = 
         raise ApiError(409, "attempt_invalidated", "This turn ran out of time; start a new one.")
 
     song = _frozen_song(match)
-    if sorted(p.phrase_id for p in body.phrases) != sorted(p.id for p in song.phrases):
-        raise ApiError(422, "phrase_mismatch", "Results must cover each phrase of the clip exactly once.")
+    rng = _started_range(attempt)
+    inc = _included(song, rng)
+    if sorted(p.phrase_id for p in body.phrases) != sorted(p.id for p in inc):
+        raise ApiError(422, "phrase_mismatch", "Results must cover each phrase of the clip (or chosen range) exactly once.")
+    keep = {p.id for p in inc}
 
     # Reference engine (ml/scoring): ignores any client-claimed score or rating and recomputes phrase
     # scores, ratings and totals with weights from our own manifest copy.
     try:
-        result = finalize_turn([p.model_dump() for p in body.phrases], _weights(song),
-                               expected_phrase_ids=[p.id for p in song.phrases], register=attempt.register)
+        result = finalize_turn([p.model_dump() for p in body.phrases], [w for p, w in zip(song.phrases, _weights(song)) if p.id in keep],
+                               expected_phrase_ids=[p.id for p in inc], register=attempt.register)
     except ValueError as e:
         raise ApiError(422, "invalid_result", str(e))
     attempt.pitch, attempt.timing, attempt.total = result["pitch"], result["timing"], result["total"]
@@ -363,8 +408,12 @@ def history(guest=Depends(current_guest), s: Session = Depends(get_db)):
         own_slot = 0 if m.mode == "solo" else None
         if m.room_id:
             own_slot = s.scalar(select(RoomMember.slot).where(RoomMember.room_id == m.room_id, RoomMember.guest_id == guest.id))
+        song = CATALOG.get(m.clip_id)
+        pr = s.scalar(select(TurnAttempt.phrase_results).where(
+            TurnAttempt.match_id == m.id, TurnAttempt.slot == own_slot, TurnAttempt.state == "accepted"))
+        rng = _range_of(song, [p["phrase_id"] for p in pr]) if pr and song and song.version == m.clip_version else None
         rows.append({"match_id": m.id, "clip_id": m.clip_id, "mode": m.mode, "created_at": m.created_at,
-                     "total": totals.get(own_slot),
+                     "total": totals.get(own_slot), "range": rng,
                      "players": [{"slot": k, "display_name": names[k], "total": totals.get(k)} for k in sorted(names)]})
     return rows
 
@@ -404,6 +453,9 @@ def leaderboard(clip_id: str, s: Session = Depends(get_db)):
         select(GuestSession.display_name, func.max(TurnAttempt.total).label("best"))
         .join(Match, Match.guest_id == GuestSession.id).join(TurnAttempt, TurnAttempt.match_id == Match.id)
         .where(Match.clip_id == clip_id, Match.clip_version == song.version, Match.mode == "solo",
-               TurnAttempt.state == "accepted", GuestSession.auth0_sub.is_not(None))
+               TurnAttempt.state == "accepted", GuestSession.auth0_sub.is_not(None),
+               # practice-section runs score a subset of phrases: not comparable, so full-clip results only
+               case((func.jsonb_typeof(TurnAttempt.phrase_results) == "array",
+                     func.jsonb_array_length(TurnAttempt.phrase_results)), else_=0) == len(song.phrases))
         .group_by(GuestSession.id).order_by(func.max(TurnAttempt.total).desc()).limit(20)).all()
     return [{"display_name": n, "total": t} for n, t in rows]

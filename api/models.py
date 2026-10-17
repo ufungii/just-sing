@@ -118,6 +118,11 @@ class PhraseScore(BaseModel):
     coverage: float = Field(ge=0, le=1)
 
 
+class TimeRange(BaseModel):
+    start: float
+    end: float
+
+
 class Score(BaseModel):
     mode: Literal["solo", "battle"]
     clip_id: str
@@ -129,6 +134,7 @@ class Score(BaseModel):
     timing: float = Score100
     phrases: list[PhraseScore]
     coach_blurb: str | None = None  # filled by Gemini later
+    range: TimeRange | None = None  # practice section (first phrase start .. last phrase end); null = full clip
 
 
 class WordFeedback(BaseModel):
