@@ -1,2 +1,2 @@
-/** Every top-level screen the app can show. Navigation is a single piece of state in App. */
-export type Screen = 'home' | 'solo' | 'practice' | 'battle' | 'history';
+/** The menu destinations on the home screen (each maps to a Route with no extra data). */
+export type Screen = 'solo' | 'practice' | 'battle' | 'history';
