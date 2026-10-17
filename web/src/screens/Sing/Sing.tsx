@@ -16,9 +16,10 @@ import type { PhraseScore, Register, Song } from '../../lib/types';
 import { useNav, type SingSetup } from '../../routes';
 import { aggregate, buildTargetTrack, displayNotes, phraseSettlesAt, phraseTotal, phraseWeights, registerRatio, scorePhrase, SCORING_CONFIG } from '../../scoring';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
+import { GuideControl } from '../../ui/GuideControl';
 import { Countdown, Judgement } from './Judgement';
 import { Lyrics } from './Lyrics';
-import { PitchLane } from './PitchLane';
+import { PitchLane, useLaneHeight } from './PitchLane';
 import './Sing.css';
 
 type Phase =
@@ -58,6 +59,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
   const [showRoman, setShowRoman] = useState(true);
   const [showTrans, setShowTrans] = useState(true);
+  const laneHeight = useLaneHeight();
   const [guide, setGuide] = useState(loadGuide);
   const [hasGuide, setHasGuide] = useState(false);
 
@@ -298,7 +300,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
 
       <div className="sing-stage">
         {song && target ? (
-          <PitchLane song={song} notes={notes} target={target} getTime={getTime} userHz={engineRef.current?.tracker.hz ?? NO_FRAMES} ratings={ratings} />
+          <PitchLane height={laneHeight} song={song} notes={notes} target={target} getTime={getTime} userHz={engineRef.current?.tracker.hz ?? NO_FRAMES} ratings={ratings} />
         ) : (
           <div className="sing-lane sing-lane--empty" />
         )}
@@ -333,20 +335,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
             </PixelButton>
           </div>
           {hasGuide && (
-            <div className="sing-guide" title="Hear the original vocals while you sing (use headphones)">
-              <PixelButton size="sm" tone="paper" aria-pressed={guide.on} onClick={() => setGuide((g) => ({ ...g, on: !g.on }))}>
-                GUIDE VOCALS
-              </PixelButton>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={Math.round(guide.vol * 100)}
-                disabled={!guide.on}
-                aria-label="Guide vocal volume"
-                onChange={(e) => setGuide({ on: true, vol: Number(e.target.value) / 100 })}
-              />
-            </div>
+            <GuideControl on={guide.on} volume={guide.vol} onToggle={() => setGuide((g) => ({ ...g, on: !g.on }))} onVolume={(vol) => setGuide({ on: true, vol })} />
           )}
           <div className="sing-meter" title="Mic level" aria-label="Mic level">
             <span className="sing-meter__label">MIC</span>
