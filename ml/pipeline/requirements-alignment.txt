@@ -1,0 +1,6 @@
+# Install into ml/pipeline/.venv alongside requirements-pitch.txt.
+faster-whisper==1.2.1
+# Korean CTC forced alignment (after the draft text is corrected).
+transformers==4.57.6
+uroman==1.3.1.1 # MMS-FA normalization for mixed Korean/English text
+korean-romanizer==0.28.0 # Offline display romanization (Revised Romanization)
