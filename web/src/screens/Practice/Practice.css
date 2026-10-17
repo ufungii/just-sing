@@ -1,0 +1,252 @@
+/*
+ * Spoken practice ("SAY IT RIGHT"). Mint is this mode's colour, matching its home card.
+ * Builds on the shared kit in ui/ui.css; everything here is prefixed practice-.
+ */
+
+.practice-intro {
+  margin: 0;
+  font-size: 18px;
+}
+
+.practice-muted { color: var(--ink-rose); font-size: 16px; }
+
+.practice-kao { font-family: var(--font-kao); white-space: nowrap; }
+
+/* ---------- layout ---------- */
+
+.practice-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) 1fr;
+  gap: 32px;
+  align-items: start;
+}
+.practice-main { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+
+/* ---------- 1 · pick a line ---------- */
+
+.practice-pick { display: flex; flex-direction: column; gap: 14px; }
+
+.practice-field { display: flex; flex-direction: column; gap: 10px; }
+.practice-field__label,
+.practice-take__label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.practice-clipname { margin: 0; font-size: 18px; }
+.practice-clipname span { color: var(--ink-rose); }
+
+.practice-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 460px;
+  overflow-y: auto;
+  padding-right: 8px; /* room for the selected row's shadow */
+  padding-bottom: 6px;
+}
+
+/* A small mint keycap row per phrase. */
+.practice-line {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: var(--border-thin) solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: left;
+  font-family: var(--font-body);
+  box-shadow: inset 3px 3px 0 #ffffff, inset -3px -4px 0 #f3d5e6, 4px 5px 0 var(--ink);
+  transition: transform 0.08s steps(2), box-shadow 0.08s steps(2);
+}
+.practice-line:hover { transform: translate(-1px, -2px); box-shadow: inset 3px 3px 0 #ffffff, inset -3px -4px 0 #f3d5e6, 5px 7px 0 var(--ink); }
+.practice-line:active { transform: translate(3px, 4px); box-shadow: 1px 1px 0 var(--ink); }
+.practice-line[aria-pressed='true'] {
+  background: var(--mint);
+  box-shadow: inset 3px 3px 0 var(--mint-light), inset -3px -4px 0 var(--mint-dark), 4px 5px 0 var(--ink);
+}
+.practice-line__n {
+  grid-row: span 2;
+  align-self: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.practice-line[aria-pressed='true'] .practice-line__n { color: var(--ink); }
+.practice-line__ko { font-family: var(--font-ko); font-size: 22px; line-height: 1.2; }
+.practice-line__ro { font-size: 14px; color: var(--ink-rose); }
+
+/* ---------- 2 · say this ---------- */
+
+.practice-card { text-align: center; padding: 28px 28px 24px; }
+.practice-ko {
+  margin: 4px 0 10px;
+  font-family: var(--font-ko);
+  font-size: 64px;
+  line-height: 1.15;
+  word-break: keep-all;
+  text-shadow: 4px 4px 0 var(--mint-light);
+}
+.practice-roman { margin: 0 0 4px; font-size: 22px; letter-spacing: 0.02em; }
+.practice-trans { margin: 0; font-size: 18px; color: var(--ink-rose); }
+.practice-toggles { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; margin-top: 18px; }
+.practice-toggles .ui-key[aria-pressed='true'] { --face: var(--butter); --bevel: #fff0a8; --side: #c9a400; }
+.practice-toggles .ui-key[aria-pressed='false'] { opacity: 0.75; text-decoration: line-through; }
+
+/* ---------- 3 · record ---------- */
+
+.practice-rec { display: flex; flex-direction: column; gap: 18px; }
+.practice-rec__controls { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+.practice-rec__side { flex: 1 1 280px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.practice-rec__status { margin: 0; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+
+/* Big round pixel REC keycap (octagon for the pixel look). */
+.practice-recbtn {
+  --face: var(--hot);
+  --bevel: var(--hot-light);
+  --side: var(--hot-dark);
+  position: relative;
+  flex: none;
+  width: 132px;
+  height: 132px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  background: var(--ink);
+  clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+  color: var(--paper);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  transition: transform 0.08s steps(2);
+}
+/* The face sits inside the ink octagon so the outline stays a crisp pixel ring. */
+.practice-recbtn::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  background: var(--face);
+  clip-path: inherit;
+  box-shadow: inset 8px 8px 0 var(--bevel), inset -8px -10px 0 var(--side);
+}
+.practice-recbtn > * { position: relative; }
+.practice-recbtn:hover:not(:disabled) { transform: translate(-2px, -3px); }
+.practice-recbtn:active:not(:disabled) { transform: translate(3px, 4px); }
+.practice-recbtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.practice-recbtn:focus-visible { outline: 4px solid var(--sky-dark); outline-offset: 4px; }
+
+.practice-recbtn__icon { width: 26px; height: 26px; background: var(--paper); box-shadow: 0 0 0 4px var(--ink); border-radius: 50%; }
+.practice-recbtn.is-recording { --face: var(--ink); --bevel: #5a3a60; --side: #22122a; }
+.practice-recbtn.is-recording .practice-recbtn__icon { border-radius: 0; background: var(--hot); animation: practice-blink 1s steps(2) infinite; }
+
+/* clip-path eats box-shadow, so the solid plum extrude comes from a drop-shadow on a wrapper. */
+.practice-recwrap { flex: none; filter: drop-shadow(6px 8px 0 var(--ink)); }
+
+@keyframes practice-blink { 50% { opacity: 0.35; } }
+
+.practice-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  background: var(--hot);
+  animation: practice-blink 1s steps(2) infinite;
+}
+
+/* Pixel level meter: chunky bars, mint up to the last three which turn hot. */
+.practice-meter { display: flex; align-items: flex-end; gap: 5px; height: 44px; }
+.practice-meter__bar {
+  width: 14px;
+  height: 100%;
+  border: 3px solid var(--ink);
+  background: var(--paper);
+}
+.practice-meter__bar:nth-child(-n + 4) { height: 40%; }
+.practice-meter__bar:nth-child(n + 5):nth-child(-n + 9) { height: 70%; }
+.practice-meter__bar.is-on { background: var(--mint); box-shadow: inset 2px 2px 0 var(--mint-light); }
+.practice-meter__bar.is-on.is-peak { background: var(--hot); box-shadow: inset 2px 2px 0 var(--hot-light); }
+
+.practice-timebar {
+  width: min(320px, 100%);
+  height: 16px;
+  border: 3px solid var(--ink);
+  background: var(--paper);
+}
+.practice-timebar span { display: block; height: 100%; background: var(--mint-dark); }
+
+.practice-take {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border: var(--border-thin) dashed var(--ink);
+  background: var(--mint-light);
+}
+.practice-take__audio { flex: 1 1 240px; min-width: 200px; height: 40px; }
+
+/* ---------- 4 · check it ---------- */
+
+.practice-check { display: flex; flex-direction: column; gap: 18px; }
+.practice-check__row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+
+.practice-words { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 16px; }
+
+/* One chunky chip per word, coloured by its display band. */
+.practice-word {
+  --face: var(--paper);
+  --bevel: #ffffff;
+  --side: #f3d5e6;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 14px;
+  min-width: 150px;
+  padding: 12px 16px;
+  border: var(--border-thin) solid var(--ink);
+  background: var(--face);
+  box-shadow: inset 4px 4px 0 var(--bevel), inset -4px -5px 0 var(--side), 5px 6px 0 var(--ink);
+}
+.practice-word--good { --face: var(--mint); --bevel: var(--mint-light); --side: var(--mint-dark); }
+.practice-word--mid { --face: var(--butter); --bevel: #fff0a8; --side: #c9a400; }
+.practice-word--low { --face: var(--pink); --bevel: var(--pink-light); --side: var(--pink-dark); }
+.practice-word__ko { font-family: var(--font-ko); font-size: 30px; line-height: 1.1; }
+.practice-word__label { grid-column: 1; font-family: var(--font-display); font-weight: 700; font-size: 13px; }
+.practice-word__score {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 30px;
+}
+
+.practice-disclaimer {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 3px dashed var(--ink);
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+
+/* ---------- narrower windows ---------- */
+
+@media (max-width: 1180px) {
+  .practice-grid { grid-template-columns: minmax(230px, 280px) 1fr; gap: 26px; }
+  .practice-ko { font-size: 54px; }
+  .practice-recbtn { width: 116px; height: 116px; }
+}
+@media (max-width: 900px) {
+  .practice-grid { grid-template-columns: 1fr; gap: 28px; }
+  .practice-lines { max-height: 220px; }
+  .practice-ko { font-size: 52px; }
+}

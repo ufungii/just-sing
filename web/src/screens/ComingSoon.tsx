@@ -1,36 +1,29 @@
-import type { Screen } from '../screens';
+import { useNav } from '../routes';
+import { Notice, Panel, PixelButton, ScreenShell } from '../ui';
 
-const NAMES: Record<Exclude<Screen, 'home'>, string> = {
-  solo: 'Solo Sing',
-  practice: 'Say It Right',
-  battle: '1P vs 2P',
-  history: 'History',
-};
-
-/** Placeholder for screens that are not built yet, so the menu never leads to a dead end. */
-export function ComingSoon({ screen, onBack }: { screen: Exclude<Screen, 'home'>; onBack: () => void }) {
+/**
+ * 1P vs 2P battle. Deferred on purpose: CLAUDE.md says no battle UI until solo karaoke and
+ * spoken practice work end to end. The menu card stays so the plan is visible.
+ */
+export function ComingSoon() {
+  const nav = useNav();
   return (
-    <main style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, textAlign: 'center' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
-        <span style={{ fontFamily: 'var(--font-kao)', fontSize: 32, color: 'var(--hot)' }}>(,,&gt;﹏&lt;,,)</span>
-        <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 40 }}>{NAMES[screen]}</h1>
-        <p style={{ margin: 0, fontSize: 20 }}>still under construction <span style={{ fontFamily: 'var(--font-kao)' }}>☆˚･♡</span></p>
-        <button
-          type="button"
-          onClick={onBack}
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontWeight: 700,
-            fontSize: 18,
-            padding: '12px 22px',
-            background: 'var(--paper)',
-            border: 'var(--border-thin) solid var(--ink)',
-            boxShadow: '6px 7px 0 var(--ink)',
-          }}
-        >
-          ◀ BACK
-        </button>
-      </div>
-    </main>
+    <ScreenShell title="1P VS 2P" kao="(｀∀´)ﾉ☆ヽ(＾▽＾)">
+      <Panel tone="sky" label="COMING SOON">
+        <p style={{ margin: '0 0 18px', fontSize: 20 }}>
+          Two singers take turns on the same clip under the same rules, and the higher total wins.
+          It unlocks once solo singing and Say It Right are finished.
+        </p>
+        <Notice tone="info">Warm up in the meantime ♪</Notice>
+        <div style={{ display: 'flex', gap: 18, marginTop: 22, flexWrap: 'wrap' }}>
+          <PixelButton tone="hot" size="lg" onClick={() => nav.go({ name: 'solo' })}>
+            ♪ SOLO SING
+          </PixelButton>
+          <PixelButton tone="mint" size="lg" onClick={() => nav.go({ name: 'practice' })}>
+            SAY IT RIGHT
+          </PixelButton>
+        </div>
+      </Panel>
+    </ScreenShell>
   );
 }
