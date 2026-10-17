@@ -101,6 +101,10 @@ from .rooms import router as rooms_router  # noqa: E402
 
 app.include_router(rooms_router)
 
+from .coach import router as coach_router  # noqa: E402
+
+app.include_router(coach_router)
+
 
 # ---- built frontend, served from the same origin so the guest cookie and WebSockets need no CORS ----
 
