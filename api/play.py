@@ -188,6 +188,10 @@ def begin_turn(attempt_id: uuid.UUID, body: BeginIn, guest=Depends(current_guest
         raise ApiError(422, "invalid_register", "register must be -12, 0 or 12.")
     if attempt.state not in ("pending", "started"):
         raise ApiError(409, "attempt_closed", "This attempt already has a result.")
+    if attempt.state == "started":  # a repeated begin never extends the deadline or changes the register
+        if body.register != attempt.register:
+            raise ApiError(409, "attempt_already_started", "This turn already started with another register.")
+        return {"attempt_id": attempt.id, "state": attempt.state}
     now = datetime.now(timezone.utc)
     attempt.state, attempt.register = "started", body.register
     attempt.calibration_offset = body.calibration_offset
@@ -229,6 +233,11 @@ def submit_result(attempt_id: uuid.UUID, body: ResultIn, idempotency_key: str = 
     if attempt.state != "started":
         raise ApiError(409, "attempt_not_started", "Begin the attempt before submitting a result.")
     _check_turn(s, guest, match, attempt)
+    if attempt.deadline_at < datetime.now(timezone.utc):  # too late: same outcome as the recovery tick
+        attempt.state, match.state = "invalidated", "retry_required"
+        s.commit()
+        notify(s, match, "retry_required")
+        raise ApiError(409, "attempt_invalidated", "This turn ran out of time; start a new one.")
 
     durations = {p.id: p.end - p.start for p in CATALOG[match.clip_id].phrases}
     if sorted(p.phrase_id for p in body.phrases) != sorted(durations):
