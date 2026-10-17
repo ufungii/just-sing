@@ -35,6 +35,33 @@ If the URL can't be reached, the window shows a small offline page with a
 Retry button instead of a blank screen. While running from source,
 `Ctrl/Cmd+R` reloads the app and `Ctrl/Cmd+Shift+I` opens DevTools.
 
+## Linux AppImage (x86-64)
+
+From `desktop/`, install dependencies and build:
+
+```bash
+npm ci
+JUST_SING_URL=https://your-server.example npm run build:appimage
+chmod +x dist/Just-Sing-0.1.0-x86_64.AppImage
+./dist/Just-Sing-0.1.0-x86_64.AppImage
+```
+
+The build remembers that server URL, so double-clicking the AppImage opens it.
+Without a build-time URL, the packaged app defaults to `http://localhost:8000`.
+The API and built frontend must already be running on the chosen server; the
+AppImage contains only the desktop shell, not Python, song assets, or credentials.
+The output stays in gitignored `desktop/dist/`.
+
+To use a different server without rebuilding:
+
+```bash
+JUST_SING_URL=https://another-server.example ./dist/Just-Sing-0.1.0-x86_64.AppImage
+```
+
+A Quick Tunnel hostname changes when the tunnel restarts; rebuild with the new
+URL or use this environment override. If your Linux distribution cannot mount
+AppImages through FUSE, run with `--appimage-extract-and-run`.
+
 ## What the web app sees
 
 The preload script exposes `window.electronAPI = { isDesktop: true, platform }`

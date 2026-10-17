@@ -26,6 +26,14 @@ its lyrics. Existing song IDs are never overwritten. The recipe keeps original
 htdemucs vocals and masters only the fine-tuned residual instrumental. To reuse
 selected stems, supply `--vocals PATH --instrumental PATH` instead of `--clip`.
 
+For Linux/macOS, invoke the environment's `bin/python` instead of
+`Scripts/python.exe`. `--separation-python /absolute/path/to/python` selects
+the Demucs environment; `JUST_SING_SEPARATION_PYTHON` supplies the same default.
+Otherwise the runner looks in `ml/pipeline/separation/.venv` on either platform.
+`--data-dir PATH` selects an output catalog root, and `--language ko|en`
+sets the manifest language (default Korean). These options also support the
+local author's raw-audio import jobs without loading models in its web server.
+
 ## Code layout
 
 | Module | Responsibility |

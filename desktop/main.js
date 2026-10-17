@@ -12,7 +12,9 @@ const { app, BrowserWindow, Menu, session, shell } = require('electron');
 // on :8000). For the demo, set JUST_SING_URL to the shared server's public
 // HTTPS URL; the mic only works in a secure context (HTTPS or localhost).
 function getAppUrl() {
-  return process.env.JUST_SING_URL || 'http://localhost:5173';
+  return process.env.JUST_SING_URL || (app.isPackaged
+    ? require('./package.json').justSingUrl || 'http://localhost:8000'
+    : 'http://localhost:5173');
 }
 
 const APP_URL = getAppUrl();

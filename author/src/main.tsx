@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { ClipTimeline } from '../../web/src/components/timeline/ClipTimeline';
 import type { Song, Line, DuetSection } from '../../web/src/lib/types';
 import './style.css';
+import { AddSong } from './AddSong';
+import { CropWorkspace, TimelineWaveform } from '../../web/src/components/timeline/CropWorkspace';
+import type { TimeRange } from '../../web/src/lib/types';
 
 type Loaded = { song: Song; revision: string; review: { reviewed?: boolean; author_pending_rebuild?: boolean } };
 async function api(path: string, body?: unknown) {
@@ -25,7 +28,8 @@ function App() {
   const [time, setTime] = useState(0), [playing, setPlaying] = useState(false);
   const [mode, setMode] = useState('vocals'), [snap, setSnap] = useState(true), [tap, setTap] = useState(false);
   const [peaks, setPeaks] = useState<number[]>([]);
-  const playback = useRef<{ctx: AudioContext; start: number; offset: number; raf: number} | null>(null);
+  const [workspace,setWorkspace]=useState(false);
+  const playback = useRef<{ctx: AudioContext; start: number; offset: number; end:number; raf: number} | null>(null);
   const buffers = useRef<{vocals: AudioBuffer; instrumental: AudioBuffer} | null>(null);
   const generation = useRef(0);
   const tapIndex = useRef(0);
@@ -81,28 +85,28 @@ function App() {
     else { setPast(past.slice(0,-1)); setFuture([...future, song]); }
     setSong(target); setDirty(true);
   }
-  async function play(from = time) {
+  async function play(from = time, end = song?.duration ?? 0) {
     stop(); if (!song || !buffers.current) return;
     try {
       const ctx = new AudioContext(); await ctx.resume();
       const offset = Math.min(from, song.duration - 0.001);
-      const p = {ctx, offset, start: ctx.currentTime + 0.04, raf: 0}; playback.current = p;
+      const p = {ctx, offset, end:Math.min(end,song.duration), start: ctx.currentTime + 0.04, raf: 0}; playback.current = p;
       for (const role of (mode === 'both' ? ['vocals','instrumental'] : [mode]) as ('vocals'|'instrumental')[]) {
         const source = ctx.createBufferSource(), gain = ctx.createGain(); source.buffer = buffers.current[role];
-        gain.gain.value = mode === 'both' ? 0.5 : 1; source.connect(gain).connect(ctx.destination); source.start(p.start, offset);
+        gain.gain.value = mode === 'both' ? 0.5 : 1; source.connect(gain).connect(ctx.destination); source.start(p.start, offset,p.end-offset);
       }
       setPlaying(true);
       const tick = () => {
         if (playback.current !== p) return;
         const current = Math.max(offset, p.offset + ctx.currentTime - p.start); setTime(current);
-        if (current >= song.duration) stop(); else p.raf = requestAnimationFrame(tick);
+        if (current >= p.end) stop(); else p.raf = requestAnimationFrame(tick);
       }; tick();
     } catch (e) { stop(); setError(String(e)); }
   }
   function seek(t: number) { if (playing) void play(t); else setTime(t); }
-  function moveLine(index: number, start: number, entranceOnly = false) {
-    const current = songRef.current; if (!current) return;
-    const next = structuredClone(current), line = next.lines[index], old = {...line};
+  function linePlacement(index: number, start: number, entranceOnly = false) {
+    const current = songRef.current!;
+    const old = current.lines[index];
     let value = start;
     if (snap) {
       const {hz, hop_seconds: hop} = current.reference;
@@ -112,7 +116,14 @@ function App() {
     }
     const min = current.lines[index-1]?.end ?? 0, maxEnd = current.lines[index+1]?.start ?? current.duration;
     const end = entranceOnly ? old.end : value + old.end - old.start;
-    if (value < min || end > maxEnd || value >= end) { setError('Line would overlap a neighbor or exceed the clip. Edit its end first.'); return; }
+    return {start:value, end, valid:value>=min && end<=maxEnd && value<end};
+  }
+  function moveLine(index: number, start: number, entranceOnly = false) {
+    const current = songRef.current; if (!current) return;
+    const placement = linePlacement(index,start,entranceOnly);
+    if (!placement.valid) { setError('Line would overlap a neighbor or exceed the clip. Edit its end first.'); return; }
+    const next = structuredClone(current), line = next.lines[index], old = {...line};
+    const value=placement.start, end=placement.end;
     line.start = value; line.end = end;
     const ratio = (end-value)/(old.end-old.start);
     line.words = line.words.map((w) => ({...w, start:value+(w.start-old.start)*ratio, end:value+(w.end-old.start)*ratio}));
@@ -140,6 +151,12 @@ function App() {
       setLoaded(result); setSong(result.song); setDirty(false); setPast([]); setFuture([]);
       setStatus(name === 'save' ? 'Saved corrections with backups. Rebuild to publish them.' : name === 'rebuild' ? 'Rebuilt manifest. Listening review still required.' : 'Marked reviewed by you.');
     } catch (e) { setError(String(e)); } finally { setBusy(false); }
+  }
+  async function saveClip(id:string,title:string,range:TimeRange){
+    if(!loaded||!song)return;
+    const result:Loaded=await api(`/${song.id}/crop`,{id,title,start:range.start,end:range.end,revision:loaded.revision});
+    setWorkspace(false);setCatalog(await api(''));await load(result.song.id);
+    setStatus('New short clip created as a draft. Review it before marking reviewed.');
   }
   function assign(slot: 0|1) {
     if (!song) return;
@@ -176,10 +193,10 @@ function App() {
     const lines = [...new Set(song.phrases.map((p) => p.line_index))]; return `Player ${Math.floor(lines.indexOf(index)/3)%2+1} (default)`;
   };
   const lineIndex = selected.at(-1) ?? 0, line = song?.lines[lineIndex];
-  const pitch = song?.reference.hz.flatMap((hz,i) => hz == null ? [] : [[i*song.reference.hop_seconds,hz]]) ?? [];
   return <main>
     <h1>Song author · local review</h1>
     <p>Listen, correct, Save, then Rebuild. Review is a separate human decision. No autosave.</p>
+    <AddSong disabled={busy || dirty} onOpen={async (id) => { setCatalog(await api('')); await load(id); }}/>
     <label>Song <select aria-label="Song" disabled={busy} value={song?.id ?? ''} onChange={(e) => void load(e.target.value)}>
       <option value="" disabled>Choose a song</option>{catalog.map((s) => <option key={s.id} value={s.id}>{s.artist} · {s.title}</option>)}
     </select></label>
@@ -188,6 +205,7 @@ function App() {
       <button disabled={!song || busy} onClick={() => void action('save')}>Save</button>
       <button disabled={!song || busy || dirty} onClick={() => void action('rebuild')}>Rebuild</button>
       <button disabled={!song || busy || dirty || loaded?.review.author_pending_rebuild} onClick={() => void action('review')}>Mark reviewed</button>
+      <button disabled={!song||busy} onClick={()=>{stop();setWorkspace(true);}}>Open timing / crop workspace</button>
       <span>{dirty ? 'Unsaved edits' : loaded?.review.reviewed ? 'Reviewed' : 'Draft'}</span>
     </div>
     <p role="status">{status}</p>{error && <p role="alert">{error}</p>}
@@ -202,11 +220,9 @@ function App() {
       <ClipTimeline duration={song.duration} phrases={song.phrases} lines={song.lines} range={null} playhead={time}
         selectedLines={selected} lineLabels={song.lines.map((_,i) => ownerFor(i))} onSeek={seek}
         onLineSelect={(i, additive) => setSelected(additive ? selected.includes(i) ? selected.filter((n) => n!==i) : [...selected,i] : [i])}
-        onLineMove={moveLine} overlay={<svg className="analysis" viewBox="0 0 1800 150" preserveAspectRatio="none" aria-label="Vocal waveform and reference pitch">
-          {peaks.map((v,i) => <line key={i} x1={i*1800/peaks.length} x2={i*1800/peaks.length} y1={75-v*65} y2={75+v*65} stroke="#4a8093"/>)}
-          {pitch.map(([t,hz],i) => <circle key={i} cx={t/song.duration*1800} cy={140-Math.max(0,Math.min(1,Math.log2(hz/65)/Math.log2(1000/65)))*130} r="1.5" fill="#ba215e"/>)}
-        </svg>}/>
-      <p>Click a line to seek/select. Ctrl/Shift-click selects several. Drag a lyric block to move it. Pink dots: reference pitch (65–1000 Hz, logarithmic).</p>
+        onLineMove={moveLine} onLineMovePreview={linePlacement}
+        overlay={<TimelineWaveform peaks={peaks} reference={song.reference} duration={song.duration}/>}/>
+      <p>Click a line to seek/select. Ctrl/Shift-click selects several. Drag a lyric block to move it. Pink line: reference pitch (65–1000 Hz, logarithmic).</p>
       <div className="toolbar"><button className="p1" onClick={() => assign(0)}>Assign Player 1</button><button className="p2" onClick={() => assign(1)}>Assign Player 2</button>
         <button onClick={() => {const next=structuredClone(song); delete next.duet_sections; edit(next);}}>Use default distribution</button></div>
       <div className="columns"><section aria-label="Lyric lines"><h2>Lyrics and distribution</h2>
@@ -232,6 +248,28 @@ function App() {
       }}/></label>)}<button onClick={() => {const next=structuredClone(song);next.reference.excluded.splice(i,1);edit(next);}}>Remove</button></div>)}
       <button onClick={() => {const next=structuredClone(song); next.reference.excluded.push({start:Math.min(time,song.duration-0.1),end:Math.min(song.duration,time+1),reason:'Listening review'});edit(next);}}>Add exclusion at playhead</button>
       </section></div>
+      {workspace&&<CropWorkspace song={song} range={null} author readOnly={busy} onClose={()=>{stop();setWorkspace(false);}}
+        onSaveClip={saveClip} saveDisabled={busy||dirty||!!loaded?.review.author_pending_rebuild}
+        onPreview={(range,from)=>void play(from??range.start,range.end)} onStop={stop} playing={playing} playhead={time}
+        peaks={peaks} selectedLines={selected} lineLabels={song.lines.map((_,i)=>ownerFor(i))}
+        onLineSelect={(i,additive)=>setSelected(additive?selected.includes(i)?selected.filter(n=>n!==i):[...selected,i]:[i])}
+        onLineMove={moveLine} onLineMovePreview={linePlacement}
+        editor={<>
+          <div className="toolbar"><label>Preview mix<select aria-label="Workspace playback mix" value={mode} onChange={e=>{stop();setMode(e.target.value);}}>
+            <option value="vocals">Vocals</option><option value="instrumental">Instrumental</option><option value="both">Both</option></select></label>
+            <label><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/> Snap moves to voiced onsets (150 ms)</label>
+            <button disabled={!past.length||busy} onClick={()=>history(false)}>Undo edit</button><button disabled={!future.length||busy} onClick={()=>history(true)}>Redo edit</button></div>
+          <div className="toolbar"><button disabled={busy} onClick={()=>void action('save')}>Save lyric edits</button><button disabled={busy||dirty} onClick={()=>void action('rebuild')}>Rebuild saved edits</button>
+            <button onClick={()=>assign(0)}>Assign Player 1</button><button onClick={()=>assign(1)}>Assign Player 2</button></div>
+          <p>{dirty?'Unsaved lyric/timing edits':loaded?.review.author_pending_rebuild?'Saved; rebuild before creating a clip':'Lyric/timing edits saved'}</p>
+          {error&&<p role="alert">{error}</p>}
+          {line&&<><h3>Selected line {lineIndex+1}</h3>
+            <label>Original text<textarea aria-label="Workspace original text" value={line.text} onChange={e=>updateLine(lineIndex,{text:e.target.value})}/></label><p>{line.romanized}</p>
+            <label>Line start<input aria-label="Workspace line start" type="number" step=".01" value={line.start} onChange={e=>moveLine(lineIndex,Number(e.target.value),true)}/></label>
+            <label>Line end<input aria-label="Workspace line end" type="number" step=".01" value={line.end} onChange={e=>{const next=structuredClone(song);next.lines[lineIndex].end=Number(e.target.value);edit(next);}}/></label>
+            <h4>Scored phrases · include held endings</h4>{song.phrases.filter(p=>p.line_index===lineIndex).map(p=><div key={p.id}>{p.id}{(['start','end'] as const).map(edge=><label key={edge}>{edge}<input aria-label={`Workspace phrase ${p.id} ${edge}`} type="number" step=".01" value={p[edge]} onChange={e=>{const next=structuredClone(song);next.phrases.find(v=>v.id===p.id)![edge]=Number(e.target.value);edit(next);}}/></label>)}</div>)}
+          </>}
+        </>}/>}
     </>}
   </main>;
 }
