@@ -31,90 +31,53 @@
 }
 .solo-small { font-size: 14px; }
 
-/* ---------- song cards ---------- */
+/* ---------- song stage (solo): ribbon, jacket + wheel, then the setup row ---------- */
 
-.solo-clips {
+.solo-ribbon {
   display: flex;
-  flex-direction: column;
-  gap: 18px;
-  margin: 0;
-  padding: 0 10px 10px 0;
-  list-style: none;
-}
-
-.solo-clip {
-  --face: var(--paper);
-  --bevel: #ffffff;
-  --side: #f3d5e6;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  width: 100%;
-  padding: 14px 18px 16px;
-  border: var(--border-thin) solid var(--ink);
-  background: var(--face);
-  color: var(--ink);
-  text-align: left;
+  align-items: stretch;
+  align-self: flex-start;
+  min-height: 54px;
+  border: var(--border) solid var(--ink);
+  background: var(--paper);
+  transform: rotate(-1deg);
   box-shadow:
-    inset 4px 4px 0 var(--bevel),
-    inset -4px -6px 0 var(--side),
-    6px 8px 0 var(--ink);
-  transition: transform 0.08s steps(2), box-shadow 0.08s steps(2);
+    inset 4px 4px 0 #ffffff,
+    inset -4px -6px 0 #f3d5e6,
+    8px 10px 0 var(--ink);
 }
-.solo-clip:hover {
-  transform: translate(-2px, -3px);
-  box-shadow:
-    inset 4px 4px 0 var(--bevel),
-    inset -4px -6px 0 var(--side),
-    8px 11px 0 var(--ink);
-}
-.solo-clip:active {
-  transform: translate(5px, 7px);
-  box-shadow:
-    inset 4px 4px 0 var(--bevel),
-    inset -4px -6px 0 var(--side),
-    1px 1px 0 var(--ink);
-}
-.solo-clip.is-selected {
-  --face: var(--butter);
-  --bevel: #fff0a8;
-  --side: #c9a400;
-  transform: translate(-2px, -3px);
-  box-shadow:
-    inset 4px 4px 0 var(--bevel),
-    inset -4px -6px 0 var(--side),
-    8px 11px 0 var(--ink);
-}
-.solo-clip:focus-visible,
-.solo-tap:focus-visible,
-.solo-input:focus-visible {
-  outline: 4px dashed var(--hot);
-  outline-offset: 5px;
-}
-
-.solo-clip__title { font-family: var(--font-display); font-weight: 700; font-size: 20px; line-height: 1.1; }
-.solo-clip__artist { font-size: 17px; }
-.solo-clip__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-top: 4px;
+.solo-ribbon > span { display: flex; align-items: center; padding: 0 18px; }
+.solo-ribbon__stage {
+  background: var(--hot);
+  color: var(--paper);
+  border-right: var(--border) solid var(--ink);
   font-family: var(--font-display);
-  font-size: 13px;
-}
-.solo-clip__check { color: var(--hot-dark); }
-
-.solo-tag {
-  padding: 2px 8px;
-  border: 3px solid var(--ink);
-  background: var(--lav-light);
-  font-family: var(--font-display);
-  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  font-size: 14px;
 }
+.solo-ribbon__title { font-family: var(--font-display); font-weight: 700; font-size: 26px; }
+.solo-ribbon__ko { gap: 8px; font-family: var(--font-ko); font-size: 22px; color: var(--hot-dark); }
+
+.solo-stage__row {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+  gap: 36px;
+  align-items: start;
+}
+
+/* Setup row: the three setup panels side by side, START underneath. */
+.solo-grid--setup {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: none;
+  grid-template-areas: 'side' 'go';
+}
+.solo-grid--setup .solo-side {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  align-items: stretch;
+}
+.solo-grid--setup .solo-go { flex-direction: row; align-items: center; justify-content: flex-end; }
+.solo-grid--setup .solo-start { min-width: 320px; }
 
 /* ---------- name + range ---------- */
 
@@ -247,6 +210,9 @@
 }
 
 @media (max-width: 860px) {
+  .solo-stage__row { grid-template-columns: minmax(0, 1fr); }
+  .solo-grid--setup .solo-side { grid-template-columns: minmax(0, 1fr); }
+  .solo-grid--setup .solo-go { flex-direction: column; align-items: stretch; }
   .solo-grid {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;

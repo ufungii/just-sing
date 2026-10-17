@@ -61,6 +61,7 @@ export interface SingResult {
 
 export type Route =
   | { name: 'home' }
+  | { name: 'zibran' }
   | { name: 'solo' }
   | { name: 'sing'; setup: SingSetup }
   | { name: 'results'; result: SingResult }

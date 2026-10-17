@@ -1,5 +1,8 @@
+import { nameEasterEgg } from '../EasterEgg/name';
 import { useEffect, useState } from 'react';
-import { ApiError, asGuest, retryTurn, savedName } from '../../lib/api';
+import { ApiError, asGuest, retryTurn } from '../../lib/api';
+import { getPlayer, usePlayers } from '../../lib/players';
+import { PlayerPicker } from '../../components/players/PlayerPicker';
 import {
   abortRoom, connectRoom, createRoom, getRoom, joinRoom, leaveRoom, pushSnapshot, rematchRoom, setReady, setRoomClip, setRoomRange, startRoom,
   useRoomLive,
@@ -12,7 +15,7 @@ import { Notice, Panel, PixelButton, ScreenShell, Segmented } from '../../ui';
 import { MatchBoard } from '../Battle/BattleTurn';
 import { useManifest } from '../Results/useManifest';
 import { MicCheck } from '../Solo/MicCheck';
-import { ClipList, NAME_MAX, REGISTERS, useClips } from '../Solo/SoloSetup';
+import { ClipList, REGISTERS, useClips } from '../Solo/SoloSetup';
 import { TimingCheck, loadCalibration } from '../Solo/TimingCheck';
 import { PracticeRangePicker } from '../../components/timeline/PracticeRangePicker';
 import { rangeLabel } from '../../components/timeline/range';
@@ -30,14 +33,16 @@ export function Online({ room, notice }: { room?: RoomRef; notice?: string }) {
 function Entry() {
   const nav = useNav();
   const { clips, loadClips } = useClips();
-  const [name, setName] = useState(savedName);
+  const { lastId } = usePlayers();
+  const [playerId, setPlayerId] = useState<string | null>(lastId);
   const [clipId, setClipId] = useState<string | null>(null);
   const [code, setCode] = useState(() => new URLSearchParams(location.search).get('room') ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const who = name.trim();
+  const who = getPlayer(playerId)?.name ?? '';
 
   async function enter(call: () => Promise<RoomSnapshot>) {
+    if (nameEasterEgg(nav, who)) return;
     setBusy(true);
     setError(null);
     try {
@@ -62,15 +67,8 @@ function Entry() {
           </div>
         </Panel>
         <div className="solo-side">
-          <Panel label="YOUR NAME" className="solo-you">
-            <input
-              className="solo-input"
-              aria-label="Your name"
-              value={name}
-              maxLength={NAME_MAX}
-              placeholder="e.g. Mina"
-              onChange={(e) => setName(e.target.value)}
-            />
+          <Panel label="WHO'S PLAYING" className="solo-you">
+            <PlayerPicker label="PLAYER" value={playerId} onChange={setPlayerId} />
           </Panel>
           <Panel tone="sky" label="2 · JOIN A FRIEND">
             <div className="solo-field">
@@ -88,7 +86,7 @@ function Entry() {
               </PixelButton>
             </div>
           </Panel>
-          {!who && <p className="solo-hint">Enter your name first.</p>}
+          {!who && <p className="solo-hint">Pick a player first.</p>}
           {error && <Notice tone="error">{error}</Notice>}
         </div>
       </div>

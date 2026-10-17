@@ -1,4 +1,5 @@
 import { chromium, expect, test, type Browser, type Page } from '@playwright/test';
+import { addPlayer } from './duetHarness';
 
 const CLIP = 'russian-roulette';
 const NAME = `E2E-Bot-range-${Date.now().toString(36)}`;
@@ -140,7 +141,7 @@ test('solo middle section: snapped handles, preview, offset audio, saved subset 
     await page.getByRole('button', { name: 'STOP PREVIEW' }).click();
     // Keep screenshots lyric-free; the actual manifest is used for all selection/scoring assertions.
     await page.screenshot({ path: 'e2e/artifacts/range-solo-setup.png', mask: [page.locator('.clip-timeline__line')] });
-    await page.getByPlaceholder('e.g. Mina').fill(NAME);
+    await addPlayer(page, 'PLAYER', NAME);
     await mic(page);
     await page.getByRole('button', { name: 'START ♪', exact: true }).click();
     const saved = await sing(page, range);
@@ -225,13 +226,13 @@ test('online host section: guest read-only, readiness reset, shared range with d
     const song = await (await host.request.get(`/api/clips/${CLIP}/manifest`)).json();
     const range = { start: song.phrases[1].start, end: song.phrases[3].end };
     await host.getByText('ONLINE', { exact: true }).first().click();
-    await host.getByPlaceholder('e.g. Mina').fill(`${NAME}-host`);
+    await addPlayer(host, 'PLAYER', `${NAME}-host`);
     await host.getByRole('button').filter({ has: host.getByText(song.title, { exact: true }) }).click();
     await host.getByRole('button', { name: /CREATE ROOM/ }).click();
     const code = await host.getByTestId('room-code').innerText();
     await guest.goto('/');
     await guest.getByText('ONLINE', { exact: true }).first().click();
-    await guest.getByPlaceholder('e.g. Mina').fill(`${NAME}-guest`);
+    await addPlayer(guest, 'PLAYER', `${NAME}-guest`);
     await guest.getByLabel('Room code').fill(code);
     await guest.getByRole('button', { name: 'JOIN', exact: true }).click();
     await chooseSection(guest, song, true);

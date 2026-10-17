@@ -14,8 +14,8 @@ const NOTES: { ch: string; style: CSSProperties }[] = [
 
 /** Boombox-kun: the wide blue boombox mascot. Sways to the beat with notes floating up; poke it to talk. */
 export function BoomboxKun({ className }: { className?: string }) {
-  const notes = NOTES.map((n) => (
-    <span key={n.ch} className="px-note px-note-glyph" aria-hidden="true" style={n.style}>
+  const notes = NOTES.map((n, i) => (
+    <span key={i} className="px-note px-note-glyph" aria-hidden="true" style={n.style}>
       {n.ch}
     </span>
   ));

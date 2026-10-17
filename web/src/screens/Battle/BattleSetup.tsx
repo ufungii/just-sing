@@ -1,9 +1,12 @@
+import { nameEasterEgg } from '../EasterEgg/name';
 import { useState } from 'react';
-import { asGuest, createMatch, savedName } from '../../lib/api';
+import { asGuest, createMatch } from '../../lib/api';
+import { getPlayer, usePlayers } from '../../lib/players';
+import { PlayerPicker } from '../../components/players/PlayerPicker';
 import type { Register } from '../../lib/types';
 import { useNav } from '../../routes';
 import { Notice, Panel, PixelButton, ScreenShell, Segmented } from '../../ui';
-import { ClipList, NAME_MAX, REGISTERS, useClips } from '../Solo/SoloSetup';
+import { ClipList, REGISTERS, useClips } from '../Solo/SoloSetup';
 import { MicCheck } from '../Solo/MicCheck';
 import { TimingCheck, loadCalibration } from '../Solo/TimingCheck';
 import '../Solo/SoloSetup.css';
@@ -17,17 +20,19 @@ export function BattleSetup() {
   const nav = useNav();
   const { clips, loadClips } = useClips();
   const [clipId, setClipId] = useState<string | null>(null);
-  const [names, setNames] = useState<[string, string]>([savedName(), '']);
+  const { lastId } = usePlayers();
+  const [ids, setIds] = useState<[string | null, string | null]>([lastId, null]);
   const [registers, setRegisters] = useState<[Register, Register]>([0, 0]);
   const [micOk, setMicOk] = useState(false);
   const [offset, setOffset] = useState<number | null>(loadCalibration);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [n1, n2] = [names[0].trim(), names[1].trim()];
-  const missing = [!clipId && 'a song', (!n1 || !n2) && 'both names', !micOk && 'a mic check'].filter(Boolean) as string[];
+  const [n1, n2] = [getPlayer(ids[0])?.name ?? '', getPlayer(ids[1])?.name ?? ''];
+  const missing = [!clipId && 'a song', (!n1 || !n2) && 'two players', !micOk && 'a mic check'].filter(Boolean) as string[];
 
   async function onStart() {
+    if (nameEasterEgg(nav, n1, n2)) return;
     if (!clipId || !n1 || !n2) return;
     setBusy(true);
     setError(null);
@@ -42,14 +47,11 @@ export function BattleSetup() {
 
   const player = (i: 0 | 1) => (
     <div className="solo-field">
-      <label className="solo-field__label" htmlFor={`battle-name-${i}`}>PLAYER {i + 1}</label>
-      <input
-        id={`battle-name-${i}`}
-        className="solo-input"
-        value={names[i]}
-        maxLength={NAME_MAX}
-        placeholder={i ? 'e.g. Jisoo' : 'e.g. Mina'}
-        onChange={(e) => setNames((n) => (i ? [n[0], e.target.value] : [e.target.value, n[1]]))}
+      <PlayerPicker
+        label={`PLAYER ${i + 1}`}
+        value={ids[i]}
+        disabledId={ids[i ? 0 : 1]}
+        onChange={(id) => setIds((v) => (i ? [v[0], id] : [id, v[1]]))}
       />
       <Segmented
         label={`Player ${i + 1} voice range`}

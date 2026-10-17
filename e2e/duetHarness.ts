@@ -74,17 +74,26 @@ export function expectOwnedScores(match: any, allIds: string[], range: any = nul
   expect(savedIds.sort()).toEqual([...allIds].sort());
 }
 
+/** Create a new local player through the setup screen's player dropdown and select them for `seat`. */
+export async function addPlayer(page: Page, seat: string, name: string) {
+  await page.getByRole('combobox', { name: seat, exact: true }).click();
+  await page.getByRole('option', { name: 'ADD PLAYER' }).click();
+  await page.getByPlaceholder('e.g. Mina').fill(name);
+  await page.getByRole('button', { name: 'ADD PLAYER', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: seat, exact: true })).toContainText(name);
+}
+
 export async function openOnlineDuet(host: Page, guest: Page) {
   await host.goto('/');
   const song = await manifest(host);
   await host.getByText('ONLINE', { exact: true }).first().click();
-  await host.getByPlaceholder('e.g. Mina').fill('E2E-Bot-duet-online');
+  await addPlayer(host, 'PLAYER', 'E2E-Bot-duet-online');
   await host.getByRole('button').filter({ has: host.getByText(song.title, { exact: true }) }).click();
   await host.getByRole('button', { name: /CREATE ROOM/ }).click();
   const code = await host.getByTestId('room-code').innerText();
   await guest.goto('/');
   await guest.getByText('ONLINE', { exact: true }).first().click();
-  await guest.getByPlaceholder('e.g. Mina').fill('E2E-Rival-duet-online');
+  await addPlayer(guest, 'PLAYER', 'E2E-Rival-duet-online');
   await guest.getByLabel('Room code').fill(code.toLowerCase());
   await guest.getByRole('button', { name: 'JOIN', exact: true }).click();
   for (const page of [host, guest]) { await mic(page); await page.getByRole('button', { name: 'READY ✓', exact: true }).click(); }
