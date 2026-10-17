@@ -1,3 +1,4 @@
+import { nameEasterEgg } from '../EasterEgg/name';
 import { useEffect, useState } from 'react';
 import { ApiError, asGuest, retryTurn } from '../../lib/api';
 import { getPlayer, usePlayers } from '../../lib/players';
@@ -41,6 +42,7 @@ function Entry() {
   const who = getPlayer(playerId)?.name ?? '';
 
   async function enter(call: () => Promise<RoomSnapshot>) {
+    if (nameEasterEgg(nav, who)) return;
     setBusy(true);
     setError(null);
     try {

@@ -15,6 +15,7 @@ from functools import lru_cache
 
 import numpy as np
 
+from .eligibility import is_spoken_korean
 from .ctc import forced_align
 from .text import is_syllable, score_words, split_words
 
@@ -102,7 +103,11 @@ def posteriors(y: np.ndarray) -> tuple[np.ndarray, str]:
 
 
 def assess_b(audio, expected: str, sr: int | None = None) -> dict:
+    if not is_spoken_korean(expected):
+        return _result("wav2vec2-ctc", "error", reason="unsupported_practice_text")
     y = load_audio(audio, sr)
+    if y.ndim != 1 or not np.isfinite(y).all():
+        return _result("wav2vec2-ctc", "error", reason="invalid_audio")
     if len(y) < SR * 0.2:
         return _result("wav2vec2-ctc", "error", reason="audio_too_short")
     log_probs, heard = posteriors(y)

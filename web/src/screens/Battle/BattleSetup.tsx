@@ -1,3 +1,4 @@
+import { nameEasterEgg } from '../EasterEgg/name';
 import { useState } from 'react';
 import { asGuest, createMatch } from '../../lib/api';
 import { getPlayer, usePlayers } from '../../lib/players';
@@ -31,6 +32,7 @@ export function BattleSetup() {
   const missing = [!clipId && 'a song', (!n1 || !n2) && 'two players', !micOk && 'a mic check'].filter(Boolean) as string[];
 
   async function onStart() {
+    if (nameEasterEgg(nav, n1, n2)) return;
     if (!clipId || !n1 || !n2) return;
     setBusy(true);
     setError(null);
