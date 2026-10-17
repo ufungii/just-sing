@@ -80,16 +80,25 @@ def manifest(clip_id: str):
     return CATALOG[clip_id]
 
 
-@app.get("/api/clips/{clip_id}/audio")
-def instrumental(clip_id: str):
-    """Instrumental only (vocals stay offline). Path comes from the validated manifest, never the URL.
-    FileResponse handles Range requests, which browsers use for seeking."""
+def _audio_file(clip_id: str, role: str) -> FileResponse:
+    """Path comes from the validated manifest, never the URL. FileResponse handles Range requests."""
     song = manifest(clip_id)
     folder = SONG_DIR[song.id].resolve()
-    path = (folder / song.audio.instrumental).resolve()
+    path = (folder / getattr(song.audio, role)).resolve()
     if not path.is_relative_to(folder) or not path.is_file():
-        raise ApiError(404, "audio_missing", f"Instrumental for '{clip_id}' is not installed on this server.")
+        raise ApiError(404, "audio_missing", f"The {role} for '{clip_id}' is not installed on this server.")
     return FileResponse(path)
+
+
+@app.get("/api/clips/{clip_id}/audio")
+def instrumental(clip_id: str):
+    return _audio_file(clip_id, "instrumental")
+
+
+@app.get("/api/clips/{clip_id}/vocals")
+def vocals(clip_id: str):
+    """Guide vocals the singer can mix in while practising. Same files and rules as the instrumental."""
+    return _audio_file(clip_id, "vocals")
 
 
 from .play import router  # noqa: E402  (play.py imports CATALOG from this module)

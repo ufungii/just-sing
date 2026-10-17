@@ -4,12 +4,13 @@
  * lyrics and scoring, and captured mic samples are timestamped on the same clock by the worklet.
  *
  *   instrumental/click  -> destination
+ *   guide vocals (optional) -> guide gain -> destination
  *   mic -> capture worklet -> (silent) destination      batches -> PitchTracker (Pitchy, hop grid)
  */
 import { SCORING_CONFIG } from '../scoring/config';
 import { CAPTURE_PROCESSOR, loadCaptureWorklet, type CaptureBatch } from './captureWorklet';
 import { PitchTracker } from './pitchTracker';
-import { loadBacking, scheduleCountIn, stopStream, type Backing } from './sources';
+import { loadBacking, loadVocals, scheduleCountIn, stopStream, type Backing } from './sources';
 
 /** Seconds of 3-2-1 count-in before clip time 0. */
 export const COUNT_IN = 3;
@@ -20,6 +21,8 @@ export class SingEngine {
   private micNode: MediaStreamAudioSourceNode | null = null;
   private capture: AudioWorkletNode | null = null;
   private source: AudioBufferSourceNode | null = null;
+  private guideSource: AudioBufferSourceNode | null = null;
+  private readonly guideGain: GainNode;
   private t0 = Infinity;
   private closed = false;
 
@@ -28,7 +31,12 @@ export class SingEngine {
     readonly backing: Backing,
     readonly duration: number,
     offset: number,
+    /** Decoded guide vocals, or null when the clip has none. */
+    readonly vocals: AudioBuffer | null,
   ) {
+    this.guideGain = ctx.createGain();
+    this.guideGain.gain.value = 0;
+    this.guideGain.connect(ctx.destination);
     this.tracker = new PitchTracker(ctx.sampleRate, offset, Math.ceil(duration / SCORING_CONFIG.hopSeconds));
   }
 
@@ -38,7 +46,8 @@ export class SingEngine {
     try {
       await loadCaptureWorklet(ctx);
       const backing = await loadBacking(ctx, clipId, duration);
-      return new SingEngine(ctx, backing, duration, offset ?? 0);
+      const vocals = await loadVocals(ctx, clipId);
+      return new SingEngine(ctx, backing, duration, offset ?? 0, vocals);
     } catch (e) {
       void ctx.close();
       throw e;
@@ -73,8 +82,20 @@ export class SingEngine {
     this.source.buffer = this.backing.buffer;
     this.source.connect(this.ctx.destination);
     this.source.start(this.t0);
+    if (this.vocals) {
+      // Always scheduled (silent while the gain is 0) so the guide can be switched on mid-song, in sync.
+      this.guideSource = this.ctx.createBufferSource();
+      this.guideSource.buffer = this.vocals;
+      this.guideSource.connect(this.guideGain);
+      this.guideSource.start(this.t0);
+    }
     this.tracker.start(this.t0);
     return this.t0;
+  }
+
+  /** Guide vocal loudness, 0 (off) to 1; takes effect immediately. */
+  setGuideVolume(v: number) {
+    this.guideGain.gain.setTargetAtTime(Math.max(0, Math.min(1, v)), this.ctx.currentTime, 0.02);
   }
 
   /** Clip time in seconds on the master clock (negative during the count-in, -Infinity before start). */
@@ -94,12 +115,14 @@ export class SingEngine {
   close() {
     if (this.closed) return;
     this.closed = true;
-    try {
-      this.source?.stop();
-    } catch {
-      // never started
+    for (const src of [this.source, this.guideSource]) {
+      try {
+        src?.stop();
+      } catch {
+        // never started
+      }
+      src?.disconnect();
     }
-    this.source?.disconnect();
     this.detachMic();
     void this.ctx.close();
   }
