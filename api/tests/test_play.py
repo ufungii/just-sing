@@ -124,3 +124,23 @@ def test_history_has_one_row_per_match(guests):
     battle = next(r for r in rows if r["match_id"] == m["match_id"])
     assert battle["total"] is None and [(p["display_name"], p["total"]) for p in battle["players"]] == [("Ann", 70), ("Bo", 90)]
     assert next(r for r in rows if r["match_id"] == solo["match_id"])["total"] == 76.0
+
+
+def test_turn_deadline_holds(guests):
+    """Regression: a second /begin reset the deadline and register (so a turn could be kept alive
+    forever), and a result after the deadline was accepted until the 15 s recovery tick ran."""
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    a = m["attempt_id"]
+    deadline = lambda: get_engine().connect().execute(text("select deadline_at from turn_attempt where id=:i"), {"i": a}).scalar()
+    c.post(f"/api/turns/{a}/begin", json={"register": 0})
+    first = deadline()
+    assert c.post(f"/api/turns/{a}/begin", json={"register": 0}).status_code == 200  # a harmless repeat
+    assert deadline() == first
+    assert c.post(f"/api/turns/{a}/begin", json={"register": 12}).json()["error"]["code"] == "attempt_already_started"
+
+    with get_engine().begin() as conn:
+        conn.execute(text("update turn_attempt set deadline_at = now() - interval '1 second' where id=:i"), {"i": a})
+    late = c.post(f"/api/turns/{a}/result", json=GOOD, headers={"Idempotency-Key": "late"})
+    assert late.json()["error"]["code"] == "attempt_invalidated"
+    assert c.get(f"/api/matches/{m['match_id']}").json()["state"] == "retry_required"
