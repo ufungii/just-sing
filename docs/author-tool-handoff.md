@@ -27,7 +27,7 @@ Build a standalone review app in `author/`. It lets a person listen to prepared 
 - Store ownership by stable phrase IDs and player slots; derive timing from the existing phrases. Do not duplicate lyric text, timing, or player display names in the arrangement.
 - Validate known phrase IDs, unique section IDs, complete and unique scored-phrase coverage, chronological sections, and no lyric line split between owners/sections. Display missing or conflicting assignments clearly.
 
-The continuous multiplayer implementation is **separate work**, not part of PR #14. Coordinate its final manifest/corrections schema before wiring Rebuild. The agreed target shape is an optional top-level field:
+The continuous multiplayer runtime is now included in PR #14 at the user’s request, with browser validation still pending. It supports the optional top-level field below. The author tool still needs to save its corrections and emit them through Rebuild:
 
 ```json
 {
@@ -38,7 +38,7 @@ The continuous multiplayer implementation is **separate work**, not part of PR #
 }
 ```
 
-Slots `0` and `1` are labelled Player 1 and Player 2 in the editor. These placeholder IDs illustrate structure only. This field is **not yet shipped by PR #14**; existing manifests must remain loadable without it.
+Slots `0` and `1` are labelled Player 1 and Player 2 in the editor. These placeholder IDs illustrate structure only. The field is optional; existing manifests remain loadable without it. Legacy arrangements default to alternating groups of three scored lyric lines.
 
 ## Save, rebuild, and review
 

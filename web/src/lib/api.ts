@@ -112,7 +112,12 @@ export const vocalsUrl = (clipId: string) => `/api/clips/${encodeURIComponent(cl
 
 /** Solo by default; two player names make a local battle (player 1's attempt comes back, player 2's appears after). */
 export const createMatch = (clipId: string, players?: [string, string]) =>
-  request<NewMatch>('/api/matches', json(players ? { clip_id: clipId, players } : { clip_id: clipId }));
+  request<NewMatch>('/api/matches', json(players ? { clip_id: clipId, players, duet: true } : { clip_id: clipId }));
+
+export const duetReady = (matchId: string, players: { slot: number; register: Register; calibration_offset: number | null }[]) =>
+  request<MatchView>(`/api/matches/${matchId}/duet/ready`, json({ players }));
+export const stopDuet = (matchId: string) => request<MatchView>(`/api/matches/${matchId}/duet/stop`, json({}));
+export const serverTime = () => request<{ server_time: number }>('/api/time');
 export const beginTurn = (attemptId: string, register: Register, calibrationOffset: number | null, range?: TimeRange | null) =>
   request<{ attempt_id: string; state: string }>(
     `/api/turns/${attemptId}/begin`,

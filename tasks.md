@@ -5,8 +5,8 @@ Updated 2026-10-17. This is the current work list; completed implementation deta
 ## Working rules
 
 - Treat `CLAUDE.md` as repository instructions for Codex too. Current explicit user instructions take precedence where they conflict.
-- PR #14 uses `overnight-extra` and targets `main`. The user authorized its push and PR; leave it unmerged. It includes the earlier overnight work, task 1, and the teammate handoff, **not the continuous multiplayer implementation**.
-- Continuous multiplayer work is isolated on `multiplayer/sections` in `/tmp/just-sing-multiplayer`. Keep it separate from PR #14. Do not modify local `main`; publish additional work only with user authorization.
+- PR #14 uses `overnight-extra` and targets `main`. The user authorized its push and PR; leave it unmerged. It includes the earlier overnight work, task 1, the teammate handoff, and the continuous multiplayer implementation requested by the user. Leave the PR unmerged.
+- The user authorized moving continuous multiplayer onto `overnight-extra`, committing/pushing it, and deleting the temporary `multiplayer/sections` branch. Do not modify local `main`.
 - No co-author trailers or generated-by footers.
 - Never commit secrets, `.env`, copyrighted lyrics/audio, or model weights. Song assets and review outputs stay in gitignored `ml/data/`.
 - `.env` is the dev database. Never test against production or delete rows the agent did not create; use disposable databases/schemas for tests with cleanup.
@@ -14,14 +14,15 @@ Updated 2026-10-17. This is the current work list; completed implementation deta
 
 ## Active: continuous multiplayer — Codex
 
-**In progress on the separate branch; unverified and not in PR #14.** The user confirmed both local 1P vs 2P and online rooms should play the song once, continuously, with automatic singer handoffs.
+**Implementation moved onto `overnight-extra` at the user’s request; browser validation is still pending.** The user confirmed both local 1P vs 2P and online rooms should play the song once, continuously, with automatic singer handoffs.
 
 - Use one count-in, clear current/next singer cues, and per-player scoring of assigned phrases. Local uses one shared microphone/playback with each player's chosen register. Solo behavior stays unchanged.
 - Support authored `duet_sections` containing section IDs, explicit player slots, and phrase IDs. Preserve whole lyric lines; validate exact ownership and chronological sections. Legacy songs fall back to alternating blocks of three scored lines. Authored consecutive same-player sections are allowed.
 - Online clients load audio/open microphones before a shared start barrier, then follow a server-scheduled timeline. Concurrent saves finish the match after both results. Reconnects must not silently replay one player's song; a missed start requires an explicit shared restart.
 - Online practice ranges retain authored ownership and must contain scoreable phrases for both singers. Local stays full clip. Assigned subsets must not be mislabeled as practice ranges.
 - Freeze arrangement/range/schedule durably; prefer no new migration. Complete model/API ownership, start/concurrency/recovery, and local/online fake-mic browser tests before calling this done.
-- Coordinate the final arrangement/corrections schema with the teammate building task 2.
+- Coordinate the arrangement/corrections schema with the teammate building task 2. The optional manifest field is now implemented in the runtime; the author tool’s correction/rebuild integration remains task 2 work.
+- Latest implementation checks passed: **118 API tests, 26 Vitest tests, typecheck, and build**. Continuous local/online browser tests still need updating and running. The older browser results below predate this redesign and are not verification of it.
 
 ## Task 2: song author tool — teammate
 
@@ -29,7 +30,7 @@ Updated 2026-10-17. This is the current work list; completed implementation deta
 
 Build the standalone localhost-only review app in `author/`, importing the shared timeline from `web/src/`. Show original and romanized lyrics together; support waveform/reference-pitch review, lyric/timing edits, tap-to-sync, and selecting lines to assign Player 1/Player 2. Explicit Save, backups, undo/redo, Rebuild, and review marking are required. Song ingestion and note/octave editing are out of scope.
 
-The duet manifest field is being implemented separately; the handoff describes the target shape and this dependency. Save assignments through corrections and preserve them through Rebuild.
+The runtime now supports the optional duet manifest field; the handoff describes its shape and the remaining author/pipeline integration. Save assignments through corrections and preserve them through Rebuild.
 
 ## Remaining bugs and maintenance
 
@@ -56,7 +57,7 @@ The duet manifest field is being implemented separately; the handoff describes t
 
 **Pushed in PR #14; unmerged.** Solo/online practice-section editing has a reusable phrase-snapping timeline, lyric positions, preview with synchronized instrumental/vocals, full reset, aligned count-in/playback/scoring, and practice labels in results/history. Hosts choose room ranges; guest views are read-only. Ranges survive retries/rematches without a migration; failed edits restore server state. Empty-score sections are rejected early. Local battle stays full clip.
 
-The PR also includes earlier reference-engine scoring/TypeScript parity, Auth0 identity/history, template coaching fallback, guide vocals, optional local pronunciation, local battle, and online lobbies. Its multiplayer gameplay still uses sequential full-song turns; continuous section handoffs are the separate active task above.
+The PR also includes earlier reference-engine scoring/TypeScript parity, Auth0 identity/history, template coaching fallback, guide vocals, optional local pronunciation, local battle, and online lobbies. Those historical browser checks used sequential full-song multiplayer. The new continuous section-handoff code is included at the user’s request, with its pending browser validation tracked above.
 
 Verification of the published gameplay:
 
