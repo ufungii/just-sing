@@ -36,11 +36,14 @@ def parser():
     result.add_argument("--id", required=True)
     result.add_argument("--title", required=True)
     result.add_argument("--artist", required=True)
+    result.add_argument("--language", choices=('ko', 'en'), default='ko')
     result.add_argument("--lyrics", type=Path, required=True, help="UTF-8 text, one lyric line per line")
     result.add_argument("--clip", type=Path, help="Source with lead vocals; separates two stem estimates")
     result.add_argument("--vocals", type=Path, help="Reuse a selected vocal stem instead of separation")
     result.add_argument("--instrumental", type=Path, help="Reuse a selected instrumental, without mastering again")
     result.add_argument("--source-url", default="")
+    result.add_argument("--separation-python", type=Path,
+                        help="Interpreter in the separate Demucs environment (platform default if omitted)")
     result.add_argument("--start", type=float, default=0)
     result.add_argument("--duration", type=float)
     return result
@@ -66,7 +69,8 @@ def validate_inputs(args):
     destination = DATA / args.id
     if destination.exists():
         raise ValueError("Song ID already exists; choose a new ID to preserve audio and hand corrections")
-    separation_python = ROOT / "ml/pipeline/separation/.venv/Scripts/python.exe"
+    separation_python = args.separation_python or ROOT / 'ml/pipeline/separation/.venv' / (
+        'Scripts/python.exe' if sys.platform == 'win32' else 'bin/python')
     if not selected and not separation_python.exists():
         raise ValueError("Install the separate Demucs environment first (see ml/pipeline/README.md)")
     return inputs, destination, separation_python
@@ -123,11 +127,11 @@ def prepare(args):
         shutil.copyfile(args.lyrics, output / "lyrics.supplied.txt")
         command(sys.executable, "-m", "ml.pipeline.align_lyrics", "--audio", output / "vocals.mp3",
                 "--instrumental", output / "instrumental.mp3", "--lyrics", output / "lyrics.supplied.txt",
-                "--output", output / "alignment")
+                "--output", output / "alignment", "--language", args.language)
         command(sys.executable, "-m", "ml.pipeline.reference", "--audio", output / "vocals.mp3",
                 "--output", output / "reference.pitch.json")
         metadata = {"id": args.id, "version": 1, "title": args.title, "artist": args.artist,
-                    "language": "ko", "duration_seconds": duration,
+                    "language": args.language, "duration_seconds": duration,
                     "audio": {role: f"{role}.mp3" for role in counts},
                     "provenance": {"source_url": args.source_url, "clip_start_seconds": args.start,
                                    "requested_duration_seconds": args.duration,

@@ -26,7 +26,7 @@ Updated 2026-10-17. This is the current work list; completed implementation deta
 
 ## Task 2: song author tool — teammate
 
-**Implemented in this PR.** Setup and use: [author/README.md](author/README.md). Full requirements and code entry points: [author-tool handoff](docs/author-tool-handoff.md).
+**Implemented and merged into main.** Setup and use: [author/README.md](author/README.md). Full requirements and code entry points: [author-tool handoff](docs/author-tool-handoff.md).
 
 The standalone loopback editor imports the shared timeline, overlays the vocal waveform/reference pitch, shows original and romanized lyrics, and supports lyric/timing/phrase/exclusion/translation edits, tap-to-sync, whole-line player assignments, and undo/redo. Explicit Save preserves aligner metadata and backs up corrections/review files. Rebuild applies the namespaced author overrides through manifest assembly, including duet sections. Review marking remains an explicit human action. Synthetic unit and browser tests cover persistence and ownership validation; listening accuracy and real reference quality remain human checks. Existing song assets were only read during verification.
 
@@ -36,14 +36,14 @@ The runtime now supports the optional duet manifest field; the handoff describes
 
 ## Remaining bugs and maintenance
 
-- Local catalog verification found a pre-existing incompatibility: `api.models.Song` rejects scored lines with empty `practice_text`, while the pipeline intentionally leaves mixed/English lines empty for Korean-only pronunciation practice. The author tool reads all ten prepared full/demo manifests, but the main API cannot load that catalog until singing eligibility is separated from pronunciation eligibility. Author regression tests use the built-in synthetic API catalog and do not change existing song assets.
+- Resolved while preparing English songs: scored singing phrases may have empty Korean-only `practice_text`. Pronunciation upload rejects empty exercises before processing audio, and the practice UI filters those lines. Existing local song assets were not changed by this eligibility fix.
 
 - Verify explicit quitting mid-performance closes the shared duet promptly. Save retry and missed-start/shared-restart now have browser coverage in the verification follow-up.
 - Online: an existing guest name overrides a newly typed name; the singing title omits the online player name.
 - API `_weights` uses reference Hz while TypeScript can fall back to notes; stub contours can disagree. No current prepared clip is known to trigger this.
 - Vocals/instrumental endpoints serve installed stems without auth. Public deployments must use permitted assets; copyrighted clips stay on the team machine.
 - Unify scoring configuration with the local demo; `ml/scoring/api_integration.patch` and `API_INTEGRATION.md` are stale.
-- Pipeline: remove the hardcoded Windows separation-environment path in `ml/pipeline/run.py`; supplying prepared stems bypasses that path today.
+- Pipeline: separation now chooses the environment interpreter by platform and accepts `--separation-python` for an explicit environment. Prepared stems still bypass separation.
 - Pronunciation: the optional scorer hook was tested with fake scorers; real model warm-up, scores, and the practice screen still need end-to-end verification. The older `live_scoring.json` fixtures cover the legacy live engine, not the current TypeScript SPEC port.
 - ML B: add an exact-half rounding fixture to `contracts/fixtures`; TypeScript's half-even behavior currently has only its local rounding test.
 - `CLAUDE.md` current-status text is stale. Refresh after user confirmation, in its own small PR.

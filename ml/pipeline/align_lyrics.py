@@ -48,14 +48,14 @@ def lrc_track(lines, duration):
     return output
 
 
-def normalize_words(lines):
+def normalize_words(lines, language='ko'):
     import uroman
 
     romanizer = uroman.Uroman()
     words = []
     for line_index, text in enumerate(lines):
         for original in text.split():
-            romanized = romanizer.romanize_string(original, lcode="kor").lower().replace("’", "'")
+            romanized = romanizer.romanize_string(original, lcode='eng' if language == 'en' else 'kor').lower().replace("’", "'")
             normalized = re.sub(r"[^a-z']", "", romanized)
             if not normalized:
                 raise ValueError(f"Unalignable word on lyric line {line_index + 1}")
@@ -123,6 +123,7 @@ def main():
     parser.add_argument("--lyrics", type=Path, required=True)
     parser.add_argument("--instrumental", type=Path, help="Bind the draft to the selected playback audio")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument('--language', choices=('ko', 'en'), default='ko')
     parser.add_argument("--corrections", type=Path, help="Audio/text-bound line anchors; reused on reruns")
     args = parser.parse_args()
     import torch
@@ -132,7 +133,7 @@ def main():
     torch.set_num_threads(4)
     args.output.mkdir(parents=True, exist_ok=True)
     texts, sections = lyric_sections(args.lyrics.read_text(encoding="utf-8-sig"))
-    words = normalize_words(texts)
+    words = normalize_words(texts, args.language)
     if not words:
         parser.error("Lyrics must contain at least one alignable word")
     audio_hash = hashlib.sha256(args.audio.read_bytes()).hexdigest()
@@ -192,7 +193,7 @@ def main():
                             + (["compressed_word"] if end - start < 0.06 else [])})
     suspect = sum(bool(word["review_flags"]) for word in diagnostics)
     apply_cached_translations(lines, args.output.parent / "translations.json")
-    track = {"status": "alignment_draft", "reviewed": False, "duration": duration,
+    track = {"status": "alignment_draft", "reviewed": False, "duration": duration, 'language': args.language,
              "source_audio_sha256": audio_hash, "lines": lines, "section_starts": sections}
     if windows:
         for line, (start, end) in zip(lines, windows, strict=True):
