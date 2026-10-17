@@ -12,5 +12,6 @@
   ],
   "coach_blurb": "string",
   "guided": false,
-  "range": null
+  "range": null,
+  "duet": false
 }

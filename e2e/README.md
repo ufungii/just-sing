@@ -15,7 +15,7 @@ npx playwright test                          # starts uvicorn on :8765 itself; ~
 cd .. && PYTHONPATH=. .venv/bin/python e2e/cleanup_db.py   # deletes the "E2E-Bot-*" and "E2E-Rival-*" guest rows, prints counts
 ```
 
-`E2E_CLIP` (default `synthetic-demo`) selects the clip for both scripts; `E2E_GOOD_FLOOR` (default 60) the minimum
+`E2E_CLIP` (default `synthetic-demo`) selects the clip for solo playback and take generation; `E2E_GOOD_FLOOR` (default 60) the minimum
 good total; `E2E_LEAD` (default 6 s, same for both) the WAV prefix; `E2E_DEBUG=1` echoes page console.
 The synthetic clip has no instrumental, so the app uses its click track (no audio is needed or committed).
 Screenshots land in `e2e/artifacts/`.
@@ -38,7 +38,17 @@ instrumental are expected and filtered). Absolute totals are not asserted beyond
 `npx playwright test range.spec.ts` uses local `russian-roulette` assets and generated in-browser fake microphones (no take WAVs needed).
 It checks pointer and keyboard snapping, full reset, synchronized instrumental/vocal preview (with instrumental fallback when vocals are missing), a count-in before a middle phrase, matching instrumental/guide offsets,
 selected-only saved results and history, host-only room edits, save-failure recovery, readiness reset and reconnect recovery.
-Both online singers must save exactly the same phrase IDs. This does not validate real-mic accuracy or lyric timing.
+Both online singers use the same range and save disjoint phrase IDs according to the frozen duet ownership. The online range spans both singers; a one-singer-only section is invalid. This does not validate real-mic accuracy or lyric timing.
 
 `E2E_PORT` overrides port 8765; `E2E_REUSE_SERVER=0` requires a fresh server rather than reusing one on that port.
 Run with an isolated test database/schema when checking retention or server startup, so background cleanup never reaches hand-played rows.
+
+## Continuous local and online duets
+
+`npx playwright test battle.spec.ts online.spec.ts` uses the real local `russian-roulette` manifest/audio and
+generated oscillator microphones. It checks one count-in/playback per client, automatic P1→P2→P1 handoffs,
+one shared local singing stream, separate registers, complete disjoint saved ownership, and full-song results
+remaining distinct from practice sections. A simulated failed save retries with the same idempotency key and no new playback. Online checks hold the start barrier until both clients load, compare
+scheduled playback timestamps within 150 ms, and deliberately offset one browser's wall clock by one hour.
+A reload after the shared start is refused without replaying one player; an explicit host restart creates a new unscheduled barrier. Screenshots mask the lyric display. These checks do not establish real microphone accuracy or physical-device
+synchronization; test those with two computers/headphones. `E2E_CLIP` does not override these duet/range specs.
