@@ -1,32 +1,32 @@
 # Singing score: degradation evals
 
-Scoring version `0.1.0`. Synthetic voice-like melody (9.5 s, 14 notes, 3 phrases), rendered to audio, tracked with pyin, scored with `score_turn`. 3 seeds per level.
+Scoring version `0.1.0`. Synthetic voice-like melody (10.25 s, 14 notes, 3 phrases), rendered to audio, tracked with pyin, scored with `score_turn`. 3 seeds per level.
 Totals are 0-100. **Limits:** clean synthetic voices only; says nothing yet about real singers.
 
 ## Sanity checks
 
 | Check | Score | Expected |
 |---|---|---|
-| Reference-like take (through tracker) | 97.9 | >= 90 |
-| Same take, octave up, +12 register chosen | 97.2 | >= 90 |
+| Reference-like take (through tracker) | 98.1 | >= 90 |
+| Same take, octave up, +12 register chosen | 96.1 | >= 90 |
 | Same take, octave up, register NOT chosen | 20.0 | <= 30 |
 | Silence | 0.0 | == 0 |
-| Noise only (no voice) | 3.8 | <= 10 |
+| Noise only (no voice) | 3.5 | <= 10 |
 | Identical input scored twice, equal? | 1.0 | == 1 |
 
 ## Detuning (every note off by +/- N cents)
 
-Spearman rho (severity vs total): **-0.959**
+Spearman rho (severity vs total): **-0.960**
 
 | Severity | Total (mean +/- sd) | Pitch | Timing |
 |---|---|---|---|
-| 0 | 98.1 +/- 0.1 | 97.7 | 100.0 |
-| 25 | 98.0 +/- 0.2 | 97.5 | 100.0 |
-| 50 | 96.1 +/- 0.1 | 95.1 | 100.0 |
-| 100 | 69.8 +/- 2.1 | 64.8 | 89.9 |
-| 150 | 42.9 +/- 1.9 | 32.6 | 84.0 |
-| 200 | 18.5 +/- 2.3 | 2.9 | 81.1 |
-| 300 | 19.8 +/- 0.9 | 0.5 | 97.1 |
+| 0 | 98.3 +/- 0.1 | 97.9 | 100.0 |
+| 25 | 98.1 +/- 0.1 | 97.7 | 100.0 |
+| 50 | 96.3 +/- 0.1 | 95.3 | 100.0 |
+| 100 | 70.1 +/- 1.9 | 65.0 | 90.7 |
+| 150 | 42.8 +/- 1.9 | 32.6 | 83.9 |
+| 200 | 18.3 +/- 2.3 | 2.8 | 80.5 |
+| 300 | 19.7 +/- 1.0 | 0.4 | 96.6 |
 
 ## Skipped notes (fraction replaced by rests)
 
@@ -34,49 +34,49 @@ Spearman rho (severity vs total): **-0.990**
 
 | Severity | Total (mean +/- sd) | Pitch | Timing |
 |---|---|---|---|
-| 0.0 | 98.1 +/- 0.1 | 97.7 | 100.0 |
-| 0.1 | 91.0 +/- 0.3 | 92.7 | 84.4 |
-| 0.25 | 69.6 +/- 1.6 | 70.2 | 67.3 |
-| 0.5 | 48.0 +/- 0.9 | 51.9 | 32.6 |
-| 0.75 | 25.2 +/- 1.4 | 27.6 | 15.6 |
+| 0.0 | 98.3 +/- 0.1 | 97.9 | 100.0 |
+| 0.1 | 91.1 +/- 0.7 | 93.2 | 83.0 |
+| 0.25 | 69.8 +/- 1.8 | 69.9 | 69.2 |
+| 0.5 | 49.2 +/- 4.2 | 53.1 | 33.3 |
+| 0.75 | 25.6 +/- 2.4 | 28.0 | 15.7 |
 | 1.0 | 0.0 +/- 0.0 | 0.0 | 0.0 |
 
 ## Background noise (white, lower SNR = worse)
 
-Spearman rho (severity vs total): **-0.870**
+Spearman rho (severity vs total): **-0.860**
 
 | Severity | Total (mean +/- sd) | Pitch | Timing |
 |---|---|---|---|
-| -40 | 98.1 +/- 0.1 | 97.7 | 100.0 |
-| -30 | 98.1 +/- 0.1 | 97.7 | 100.0 |
-| -20 | 98.1 +/- 0.1 | 97.7 | 100.0 |
-| -10 | 98.0 +/- 0.0 | 97.5 | 100.0 |
-| -5 | 97.1 +/- 0.2 | 96.4 | 100.0 |
-| 0 | 24.7 +/- 17.5 | 24.6 | 25.3 |
-| 5 | 0.3 +/- 0.4 | 0.0 | 1.6 |
+| -40 | 98.3 +/- 0.1 | 97.9 | 100.0 |
+| -30 | 98.3 +/- 0.1 | 97.9 | 100.0 |
+| -20 | 98.3 +/- 0.1 | 97.9 | 100.0 |
+| -10 | 98.2 +/- 0.0 | 97.7 | 100.0 |
+| -5 | 97.3 +/- 0.2 | 96.7 | 100.0 |
+| 0 | 25.2 +/- 17.8 | 25.2 | 25.1 |
+| 5 | 0.3 +/- 0.4 | 0.0 | 1.4 |
 
 ## Late entrance, uncalibrated (seconds)
 
-Spearman rho (severity vs total): **-0.991**
+Spearman rho (severity vs total): **-0.988**
 
 | Severity | Total (mean +/- sd) | Pitch | Timing |
 |---|---|---|---|
-| 0.0 | 98.1 +/- 0.1 | 97.7 | 100.0 |
-| 0.1 | 90.4 +/- 0.1 | 88.2 | 99.2 |
-| 0.2 | 72.4 +/- 0.2 | 71.8 | 74.6 |
-| 0.3 | 52.6 +/- 0.2 | 55.5 | 41.2 |
-| 0.4 | 33.0 +/- 0.2 | 39.1 | 8.7 |
-| 0.5 | 20.5 +/- 0.0 | 22.9 | 10.9 |
+| 0.0 | 98.3 +/- 0.1 | 97.9 | 100.0 |
+| 0.1 | 91.2 +/- 0.1 | 89.2 | 99.3 |
+| 0.2 | 74.3 +/- 0.2 | 74.1 | 75.2 |
+| 0.3 | 55.6 +/- 0.2 | 59.1 | 41.9 |
+| 0.4 | 37.0 +/- 0.2 | 43.9 | 9.3 |
+| 0.5 | 25.2 +/- 0.1 | 29.0 | 10.0 |
 
 ## Tempo drift (singer slower; 1 - rate)
 
-Spearman rho (severity vs total): **-0.818**
+Spearman rho (severity vs total): **-0.819**
 
 | Severity | Total (mean +/- sd) | Pitch | Timing |
 |---|---|---|---|
-| 0.0 | 97.6 +/- 0.2 | 97.7 | 97.2 |
-| 0.05 | 68.5 +/- 0.9 | 70.2 | 61.8 |
-| 0.1 | 44.1 +/- 0.5 | 40.6 | 58.2 |
-| 0.2 | 25.9 +/- 0.2 | 24.6 | 30.8 |
-| 0.3 | 22.9 +/- 0.2 | 22.2 | 25.3 |
-| 0.4 | 31.0 +/- 0.2 | 30.6 | 32.5 |
+| 0.0 | 97.7 +/- 0.1 | 97.9 | 96.9 |
+| 0.05 | 69.7 +/- 0.8 | 72.5 | 58.8 |
+| 0.1 | 43.4 +/- 0.4 | 39.8 | 57.9 |
+| 0.2 | 24.2 +/- 0.2 | 22.7 | 30.3 |
+| 0.3 | 21.3 +/- 0.2 | 20.4 | 24.7 |
+| 0.4 | 29.1 +/- 0.2 | 28.1 | 32.9 |

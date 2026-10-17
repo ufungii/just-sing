@@ -25,7 +25,8 @@ TOLERANCE = 0.1  # scores are rounded to 1 decimal
 
 def _shift(track: np.ndarray, seconds: float) -> np.ndarray:
     n = int(round(seconds / HOP_SECONDS))
-    return np.concatenate([np.full(n, np.nan), track])[: len(track)]
+    # the recording keeps running past the clip end, so the delayed track is not truncated
+    return np.concatenate([np.full(n, np.nan), track])
 
 
 def build_cases() -> list[dict]:
