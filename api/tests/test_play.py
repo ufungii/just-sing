@@ -144,3 +144,18 @@ def test_turn_deadline_holds(guests):
     late = c.post(f"/api/turns/{a}/result", json=GOOD, headers={"Idempotency-Key": "late"})
     assert late.json()["error"]["code"] == "attempt_invalidated"
     assert c.get(f"/api/matches/{m['match_id']}").json()["state"] == "retry_required"
+
+
+def test_turns_refuse_a_changed_clip_version(guests, monkeypatch):
+    """Regression: begin/submit used the current manifest, not the match's frozen clip_version, so a
+    manifest update mid-match graded results against the wrong phrases and durations."""
+    from api import play as play_module
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    c.post(f"/api/turns/{m['attempt_id']}/begin", json={})
+    bumped = play_module.CATALOG["synthetic-demo"].model_copy(update={"version": 2})
+    monkeypatch.setitem(play_module.CATALOG, "synthetic-demo", bumped)
+    r = c.post(f"/api/turns/{m['attempt_id']}/result", json=GOOD, headers={"Idempotency-Key": "v"})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "clip_version_changed"
+    fresh = c.post("/api/matches", json={"clip_id": "synthetic-demo"})
+    assert fresh.json()["error"]["code"] == "catalog_not_seeded"  # version 2 was never seeded
