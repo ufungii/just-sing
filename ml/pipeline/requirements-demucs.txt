@@ -1,0 +1,9 @@
+# Isolated CPU separation environment (Python 3.11).
+# First install torch/torchaudio from https://download.pytorch.org/whl/cpu.
+torch==2.0.1+cpu
+torchaudio==2.0.2+cpu
+numpy==1.26.4
+packaging>=23 # torch 2.0 version comparisons need this at inference time
+demucs==4.0.1
+soundfile>=0.12
+imageio-ffmpeg==0.6.0

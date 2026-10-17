@@ -1,0 +1,71 @@
+<!doctype html>
+<!--
+  Shown by main.js when the app URL can't be reached (for example, the web dev
+  server isn't running). Retry goes back to the app URL passed in ?url=.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+    />
+    <title>Just Sing!</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: grid;
+        place-items: center;
+        background: #ffe4f1;
+        color: #3b2340;
+        font-family: 'Courier New', monospace;
+        -webkit-font-smoothing: none;
+      }
+      .card {
+        max-width: 460px;
+        padding: 28px 32px;
+        background: #fff6fb;
+        border: 4px solid #3b2340;
+        box-shadow: 6px 6px 0 #3b2340;
+        text-align: center;
+      }
+      .kao { font-size: 40px; margin: 0 0 12px; }
+      h1 { font-size: 22px; margin: 0 0 8px; letter-spacing: 1px; text-transform: uppercase; }
+      p { margin: 6px 0; line-height: 1.4; }
+      .detail { font-size: 12px; color: #b04a86; word-break: break-all; }
+      button {
+        margin-top: 18px;
+        padding: 10px 26px;
+        font: inherit;
+        font-weight: bold;
+        font-size: 16px;
+        text-transform: uppercase;
+        color: #3b2340;
+        background: #ff8cc0;
+        border: 4px solid #3b2340;
+        box-shadow: inset -4px -4px 0 #d9558f, inset 4px 4px 0 #ffc8e1, 4px 4px 0 #3b2340;
+        cursor: pointer;
+      }
+      button:active { transform: translate(4px, 4px); box-shadow: inset -4px -4px 0 #d9558f, inset 4px 4px 0 #ffc8e1; }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <p class="kao">(,,&gt;﹏&lt;,,)</p>
+      <h1>Can't reach the stage</h1>
+      <p>Just Sing! couldn't connect to its server. Make sure it's running, then try again.</p>
+      <p class="detail" id="detail"></p>
+      <button id="retry" type="button">Retry ♪</button>
+    </main>
+    <script>
+      const params = new URLSearchParams(location.search);
+      const appUrl = params.get('url') || '';
+      const reason = params.get('reason');
+      document.getElementById('detail').textContent = appUrl + (reason ? ' (' + reason + ')' : '');
+      document.getElementById('retry').addEventListener('click', () => {
+        // Only ever go back to an http(s) app URL.
+        if (/^https?:\/\//.test(appUrl)) location.href = appUrl;
+      });
+    </script>
+  </body>
+</html>

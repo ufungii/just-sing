@@ -1,0 +1,47 @@
+/*
+ * Just Sing! design tokens: a pastel pixel-arcade palette.
+ * Every screen and component uses these instead of raw hex values.
+ */
+:root {
+  /* Ground and ink */
+  --bg: #ffe4f1;
+  --paper: #fff6fb;
+  --ink: #3b2340; /* outlines, text, hard shadows */
+  --ink-soft: #7a5cd6;
+  --ink-rose: #b04a86;
+
+  /* Accent faces, each with a light bevel and a dark side for the 3D keycap look */
+  --pink: #ff8cc0;
+  --pink-light: #ffc8e1;
+  --pink-dark: #d9558f;
+  --hot: #ff4f9a; /* logo, primary call to action */
+  --hot-light: #ff9cc8;
+  --hot-dark: #c2286d;
+
+  --sky: #8fd3ff;
+  --sky-light: #d4eeff;
+  --sky-dark: #4fa3da;
+
+  --mint: #7eefcf;
+  --mint-light: #cbfcee;
+  --mint-dark: #3ebf9c;
+
+  --lav: #c9b6ff;
+  --lav-light: #ece4ff;
+  --lav-dark: #9a7fe6;
+
+  --butter: #ffd84d;
+
+  /* Type */
+  --font-display: 'Silkscreen', monospace; /* titles, buttons, labels */
+  --font-body: 'Pixelify Sans', system-ui, sans-serif; /* sentences */
+  --font-kao: 'DotGothic16', 'Pixelify Sans', sans-serif; /* kaomoji and ♪ sparkles */
+  --font-ko: 'Jua', 'Pixelify Sans', sans-serif; /* Hangul */
+
+  /* Pixel geometry */
+  --border: 5px;
+  --border-thin: 4px;
+  --extrude: 10px 12px; /* resting keycap shadow offset */
+  --extrude-lift: 14px 18px; /* hovered / selected */
+  --extrude-press: 2px 2px; /* pressed */
+}
