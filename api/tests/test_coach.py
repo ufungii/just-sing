@@ -53,17 +53,18 @@ def test_coach_flow(guests, monkeypatch):  # noqa: F811
 
 
 @needs_db
-def test_failures_are_unavailable_and_retryable(guests, monkeypatch):  # noqa: F811
+def test_failures_fall_back_to_template_and_stay_retryable(guests, monkeypatch):  # noqa: F811
     c = new_guest(guests)
     mid, a = finished_attempt(c)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    assert c.post(f"/api/turns/{a}/coach").json() == {"status": "unavailable", "coach_blurb": None}
+    r = c.post(f"/api/turns/{a}/coach").json()
+    assert r["status"] == "ok" and r["source"] == "template" and "/100" in r["coach_blurb"]
 
     monkeypatch.setenv("GEMINI_API_KEY", "fake")
     monkeypatch.setattr(coach, "_generate", lambda p: (_ for _ in ()).throw(RuntimeError("quota")))
-    assert c.post(f"/api/turns/{a}/coach").json() == {"status": "unavailable", "coach_blurb": None}
+    assert c.post(f"/api/turns/{a}/coach").json()["source"] == "template"
     monkeypatch.setattr(coach, "_generate", lambda p: "   ")
-    assert c.post(f"/api/turns/{a}/coach").json()["status"] == "unavailable"  # empty text is not a blurb
+    assert c.post(f"/api/turns/{a}/coach").json()["source"] == "template"  # empty text is not a blurb
     assert c.get(f"/api/matches/{mid}").json()["attempts"][0]["score"]["coach_blurb"] is None  # nothing saved
 
     monkeypatch.setattr(coach, "_generate", lambda p: "Back online.")
