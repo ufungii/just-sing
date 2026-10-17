@@ -1,0 +1,9 @@
+# CPU pitch environment (Python 3.11), also used by download_audio.py.
+# First install torch/torchaudio from https://download.pytorch.org/whl/cpu.
+torch==2.8.0+cpu
+torchaudio==2.8.0+cpu
+numpy==1.26.4
+torchcrepe==0.0.24
+soundfile>=0.12
+scipy>=1.11
+librosa>=0.10

@@ -1,0 +1,7 @@
+{
+  "explorer.excludeGitIgnore": false,
+  "files.exclude": {
+    "**/*.mp3": false,
+    "**/*.json": false
+  }
+}

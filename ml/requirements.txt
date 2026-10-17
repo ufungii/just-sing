@@ -10,7 +10,12 @@ pytest>=8
 # --- Offline pipeline (heavy, laptop/Colab only, never on the prod server) ---
 torch>=2.2
 torchaudio>=2.2
-demucs>=4.0        # vocal / instrumental separation
+# Demucs has an incompatible torchaudio constraint. Install separately using
+# ml/pipeline/requirements-demucs.txt, never in this shared environment.
 whisperx>=3.1      # word-level timestamps (fallback: faster-whisper)
 torchcrepe>=0.0.22 # reference pitch contour
 google-genai>=0.3  # Gemini: romanization + translation
+
+# --- Local audio acquisition ---
+yt-dlp[default]==2026.8.19
+imageio-ffmpeg==0.6.0 # bundled FFmpeg executable for MP3 conversion
