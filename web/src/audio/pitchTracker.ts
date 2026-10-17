@@ -6,17 +6,53 @@
  *
  * A frame is voiced only if Pitchy's clarity, the window RMS and the frequency range all pass the config
  * gates, so mic noise does not become pitch just because the tracker returned a number.
+ *
+ * Raw Pitchy output is smoothed (see smoothFrame) before anyone reads it. The filter is centred, so it
+ * shifts nothing in time (frame k is still clip time k * hop); the price is that frame k is only final
+ * once frame k + SMOOTH_HALF has been analysed, i.e. 40 ms of extra display/rating latency. `analysed`
+ * reports the smoothed frames, so phrase rating waits for them.
  */
 import { PitchDetector } from 'pitchy';
 import { SCORING_CONFIG } from '../scoring/config';
 import type { CaptureBatch } from './captureWorklet';
 
+/** Median window is 2 * SMOOTH_HALF + 1 = 5 frames (0.1 s). */
+export const SMOOTH_HALF = 2;
+/** A frame this far (+-OCTAVE_TOL cents) from +-1200 cents off two agreeing neighbours is an octave glitch. */
+const OCTAVE_TOL_CENTS = 150;
+const AGREE_CENTS = 100;
+
+const cents = (a: number, b: number) => 1200 * Math.log2(a / b);
+
+/**
+ * Smoothed value for frame i of the raw track. Unvoiced stays unvoiced (voiced pitch is never smeared into
+ * a gap); a voiced frame becomes the median of the voiced frames within SMOOTH_HALF of it, after a
+ * single-frame octave jump (both neighbours voiced, agreeing, and an octave away) is replaced by them.
+ * Frames past the end of `raw` are simply absent, so the last frames use a shorter window.
+ */
+export function smoothFrame(raw: readonly (number | null)[], i: number): number | null {
+  if (raw[i] == null) return null;
+  const at = (j: number) => {
+    const v = raw[j] ?? null;
+    const a = raw[j - 1] ?? null, b = raw[j + 1] ?? null;
+    if (v != null && a != null && b != null && Math.abs(cents(a, b)) < AGREE_CENTS
+      && [a, b].every((n) => Math.abs(Math.abs(cents(v, n)) - 1200) < OCTAVE_TOL_CENTS)) return Math.sqrt(a * b);
+    return v;
+  };
+  const vals: number[] = [];
+  for (let j = i - SMOOTH_HALF; j <= i + SMOOTH_HALF; j++) { const v = at(j); if (v != null) vals.push(v); }
+  vals.sort((x, y) => x - y);
+  const m = vals.length >> 1;
+  return vals.length % 2 ? vals[m] : Math.sqrt(vals[m - 1] * vals[m]);
+}
+
 /** Keep about this many seconds of raw samples (only the latest window is ever needed). */
 const KEEP_SECONDS = 2;
 
 export class PitchTracker {
-  /** User Hz per clip frame (null = unvoiced). Read by the pitch lane and the scorer. */
+  /** Smoothed user Hz per clip frame (null = unvoiced). Read by the pitch lane and the scorer. */
   readonly hz: (number | null)[] = [];
+  private readonly raw: (number | null)[] = [];
   /** RMS of the latest analysed window, for the mic level meter. */
   level = 0;
 
@@ -43,9 +79,9 @@ export class PitchTracker {
     this.t0 = t0;
   }
 
-  /** Clip frames analysed so far; frames below this index are final. */
+  /** Clip frames final so far (analysed and smoothed); frames below this index are final. */
   get analysed() {
-    return this.next;
+    return this.hz.length;
   }
 
   push(batch: CaptureBatch) {
@@ -62,8 +98,11 @@ export class PitchTracker {
     while (this.next < this.frames) {
       const centre = Math.round((this.t0 + this.next * this.hop + this.offset) * this.sampleRate);
       if (centre + half > endFrame) break;
-      this.hz[this.next] = this.copyWindow(centre - half) ? this.pitchOfWindow() : null;
+      this.raw[this.next] = this.copyWindow(centre - half) ? this.pitchOfWindow() : null;
       this.next++;
+      // Frame k is final once k + SMOOTH_HALF is in, or when the clip has no more frames.
+      const final = this.next >= this.frames ? this.next : this.next - SMOOTH_HALF;
+      while (this.hz.length < final) this.hz.push(smoothFrame(this.raw, this.hz.length));
     }
   }
 

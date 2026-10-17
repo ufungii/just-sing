@@ -6,16 +6,20 @@ import type { MatchView, PhraseScore, Song } from '../../lib/types';
 import { useNav, type DuetSetup } from '../../routes';
 import { aggregate, buildTargetTrack, displayNotes, phraseSettlesAt, phraseWeights, registerRatio, scorePhrase, SCORING_CONFIG } from '../../scoring';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
+import { GuideControl } from '../../ui/GuideControl';
+import { PixelIcon } from '../../ui/PixelIcon';
 import { rangeLabel } from '../../components/timeline/range';
 import { MatchBoard } from '../Battle/BattleTurn';
 import { Lyrics } from '../Sing/Lyrics';
-import { PitchLane } from '../Sing/PitchLane';
+import { PitchLane, useLaneHeight } from '../Sing/PitchLane';
 import { Countdown, Judgement } from '../Sing/Judgement';
 import { bestClock, sectionAt, serverNow, type ClockSample } from './timeline';
 import '../Sing/Sing.css';
 
 type Phase = 'loading' | 'ready' | 'waiting' | 'playing' | 'saving' | 'saved' | 'error';
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
+/** Seconds before a handoff that the NEXT-player chip slides in (matches the 4 s the lane shows ahead). */
+const HANDOFF_CUE = 4;
 const EMPTY: (number | null)[] = [];
 
 /** A single audio/capture session. Sections change ownership; audio never restarts at a handoff. */
@@ -28,6 +32,7 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
   const [now, setNow] = useState(0);
   const [ratings, setRatings] = useState(new Map<string, PhraseScore>());
   const [judge, setJudge] = useState<PhraseScore | null>(null);
+  const laneHeight = useLaneHeight();
   const [guide, setGuide] = useState(false);
   const [guideVolume, setGuideVolume] = useState(0.6);
   const engine = useRef<SingEngine | null>(null);
@@ -52,9 +57,12 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
   const activeSlot = current?.slot ?? 0;
   const displaySlot = mySlot ?? activeSlot;
   const displayTarget = targets[displaySlot];
+  // The next section that hands the mic to the other singer, and how long until then.
+  const handoff = sections.slice(sectionIndex + 1).find((s) => s.slot !== activeSlot);
+  const handoffIn = handoff ? handoff.start - now : Infinity;
   const names = (slot: number) => `P${slot + 1} ${match?.players.find((p) => p.slot === slot)?.display_name ?? 'Player'}`;
   const notes = useMemo(() => song ? displayNotes(song).flatMap((note) => song.phrases.filter((p) => owner.has(p.id) && note.start < p.end && note.end > p.start)
-    .map((p) => ({ start: Math.max(note.start, p.start), end: Math.min(note.end, p.end), hz: note.hz * registerRatio(setup.registers[mySlot ?? owner.get(p.id)!]) }))) : [],
+    .map((p) => ({ start: Math.max(note.start, p.start), end: Math.min(note.end, p.end), hz: note.hz * registerRatio(setup.registers[mySlot ?? owner.get(p.id)!]), slot: owner.get(p.id) }))) : [],
   [song, owner, mySlot, setup.registers[0], setup.registers[1]]);
 
   useEffect(() => {
@@ -209,22 +217,34 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
       {song && <p className="sing-title">{song.title} <span>· {song.artist}</span></p>}
       {plan?.range && <p className="solo-hint">Practice section · {rangeLabel(plan.range)}</p>}
       {error && <Notice tone="error">{error}</Notice>}
-      <Panel tone={activeSlot === 0 ? 'pink' : 'sky'} label="SINGER">
-        <p data-testid="duet-current" data-slot={activeSlot} style={{ fontSize: 30, margin: 0 }} aria-live="polite">
-          {names(activeSlot)} {mySlot === undefined || mySlot === activeSlot ? '· SING' : '· LISTEN'}
-        </p>
-        <p data-testid="duet-next">{next ? `Next: ${names(next.slot)} at ${next.start.toFixed(1)} s` : 'Final section'}</p>
-        <p className="solo-hint">One song. Follow the singer cue; the music keeps playing through each switch.</p>
-        <div className="sing-hud" style={{ flexWrap: 'wrap', marginTop: 16 }}>
+      <div className={`duet-bar duet-bar--p${activeSlot + 1}`} title="One song. Follow the singer cue; the music keeps playing through each switch.">
+        <div className="duet-bar__who">
+          <p data-testid="duet-current" data-slot={activeSlot} aria-live="polite">
+            {names(activeSlot)} {mySlot === undefined || mySlot === activeSlot ? '· SING' : '· LISTEN'}
+          </p>
+          <p data-testid="duet-next">{next ? `Next: ${names(next.slot)} at ${next.start.toFixed(1)} s` : 'Final section'}</p>
+        </div>
+        <div className="sing-hud">
         {[0, 1].map((slot) => {
           const phrases = owned.filter((p) => owner.get(p.id) === slot);
           const scores = phrases.flatMap((p) => ratings.has(p.id) ? [ratings.get(p.id)!] : []);
           return <span key={slot} className="sing-chip" data-testid={`duet-score-${slot}`}>{names(slot)} · {scores.length ? aggregate(scores, phraseWeights(phrases, targets[slot])).total.toFixed(1) : '—'} · {scores.length}/{sections.filter((s) => s.slot === slot).flatMap((s) => s.phrase_ids).length} phrases </span>;
         })}
         </div>
-      </Panel>
+      </div>
       <div className="sing-stage">
-        {song && displayTarget ? <PitchLane song={song} notes={notes} target={displayTarget} getTime={getTime} userHz={engine.current?.tracker.hz ?? EMPTY} ratings={ratings} /> : <div className="sing-lane sing-lane--empty" />}
+        {song && displayTarget ? <PitchLane height={laneHeight} song={song} notes={notes} sections={sections} target={displayTarget} getTime={getTime} userHz={engine.current?.tracker.hz ?? EMPTY} ratings={ratings} /> : <div className="sing-lane sing-lane--empty" />}
+        {phase === 'playing' && handoff && handoffIn > 0 && handoffIn <= HANDOFF_CUE && (
+          <div className={`duet-cue duet-cue--p${handoff.slot + 1}`} data-testid="duet-handoff" aria-hidden="true">
+            <PixelIcon name="speaker" size={22} />
+            <span>NEXT: PLAYER {handoff.slot + 1}</span>
+            <b>{Math.ceil(handoffIn)}</b>
+          </div>
+        )}
+        {/* one polite announcement per handoff (the visible countdown is aria-hidden so it does not chatter) */}
+        <span className="sr-only" aria-live="polite">
+          {phase === 'playing' && handoff && handoffIn > 0 && handoffIn <= HANDOFF_CUE ? `Next: ${names(handoff.slot)} sings in a few seconds.` : ''}
+        </span>
         {phase === 'loading' && <div className="sing-overlay">LOADING AUDIO AND MIC…</div>}
         {phase === 'ready' && <div className="sing-overlay"><PixelButton tone="hot" size="lg" onClick={() => void prepare()}>READY TO SING</PixelButton></div>}
         {phase === 'waiting' && <div className="sing-overlay">Waiting for both microphones and audio…</div>}
@@ -237,7 +257,7 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
       {phase === 'saved' && error && <PixelButton onClick={() => void save()}>RETRY SAVE</PixelButton>}
       {phase === 'error' && <PixelButton onClick={() => void restart()}>{setup.online ? 'STOP DUET FOR RESTART' : 'RESTART TOGETHER'}</PixelButton>}
       <Panel>
-        {engine.current?.vocals && <><PixelButton aria-pressed={guide} onClick={() => setGuide((v) => !v)}>GUIDE VOCALS</PixelButton><input type="range" aria-label="Guide vocal volume" min={0} max={100} value={guideVolume * 100} onChange={(e) => setGuideVolume(Number(e.target.value) / 100)} /></>}
+        {engine.current?.vocals && <GuideControl on={guide} volume={guideVolume} onToggle={() => setGuide((v) => !v)} onVolume={setGuideVolume} />}
         {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman showTrans />}
       </Panel>
     </ScreenShell>
