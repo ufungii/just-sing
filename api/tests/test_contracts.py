@@ -84,3 +84,24 @@ def test_scoring_numbers_come_from_the_shared_config():
     assert abs(sum(config["total_weights"].values()) - 1) < 1e-9
     source = (Path(play.__file__)).read_text(encoding="utf-8")
     assert "0.8" not in source and "PITCH_WEIGHT" not in source
+
+
+def test_guest_cookie_works_when_auth0_is_not_configured(monkeypatch):
+    """Regression: any Authorization header got a 503 when Auth0 was not configured, even with a valid
+    guest cookie (a stale bearer token from an earlier login, for example)."""
+    import os
+    if not os.getenv("DATABASE_URL"):
+        import pytest
+        pytest.skip("needs DATABASE_URL")
+    monkeypatch.delenv("AUTH0_DOMAIN", raising=False)
+    monkeypatch.delenv("AUTH0_AUDIENCE", raising=False)
+    c = TestClient(app)
+    gid = c.post("/api/guests", json={"display_name": "stale-bearer"}).json()["id"]
+    try:
+        r = c.get("/api/history", headers={"Authorization": "Bearer left-over-token"})
+        assert r.status_code == 200, r.text
+    finally:
+        from sqlalchemy import text
+        from api.db import get_engine
+        with get_engine().begin() as conn:
+            conn.execute(text("delete from guest_session where id=:g"), {"g": gid})

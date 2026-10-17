@@ -95,9 +95,23 @@ from .play import router  # noqa: E402  (play.py imports CATALOG from this modul
 
 app.include_router(router)
 
-from .practice import router as practice_router  # noqa: E402
+from . import practice  # noqa: E402
 
-app.include_router(practice_router)
+app.include_router(practice.router)
+
+
+@app.middleware("http")
+async def limit_practice_upload(request: Request, call_next):
+    """Refuse an oversize practice upload from its Content-Length header, before the body is read
+    (the handler's own check only runs after Starlette has received the whole multipart body)."""
+    if request.method == "POST" and request.url.path == "/api/practice":
+        length = request.headers.get("content-length", "")
+        if not length.isdigit():
+            return error_response(request, 411, "length_required", "Send a Content-Length with the upload.")
+        if int(length) > practice.MAX_BYTES + 64 * 1024:  # a little headroom for the form fields
+            return error_response(request, 413, "audio_too_large",
+                                  f"Audio must be under {practice.MAX_BYTES // 1024 // 1024} MB.")
+    return await call_next(request)
 
 from .rooms import router as rooms_router  # noqa: E402
 

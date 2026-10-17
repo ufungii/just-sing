@@ -161,3 +161,16 @@ def test_lost_turn_is_recovered_without_double_scoring(world):
     view = c.get(f"/api/matches/{start['match_id']}", headers=host).json()
     assert [a["state"] for a in view["attempts"] if a["slot"] == 0].count("accepted") == 1
     assert view["active_slot"] == 1
+
+
+def test_binary_frame_gets_an_error_and_the_socket_survives(world):
+    """Regression: receive_text raised KeyError on a binary frame, killing the connection."""
+    c, guest = world
+    host, bo = guest("host"), guest("bo")
+    room = open_room(c, host, bo)
+    with c.websocket_connect(f"/ws/rooms/{room['id']}", headers=host) as ws:
+        until(ws, "room_snapshot")
+        ws.send_bytes(b"\x00\x01\x02")
+        assert until(ws, "error")["code"] == "bad_message"
+        ws.send_json({"type": "heartbeat"})
+        until(ws, "heartbeat_ack")  # still alive
