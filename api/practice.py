@@ -93,7 +93,7 @@ def practice(clip_id: str = Form(), phrase_id: str = Form(), audio: UploadFile =
         raise ApiError(404, "phrase_not_found", "Unknown clip or phrase.")
     expected = song.lines[phrase.line_index].practice_text
     if not expected.strip():
-        raise ApiError(422, "phrase_not_practicable", "This line is available for singing only. Choose a Korean spoken-practice line.")
+        raise ApiError(422, 'practice_unavailable', 'This line has no Korean pronunciation exercise. Choose a Korean-only line.')
 
     provider, status, words, overall = (scorer.provider if scorer else "none"), "unavailable", [], None
     with tempfile.TemporaryDirectory() as d:  # deleted on success, error and timeout alike

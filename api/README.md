@@ -104,7 +104,7 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | 409 | `not_your_turn`, `attempt_not_started`, `attempt_closed`, `attempt_invalidated`, `already_submitted`, `cannot_retry`, `use_room_rematch`, `room_full`, `room_started`, `not_ready`, `not_finished`, `use_duet_ready`, `duet_closed`, `missed_start`, `restart_duet`, `duet_not_started` |
 | 410 | `room_expired` |
 | 411 | `length_required` (practice uploads must send a `Content-Length`; browsers do this for `FormData`) |
-| 413 / 422 | `audio_too_large`, `audio_too_long`, `unsupported_audio`, `phrase_mismatch`, `phrase_not_practicable`, `invalid_result`, `invalid_register`, `invalid_request`, `invalid_duet`, `invalid_duet_range` |
+| 413 / 422 | `audio_too_large`, `audio_too_long`, `unsupported_audio`, `phrase_mismatch`, `practice_unavailable`, `invalid_result`, `invalid_register`, `invalid_request`, `invalid_duet`, `invalid_duet_range` |
 | 429 | `pronunciation_busy` (retryable), `too_many_joins` (retryable) |
 | 503 | `catalog_not_seeded`, `auth_unavailable`, `room_code_unavailable` |
 

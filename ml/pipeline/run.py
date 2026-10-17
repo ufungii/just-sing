@@ -37,6 +37,7 @@ def parser():
     result.add_argument("--id", required=True)
     result.add_argument("--title", required=True)
     result.add_argument("--artist", required=True)
+    result.add_argument("--language", choices=('ko', 'en'), default='ko')
     result.add_argument("--lyrics", type=Path, required=True, help="UTF-8 text, one lyric line per line")
     result.add_argument("--clip", type=Path, help="Source with lead vocals; separates two stem estimates")
     result.add_argument("--vocals", type=Path, help="Reuse a selected vocal stem instead of separation")
@@ -46,7 +47,6 @@ def parser():
     result.add_argument("--duration", type=float)
     result.add_argument("--data-dir", type=Path, help="Output catalog root (defaults to ml/data)")
     result.add_argument("--separation-python", type=Path, help="Python interpreter with Demucs installed")
-    result.add_argument("--language", choices=("ko", "en"), default="ko")
     return result
 
 
@@ -135,7 +135,7 @@ def prepare(args):
         print("JUST_SING_STAGE:aligning", flush=True)
         command(sys.executable, "-m", "ml.pipeline.align_lyrics", "--audio", output / "vocals.mp3",
                 "--instrumental", output / "instrumental.mp3", "--lyrics", output / "lyrics.supplied.txt",
-                "--output", output / "alignment")
+                "--output", output / "alignment", "--language", args.language)
         print("JUST_SING_STAGE:pitch", flush=True)
         command(sys.executable, "-m", "ml.pipeline.reference", "--audio", output / "vocals.mp3",
                 "--output", output / "reference.pitch.json")

@@ -96,7 +96,7 @@ def test_singing_only_line_is_rejected_before_audio_or_scorer(env, monkeypatch, 
     monkeypatch.setattr(practice, "scorer", FakeScorer())
     response = post(c, b"not decoded")
     assert response.status_code == 422
-    assert response.json()["error"]["code"] == "phrase_not_practicable"
+    assert response.json()["error"]["code"] == "practice_unavailable"
 
 
 def streamed_webm(path, seconds):
