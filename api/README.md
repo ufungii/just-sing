@@ -118,7 +118,7 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | POST | `/api/guests` | Create guest `{display_name}`; sets the cookie |
 | POST | `/api/auth/claim` | After login, send bearer token + guest cookie to move guest history to the account |
 | POST | `/api/matches` | `{clip_id}` for solo, plus `players: ["A","B"]` for local battle |
-| POST | `/api/turns/{attempt_id}/begin` | `{register, calibration_offset?}` |
+| POST | `/api/turns/{attempt_id}/begin` | `{register, calibration_offset?, range?: {start,end}}` |
 | POST | `/api/turns/{attempt_id}/result` | Final phrase results; needs an `Idempotency-Key` header |
 | GET | `/api/matches/{id}` | Match, players, attempts, scores, `winner_slot` |
 | POST | `/api/matches/{id}/retry` | Replace a lost or abandoned turn with a fresh attempt |
@@ -128,7 +128,7 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | POST | `/api/practice` | Multipart: `clip_id`, `phrase_id`, `audio` (WAV/MP3/WebM/Ogg, max 5 MB and 15 s) |
 | POST | `/api/rooms`, `/api/rooms/join` | Create `{clip_id}`; join `{code}` |
 | GET | `/api/rooms/{id}` | Snapshot (members only) |
-| POST | `/api/rooms/{id}/ready`, `/clip`, `/start`, `/rematch`, `/abort` | Lobby and lifecycle (`clip`, `start`, `rematch`, `abort` are host-only) |
+| POST | `/api/rooms/{id}/ready`, `/clip`, `/range`, `/start`, `/rematch`, `/abort` | Lobby and lifecycle (`clip`, `range`, `start`, `rematch`, `abort` are host-only) |
 | WS | `/ws/rooms/{id}` | Presence, snapshots, provisional progress |
 
 ## Example: a solo game
@@ -157,9 +157,9 @@ Rules worth knowing:
   scored on pitch alone). The response phrases are `{phrase_id, pitch, timing|null, score, coverage, rating}`, all server-computed.
 - The result must contain **every phrase of the clip exactly once** (`phrase_mismatch` otherwise), or, for a practice
   section, exactly the phrases of the range.
-- **Practice section** (solo only): `POST /api/turns/{id}/begin` with `{"register":0,"range":{"start":12.0,"end":30.5}}`.
+- **Practice section** (solo, or a host-selected online section): `POST /api/turns/{id}/begin` with `{"register":0,"range":{"start":12.0,"end":30.5}}`.
   The scored phrases are those with `start >= range.start - 0.05` and `end <= range.end + 0.05` (seconds from clip start);
-  none -> 422 `invalid_range` (also for non-finite/out-of-clip values, or any range in a local/online battle). The range is
+  none or no scoreable reference frames -> 422 `invalid_range` (also for non-finite/out-of-clip values, or any range in a local battle). The range is
   normalized to first-phrase start .. last-phrase end, fixed for the attempt (repeat begin with another range -> 409
   `attempt_already_started`), and the result must contain exactly those phrase IDs; totals are weighted over them only.
   Responses (`Score`, `GET /api/matches/{id}`, `/api/history` rows) carry `range: {start,end} | null` (null = full clip).
@@ -177,12 +177,22 @@ Rules worth knowing:
 ## Example: an online room
 
 1. Host `POST /api/rooms {clip_id}` and shares the returned `code`; the friend `POST /api/rooms/join {code}`.
-2. Each calls `POST /api/rooms/{id}/ready {ready: true}`; the host calls `/start` (returns `match_id`, `attempt_id`).
+2. The host can first select `POST /api/rooms/{id}/range {range: {start,end}}` (or `{range: null}` to reset).
+   A range/clip change clears both ready flags. Each calls `POST /api/rooms/{id}/ready {ready: true}`; the host calls `/start` (returns `match_id`, `attempt_id`).
 3. Both open `ws://host/ws/rooms/{id}` (guest cookie, or for Auth0 the WebSocket subprotocols `bearer, <token>`; never a query string, which would reach access logs). The server sends `room_snapshot`
    immediately and after every durable change.
 4. The singer runs `begin` then `result` exactly as in solo. Only the active seat may call them (`not_your_seat` otherwise).
 5. The other player sees `result_saved`, then their own turn opens; after the last result, `match_finished`. Both read the
    same winner from `GET /api/rooms/{id}` (`match.winner_slot`).
+
+Room snapshots include `range: {start,end} | null`, including in the lobby and after reconnects. The range is immutable
+once the match starts, applies to both singers automatically when `/begin` omits it, and is retained on retries and
+rematches. A client-supplied different section is rejected. Guests cannot edit it.
+
+No migration is required: editing a lobby section creates a draft match (`state: lobby`) with a pending host attempt.
+Its `phrase_results` holds the range object. Starting activates that same match and adds the guest player. Drafts are
+hidden from the lobby's public `match` field and never appear in history (no accepted scores). The original host attempt
+is kept across retries; after acceptance its phrase IDs preserve the selection. Changing the clip clears the draft range.
 
 WebSocket messages (all JSON with a `type` and an `id`):
 

@@ -7,12 +7,13 @@
  *   guide vocals (optional) -> guide gain -> destination
  *   mic -> capture worklet -> (silent) destination      batches -> PitchTracker (Pitchy, hop grid)
  */
+import type { TimeRange } from '../lib/types';
 import { SCORING_CONFIG } from '../scoring/config';
 import { CAPTURE_PROCESSOR, loadCaptureWorklet, type CaptureBatch } from './captureWorklet';
 import { PitchTracker } from './pitchTracker';
 import { loadBacking, loadVocals, scheduleCountIn, stopStream, type Backing } from './sources';
 
-/** Seconds of 3-2-1 count-in before clip time 0. */
+/** Seconds of 3-2-1 count-in before the selected playback start. */
 export const COUNT_IN = 3;
 
 export class SingEngine {
@@ -33,6 +34,7 @@ export class SingEngine {
     offset: number,
     /** Decoded guide vocals, or null when the clip has none. */
     readonly vocals: AudioBuffer | null,
+    readonly range: TimeRange | null,
   ) {
     this.guideGain = ctx.createGain();
     this.guideGain.gain.value = 0;
@@ -41,13 +43,13 @@ export class SingEngine {
   }
 
   /** Build the context, load the capture worklet and the backing track. Throws on load failure. */
-  static async create(clipId: string, duration: number, offset: number | null): Promise<SingEngine> {
+  static async create(clipId: string, duration: number, offset: number | null, range: TimeRange | null = null): Promise<SingEngine> {
     const ctx = new AudioContext({ latencyHint: 'interactive' });
     try {
       await loadCaptureWorklet(ctx);
       const backing = await loadBacking(ctx, clipId, duration);
       const vocals = await loadVocals(ctx, clipId);
-      return new SingEngine(ctx, backing, duration, offset ?? 0, vocals);
+      return new SingEngine(ctx, backing, duration, offset ?? 0, vocals, range);
     } catch (e) {
       void ctx.close();
       throw e;
@@ -83,18 +85,22 @@ export class SingEngine {
 
   private async startOnce(): Promise<number> {
     await this.ctx.resume();
-    this.t0 = this.ctx.currentTime + COUNT_IN + 0.15;
-    scheduleCountIn(this.ctx, [3, 2, 1].map((n) => this.t0 - n));
+    const start = this.range?.start ?? 0;
+    const end = this.range?.end ?? this.duration;
+    const at = this.ctx.currentTime + COUNT_IN + 0.15;
+    // Keep t0 as the origin of the full clip, including when it lies before context time 0.
+    this.t0 = at - start;
+    scheduleCountIn(this.ctx, [3, 2, 1].map((n) => at - n));
     this.source = this.ctx.createBufferSource();
     this.source.buffer = this.backing.buffer;
     this.source.connect(this.ctx.destination);
-    this.source.start(this.t0);
+    this.source.start(at, start, end - start);
     if (this.vocals) {
       // Always scheduled (silent while the gain is 0) so the guide can be switched on mid-song, in sync.
       this.guideSource = this.ctx.createBufferSource();
       this.guideSource.buffer = this.vocals;
       this.guideSource.connect(this.guideGain);
-      this.guideSource.start(this.t0);
+      this.guideSource.start(at, start, end - start);
     }
     this.tracker.start(this.t0);
     return this.t0;
@@ -105,7 +111,7 @@ export class SingEngine {
     this.guideGain.gain.setTargetAtTime(Math.max(0, Math.min(1, v)), this.ctx.currentTime, 0.02);
   }
 
-  /** Clip time in seconds on the master clock (negative during the count-in, -Infinity before start). */
+  /** Clip time on the master clock (before the selected start during count-in; -Infinity before start). */
   clipTime(): number {
     return this.ctx.currentTime - this.t0;
   }

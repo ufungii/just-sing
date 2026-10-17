@@ -23,8 +23,9 @@ from . import play
 from .auth import verify_bearer
 from .db import get_engine
 from .errors import ApiError
+from .models import TimeRange
 from .play import current_guest, get_db, match_view
-from .tables import GuestSession, Match, Room, RoomMember
+from .tables import GuestSession, Match, MatchPlayer, Room, RoomMember, TurnAttempt
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -76,15 +77,20 @@ hub = Hub()
 
 # ---- snapshots -------------------------------------------------------------------------------
 
+def _latest_match(s: Session, room: Room):
+    return s.scalars(select(Match).where(Match.room_id == room.id).order_by(Match.created_at.desc()).limit(1)).first()
+
+
 def snapshot(s: Session, room: Room) -> dict:
     members = s.scalars(select(RoomMember).where(RoomMember.room_id == room.id).order_by(RoomMember.slot)).all()
-    match = s.scalars(select(Match).where(Match.room_id == room.id).order_by(Match.created_at.desc()).limit(1)).first()
+    match = _latest_match(s, room)
     here = hub.present(room.id)
     return {"id": room.id, "code": room.code, "state": room.state, "state_version": room.state_version,
             "clip_id": room.clip_id, "host_slot": 0,
+            "range": play._match_range(s, match) if match else None,
             "members": [{"slot": m.slot, "display_name": m.display_name, "ready": m.ready,
                          "connected": m.slot in here} for m in members],
-            "match": match_view(s, match) if match else None}
+            "match": match_view(s, match) if match and match.state != "lobby" else None}
 
 
 def publish(s: Session, room: Room, *extra: dict):
@@ -132,6 +138,22 @@ class JoinIn(BaseModel):
 
 class ReadyIn(BaseModel):
     ready: bool
+
+
+class RangeIn(BaseModel):
+    range: TimeRange | None = None
+
+
+def _draft(s: Session, room: Room, guest: GuestSession) -> Match:
+    """A lobby's pending host attempt doubles as durable range settings. On start, this same
+    draft becomes the real match. Old rooms without a draft are supported lazily."""
+    match = _latest_match(s, room)
+    if match is None:
+        out = play._new_match(s, guest, room.clip_id, [guest.display_name], room_id=room.id)
+        match = s.get(Match, out["match_id"])
+        match.state = "lobby"
+        s.flush()
+    return match
 
 
 @router.post("/api/rooms")
@@ -215,8 +237,36 @@ def change_clip(room_id: uuid.UUID, body: RoomIn, guest=Depends(current_guest), 
         raise ApiError(409, "room_started", "The room is no longer in the lobby.")
     song = play.require_clip(s, body.clip_id)
     room.clip_id, room.clip_version = song.id, song.version
+    draft = _latest_match(s, room)
+    if draft:
+        draft.clip_id, draft.clip_version = song.id, song.version
+        first = s.scalar(select(TurnAttempt).where(TurnAttempt.match_id == draft.id, TurnAttempt.slot == 0))
+        first.phrase_results = None
     for m in s.scalars(select(RoomMember).where(RoomMember.room_id == room.id)):
         m.ready = False  # a new clip needs a fresh yes from everyone
+    _bump(room)
+    s.commit()
+    publish(s, room)
+    return snapshot(s, room)
+
+
+@router.post("/api/rooms/{room_id}/range")
+def change_range(room_id: uuid.UUID, body: RangeIn, guest=Depends(current_guest), s: Session = Depends(get_db)):
+    room = _room(s, room_id, lock=True)
+    _member(s, room, guest)
+    _host_only(room, guest)
+    if room.state != "lobby":
+        raise ApiError(409, "room_started", "The room is no longer in the lobby.")
+    song = play.require_clip(s, room.clip_id)
+    inc = play._included(song, body.range)
+    rng = play._range_of(song, [p.id for p in inc]) if body.range else None
+    if body.range and not any(w > 0 for p, w in zip(song.phrases, play._weights(song)) if p in inc):
+        raise ApiError(422, "invalid_range", "The section must contain scoreable reference notes.")
+    draft = _draft(s, room, guest)
+    first = s.scalar(select(TurnAttempt).where(TurnAttempt.match_id == draft.id, TurnAttempt.slot == 0))
+    first.phrase_results = {"range": rng.model_dump()} if rng else None
+    for m in s.scalars(select(RoomMember).where(RoomMember.room_id == room.id)):
+        m.ready = False
     _bump(room)
     s.commit()
     publish(s, room)
@@ -226,7 +276,18 @@ def change_clip(room_id: uuid.UUID, body: RoomIn, guest=Depends(current_guest), 
 def _start_match(s: Session, room: Room, host: GuestSession, previous: uuid.UUID | None = None):
     names = s.scalars(select(RoomMember.display_name).where(RoomMember.room_id == room.id)
                       .order_by(RoomMember.slot)).all()
-    out = play._new_match(s, host, room.clip_id, list(names), previous=previous, room_id=room.id)
+    draft = _latest_match(s, room)
+    if draft and draft.state == "lobby":
+        play._frozen_song(draft)
+        draft.state = "active"
+        s.add(MatchPlayer(match_id=draft.id, slot=1, display_name=names[1]))
+        first = s.scalar(select(TurnAttempt).where(TurnAttempt.match_id == draft.id, TurnAttempt.slot == 0))
+        out = {"match_id": draft.id, "attempt_id": first.id, "scoring_version": draft.scoring_version}
+    else:
+        rng = play._match_range(s, draft) if draft else None
+        out = play._new_match(s, host, room.clip_id, list(names), previous=previous, room_id=room.id)
+        first = s.get(TurnAttempt, out["attempt_id"])
+        first.phrase_results = {"range": rng.model_dump()} if rng else None
     room.state = "playing"
     _bump(room)
     s.commit()

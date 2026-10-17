@@ -5,6 +5,8 @@
  */
 
 export type Rating = 'perfect' | 'great' | 'okay' | 'bad' | 'miss';
+export interface TimeRange { start: number; end: number }
+
 export type Register = -12 | 0 | 12; // semitones, chosen before the turn
 
 export interface ClipSummary {
@@ -75,6 +77,7 @@ export interface PhraseScore {
 }
 
 export interface Score {
+  range?: TimeRange | null;
   mode: 'solo' | 'battle';
   clip_id: string;
   clip_version: number;
@@ -103,6 +106,7 @@ export interface Practice {
 }
 
 export interface HistoryItem {
+  range?: TimeRange | null;
   match_id: string;
   clip_id: string;
   created_at: string;

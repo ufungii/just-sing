@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ApiError, asGuest, retryTurn, savedName } from '../../lib/api';
 import {
-  abortRoom, connectRoom, createRoom, getRoom, joinRoom, leaveRoom, pushSnapshot, rematchRoom, setReady, setRoomClip, startRoom,
+  abortRoom, connectRoom, createRoom, getRoom, joinRoom, leaveRoom, pushSnapshot, rematchRoom, setReady, setRoomClip, setRoomRange, startRoom,
   useRoomLive,
 } from '../../lib/rooms';
 import type { RoomSnapshot } from '../../lib/rooms';
@@ -14,6 +14,8 @@ import { useManifest } from '../Results/useManifest';
 import { MicCheck } from '../Solo/MicCheck';
 import { ClipList, NAME_MAX, REGISTERS, useClips } from '../Solo/SoloSetup';
 import { TimingCheck, loadCalibration } from '../Solo/TimingCheck';
+import { PracticeRangePicker } from '../../components/timeline/PracticeRangePicker';
+import { rangeLabel } from '../../components/timeline/range';
 import '../Solo/SoloSetup.css';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -131,8 +133,11 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
       await fn();
     } catch (e) {
       setError(msg(e));
+      setBusy(false);
+      return false;
     }
     setBusy(false);
+    return true;
   };
 
   function sing() {
@@ -144,6 +149,7 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
       setup: {
         runId: crypto.randomUUID(),
         clipId: snap.clip_id,
+        range: snap.range,
         register,
         calibrationOffset: offset,
         playerName: snap.members.find((p) => p.slot === room.slot)?.display_name ?? 'Player',
@@ -193,6 +199,8 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
             ) : (
               <p style={{ fontSize: 22, margin: 0 }}>{clip ? `${clip.title} · ${clip.artist}` : snap.clip_id}. The host picks the song.</p>
             )}
+            <PracticeRangePicker clipId={snap.clip_id} range={snap.range} disabled={busy}
+              onChange={isHost ? (range) => act(() => setRoomRange(room.id, range).then(pushSnapshot)) : undefined} />
           </Panel>
           <div className="solo-side">
             <Panel label="PLAYERS" className="solo-you">
@@ -264,11 +272,13 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
   // ---- playing: my turn, or waiting for the other singer ----
   const myTurn = match.state === 'active' && match.active_slot === room.slot;
   const singer = snap.members.find((p) => p.slot === match.active_slot);
-  const dur = song?.duration ?? clip?.duration ?? 0;
+  const rangeStart = snap.range?.start ?? 0;
+  const dur = (snap.range?.end ?? song?.duration ?? clip?.duration ?? 0) - rangeStart;
   const p = live.progress;
   return (
     <ScreenShell title={`ROOM ${snap.code}`} kao="♪(^▽^)♪" onBack={leave} backLabel="LEAVE">
       {notices}
+      {snap.range && <p className="solo-hint">Practice section · {rangeLabel(snap.range)}</p>}
       {match.state === 'retry_required' ? (
         match.active_slot === room.slot ? (
           <Panel tone="pink" label="TURN LOST">
@@ -291,7 +301,7 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
               : `${singer?.display_name ?? 'They'} is singing. Your turn comes next.`}
           </p>
           <div className="sing-progress" aria-hidden="true">
-            <div className="sing-progress__fill" style={{ width: `${dur && p ? Math.max(0, Math.min(1, p.t / dur)) * 100 : 0}%` }} />
+            <div className="sing-progress__fill" style={{ width: `${dur && p ? Math.max(0, Math.min(1, (p.t - rangeStart) / dur)) * 100 : 0}%` }} />
           </div>
           <p data-testid="live-badges" style={{ fontSize: 22 }}>
             {p ? `Live score ${p.running.toFixed(1)} · ` : ''}
