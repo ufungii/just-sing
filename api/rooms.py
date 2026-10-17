@@ -150,7 +150,7 @@ def create_room(body: RoomIn, guest=Depends(current_guest), s: Session = Depends
         raise ApiError(503, "room_code_unavailable", "Could not allocate a room code. Try again.", True)
     s.add(RoomMember(room_id=room.id, slot=0, guest_id=guest.id, display_name=guest.display_name))
     s.commit()
-    return snapshot(s, room)
+    return {**snapshot(s, room), "you": 0}  # "you": the caller's seat (the shared snapshot cannot say)
 
 
 _join_log: dict[uuid.UUID, deque] = defaultdict(deque)
@@ -171,7 +171,8 @@ def join_room(body: JoinIn, guest=Depends(current_guest), s: Session = Depends(g
         raise ApiError(404, "room_not_found", "No room with that code.")
     if room.expires_at < datetime.now(timezone.utc):
         raise ApiError(410, "room_expired", "That room has expired.")
-    if s.scalar(select(RoomMember.slot).where(RoomMember.room_id == room.id, RoomMember.guest_id == guest.id)) is None:
+    mine = s.scalar(select(RoomMember.slot).where(RoomMember.room_id == room.id, RoomMember.guest_id == guest.id))
+    if mine is None:
         if room.state != "lobby":
             raise ApiError(409, "room_started", "That room already started.")
         taken = s.scalars(select(RoomMember.slot).where(RoomMember.room_id == room.id)).all()
@@ -181,14 +182,15 @@ def join_room(body: JoinIn, guest=Depends(current_guest), s: Session = Depends(g
         _bump(room)
         s.commit()
         publish(s, room)
-    return snapshot(s, room)
+        mine = 1
+    return {**snapshot(s, room), "you": mine}
 
 
 @router.get("/api/rooms/{room_id}")
 def get_room(room_id: uuid.UUID, guest=Depends(current_guest), s: Session = Depends(get_db)):
     room = _room(s, room_id)
-    _member(s, room, guest)
-    return snapshot(s, room)
+    me = _member(s, room, guest)
+    return {**snapshot(s, room), "you": me.slot}
 
 
 @router.post("/api/rooms/{room_id}/ready")

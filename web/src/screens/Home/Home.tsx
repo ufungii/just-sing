@@ -40,6 +40,14 @@ const CARDS: CardDef[] = [
     color: 'sky',
   },
   {
+    to: 'online',
+    title: 'ONLINE',
+    sub: 'make a room, send the code, sing against a friend',
+    kao: '(＾▽＾)ﾉ ⇄ ヽ(＾▽＾)',
+    icon: 'versus',
+    color: 'pink',
+  },
+  {
     to: 'history',
     title: 'HISTORY',
     sub: 'your saved scores from this session',

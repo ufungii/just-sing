@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test';
 const PORT = 8765;
 export default defineConfig({
   testDir: '.',
-  testMatch: ['sing.spec.ts', 'battle.spec.ts'],
+  testMatch: ['sing.spec.ts', 'battle.spec.ts', 'online.spec.ts'],
   timeout: 120_000,
   workers: 1, // one fake mic file per browser; takes run one after another
   reporter: 'list',
