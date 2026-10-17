@@ -14,7 +14,7 @@ def midi_to_hz(midi: float) -> float:
 
 
 def example_melody() -> list[Note]:
-    """~9 s phrase in a comfortable singing range, with rests between phrases."""
+    """~10 s melody in a comfortable singing range, with rests between phrases."""
     return [
         (64, 0.5), (67, 0.5), (69, 0.75), (67, 0.5), (64, 0.75),
         (None, 0.5),
@@ -72,7 +72,7 @@ def render_audio(
 # --------------------------------------------------------------------------- #
 def example_phrases() -> list[tuple[str, float, float]]:
     """(id, start_s, end_s) phrase boundaries matching example_melody()."""
-    return [("p1", 0.0, 3.2), ("p2", 3.2, 6.0), ("p3", 6.0, 9.5)]
+    return [("p1", 0.0, 3.2), ("p2", 3.2, 6.0), ("p3", 6.0, 10.25)]
 
 
 def detune_random(notes: list[Note], cents: float, seed: int = 0) -> list[Note]:

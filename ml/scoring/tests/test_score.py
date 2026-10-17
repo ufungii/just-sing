@@ -5,7 +5,7 @@ from ml.evals.synthetic import example_melody, melody_track
 from ml.scoring.score import score_turn
 
 HOP = 0.02
-PHRASES = [("p1", 0.0, 3.2), ("p2", 3.2, 6.0), ("p3", 6.0, 9.5)]
+PHRASES = [("p1", 0.0, 3.2), ("p2", 3.2, 6.0), ("p3", 6.0, 10.25)]
 
 
 @pytest.fixture
@@ -58,7 +58,8 @@ def test_deterministic(ref):
 
 def _late(track, seconds):
     n = int(round(seconds / HOP))
-    return np.concatenate([np.full(n, np.nan), track])[: len(track)]
+    # a real recording keeps running past the clip end, so do not truncate the delayed track
+    return np.concatenate([np.full(n, np.nan), track])
 
 
 def test_calibrated_device_latency_costs_nothing_on_pitch_or_timing(ref):

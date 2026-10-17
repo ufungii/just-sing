@@ -96,7 +96,7 @@ def to_markdown(results: dict, checks, seeds: int) -> str:
     out = [
         "# Singing score: degradation evals",
         "",
-        f"Scoring version `{SCORING_VERSION}`. Synthetic voice-like melody (9.5 s, 14 notes, 3 phrases), "
+        f"Scoring version `{SCORING_VERSION}`. Synthetic voice-like melody (10.25 s, 14 notes, 3 phrases), "
         f"rendered to audio, tracked with pyin, scored with `score_turn`. {seeds} seeds per level.",
         "Totals are 0-100. **Limits:** clean synthetic voices only; says nothing yet about real singers.",
         "",
