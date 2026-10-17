@@ -350,9 +350,15 @@ async def room_socket(ws: WebSocket, room_id: uuid.UUID):
     try:
         while True:
             try:
-                raw = await asyncio.wait_for(ws.receive_text(), HEARTBEAT_TIMEOUT)
+                frame = await asyncio.wait_for(ws.receive(), HEARTBEAT_TIMEOUT)
             except asyncio.TimeoutError:
                 return await ws.close(code=1001)  # silent too long: treat as gone
+            if frame["type"] == "websocket.disconnect":
+                break
+            raw = frame.get("text")
+            if raw is None:  # a binary frame: say so and keep the socket open
+                await ws.send_json(_event("error", code="bad_message", message="Send JSON text frames only."))
+                continue
             now = time.monotonic()
             while recent and now - recent[0] > 1:
                 recent.popleft()
