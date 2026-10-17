@@ -17,6 +17,10 @@ class PitchConfig:
     # Credit falls linearly to zero at this error. A soft ramp (not a hard
     # pass/fail) keeps the score smooth, which matters for monotonicity evals.
     zero_credit_cents: float = 200.0
+    # Pitch may match the target up to this many seconds early or late without
+    # losing pitch credit (lateness is then penalized by timing only). 0 = strict,
+    # the current default. See ml/evals/results/tolerance.md before changing it.
+    time_tolerance_s: float = 0.0
 
 
 @dataclass(frozen=True)

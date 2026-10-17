@@ -120,3 +120,25 @@ def test_pyin_extraction_matches_ground_truth_and_ranks_detuning():
     bad = pitch_score(off, ref).score
     assert good > 85, f"clean extraction scored only {good:.1f}"
     assert bad < good - 15, f"detuned take not clearly worse: {bad:.1f} vs {good:.1f}"
+
+
+def test_crepe_backend_matches_ground_truth():
+    # Runs only where torchcrepe is installed (the GPU / prep environment).
+    pytest.importorskip("torchcrepe")
+    notes = example_melody()
+    ref = melody_track(notes, HOP)
+    track = pitch_contour(render_audio(notes), 16_000, backend="crepe")
+    assert abs(len(track) - len(ref)) <= 2
+    assert pitch_score(track, ref).score > 90
+    assert pitch_score(pitch_contour(render_audio(detune(notes, 150)), 16_000, backend="crepe"), ref).score < 75
+
+
+def test_time_tolerance_forgives_small_lateness_but_not_wrong_notes(ref):
+    from ml.scoring.config import PitchConfig
+
+    late = np.concatenate([np.full(5, np.nan), ref])  # 0.1 s late
+    strict, tol = PitchConfig(), PitchConfig(time_tolerance_s=0.1)
+    assert pitch_score(late, ref, cfg=strict).score < 97
+    assert pitch_score(late, ref, cfg=tol).score == pytest.approx(100.0)
+    assert pitch_score(ref * 2, ref, cfg=tol).score == 0.0          # wrong register still wrong
+    assert pitch_score(np.full_like(ref, np.nan), ref, cfg=tol).score == 0.0
