@@ -100,7 +100,9 @@ export const audioUrl = (clipId: string) => `/api/clips/${encodeURIComponent(cli
 
 // ---------- solo play ----------
 
-export const createMatch = (clipId: string) => request<NewMatch>('/api/matches', json({ clip_id: clipId }));
+/** Solo by default; two player names make a local battle (player 1's attempt comes back, player 2's appears after). */
+export const createMatch = (clipId: string, players?: [string, string]) =>
+  request<NewMatch>('/api/matches', json(players ? { clip_id: clipId, players } : { clip_id: clipId }));
 export const beginTurn = (attemptId: string, register: Register, calibrationOffset: number | null) =>
   request<{ attempt_id: string; state: string }>(
     `/api/turns/${attemptId}/begin`,

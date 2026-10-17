@@ -16,6 +16,16 @@ export interface SingSetup {
   playerName: string;
   /** Server match for saving results; null when the server or database is unavailable (play still works, unsaved). */
   match: { matchId: string; attemptId: string } | null;
+  /** Set for a local battle turn; solo leaves it undefined. */
+  battle?: BattleCtx;
+}
+
+/** Local 1P vs 2P: one clip, two singers on one laptop, each with their own register. */
+export interface BattleCtx {
+  turn: 0 | 1;
+  names: [string, string];
+  registers: [Register, Register];
+  calibrationOffset: number | null;
 }
 
 /** Handed from the singing screen to the results screen. */
@@ -38,7 +48,9 @@ export type Route =
   | { name: 'results'; result: SingResult }
   | { name: 'practice' }
   | { name: 'history' }
-  | { name: 'battle' };
+  | { name: 'battle' }
+  /** After a battle turn: hand-off after player 1, final results after player 2. */
+  | { name: 'battleturn'; result: SingResult };
 
 export interface Nav {
   route: Route;

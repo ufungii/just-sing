@@ -7,7 +7,8 @@ import { Sing } from './screens/Sing/Sing';
 import { Results } from './screens/Results/Results';
 import { Practice } from './screens/Practice/Practice';
 import { History } from './screens/History/History';
-import { ComingSoon } from './screens/ComingSoon';
+import { BattleSetup } from './screens/Battle/BattleSetup';
+import { BattleTurn } from './screens/Battle/BattleTurn';
 
 /** Top-level navigation: one route at a time, shared through NavContext. */
 export function App() {
@@ -76,7 +77,8 @@ function renderRoute(route: Route, go: (r: Route) => void) {
     case 'history':
       return <History />;
     case 'battle':
-      // Battle is deferred until solo and practice work end to end (CLAUDE.md).
-      return <ComingSoon />;
+      return <BattleSetup />;
+    case 'battleturn':
+      return <BattleTurn result={route.result} />;
   }
 }
