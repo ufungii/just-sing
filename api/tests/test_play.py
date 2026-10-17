@@ -87,3 +87,22 @@ def test_local_battle_alternates_and_picks_winner_or_tie(guests):
         assert view["state"] == "finished" and view["winner_slot"] == winner
     rematch = c.post(f"/api/matches/{m['match_id']}/rematch").json()
     assert [p["display_name"] for p in c.get(f"/api/matches/{rematch['match_id']}").json()["players"]] == ["Ann", "Bo"]
+
+
+def test_concurrent_submit_and_retry_never_crash_or_lose_a_result(guests):
+    """Regression: submit locked attempt->match and retry locked match->attempt, so racing them could
+    deadlock (500), or retry could invalidate a result that had just been accepted."""
+    from concurrent.futures import ThreadPoolExecutor
+    c = new_guest(guests)
+    for i in range(6):
+        m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+        a = m["attempt_id"]
+        c.post(f"/api/turns/{a}/begin", json={})
+        with ThreadPoolExecutor(2) as pool:
+            fs = pool.submit(c.post, f"/api/turns/{a}/result", json=GOOD, headers={"Idempotency-Key": f"k{i}"})
+            fr = pool.submit(c.post, f"/api/matches/{m['match_id']}/retry")
+            rs, rr = fs.result(), fr.result()
+        assert rs.status_code in (200, 409) and rr.status_code in (200, 409), (rs.text, rr.text)
+        states = {x["id"]: x["state"] for x in c.get(f"/api/matches/{m['match_id']}").json()["attempts"]}
+        if rs.status_code == 200:
+            assert states[a] == "accepted"  # an accepted result is never invalidated afterwards

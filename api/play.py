@@ -162,13 +162,22 @@ def rematch(match_id: uuid.UUID, guest=Depends(current_guest), s: Session = Depe
     return out
 
 
+def lock_turn(s: Session, attempt_id: uuid.UUID) -> tuple[Match, TurnAttempt]:
+    """Lock order for every turn action: the match row first, then the attempt row. One fixed order
+    means concurrent begin/submit/retry/recovery queue up instead of deadlocking."""
+    match_id = s.scalar(select(TurnAttempt.match_id).where(TurnAttempt.id == attempt_id))
+    if match_id is None:
+        raise ApiError(404, "attempt_not_found", "No such attempt.")
+    match = s.get(Match, match_id, with_for_update=True, populate_existing=True)
+    attempt = s.get(TurnAttempt, attempt_id, with_for_update=True, populate_existing=True)
+    return match, attempt
+
+
 @router.post("/turns/{attempt_id}/begin")
 def begin_turn(attempt_id: uuid.UUID, body: BeginIn, guest=Depends(current_guest),
                s: Session = Depends(get_db)):
-    attempt = s.get(TurnAttempt, attempt_id, with_for_update=True)
-    if not attempt:
-        raise ApiError(404, "attempt_not_found", "No such attempt.")
-    match = _owned_match(s, guest, attempt.match_id)
+    match, attempt = lock_turn(s, attempt_id)
+    _owned_match(s, guest, match.id)
     _check_turn(s, guest, match, attempt)
     if body.register not in (-12, 0, 12):
         raise ApiError(422, "invalid_register", "register must be -12, 0 or 12.")
@@ -203,11 +212,9 @@ def _score(match: Match, a: TurnAttempt) -> Score:
 @router.post("/turns/{attempt_id}/result", response_model=Score)
 def submit_result(attempt_id: uuid.UUID, body: ResultIn, idempotency_key: str = Header(max_length=64),
                   guest=Depends(current_guest), s: Session = Depends(get_db)):
-    # Row lock: concurrent duplicate submissions queue here and see the accepted state.
-    attempt = s.get(TurnAttempt, attempt_id, with_for_update=True)
-    if not attempt:
-        raise ApiError(404, "attempt_not_found", "No such attempt.")
-    match = _owned_match(s, guest, attempt.match_id)
+    # Row locks: concurrent duplicate submissions (and retries) queue here and see the latest state.
+    match, attempt = lock_turn(s, attempt_id)
+    _owned_match(s, guest, match.id)
     if attempt.state == "accepted":
         if attempt.idempotency_key == idempotency_key:
             return _score(match, attempt)  # replay: same answer, nothing advances twice
@@ -269,13 +276,14 @@ def match_view(s: Session, match: Match) -> dict:
 def retry_turn(match_id: uuid.UUID, guest=Depends(current_guest), s: Session = Depends(get_db)):
     """Replace a lost or abandoned turn with a fresh attempt. The old one is invalidated first, so a
     late submission from it cannot overwrite anything."""
-    match = s.get(Match, match_id, with_for_update=True)
+    match = s.get(Match, match_id, with_for_update=True, populate_existing=True)  # match first, as lock_turn
     if match:
         _owned_match(s, guest, match_id)
     if not match or match.state not in ("active", "retry_required"):
         raise ApiError(409, "cannot_retry", "This match has no turn to retry.")
     last = s.scalars(select(TurnAttempt).where(TurnAttempt.match_id == match.id, TurnAttempt.slot == match.active_slot)
-                     .order_by(TurnAttempt.attempt_number.desc()).limit(1)).one()
+                     .order_by(TurnAttempt.attempt_number.desc()).limit(1)
+                     .with_for_update().execution_options(populate_existing=True)).one()
     if last.state == "accepted":
         raise ApiError(409, "cannot_retry", "That turn already has a result.")
     last.state = "invalidated"
