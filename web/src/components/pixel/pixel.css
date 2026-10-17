@@ -1,0 +1,105 @@
+/*
+ * Pixel sprite styles. Keyframes and timings are copied from the approved mockup
+ * (web/.design-ref/home-mockup.dc.html); every class is prefixed px- to avoid collisions.
+ * Global CSS already disables animation under prefers-reduced-motion.
+ */
+
+.px-svg {
+  display: block;
+  shape-rendering: crispEdges;
+}
+
+/* ---- Keyframes ---- */
+
+@keyframes px-hop {
+  0%, 100% { transform: translateY(0) rotate(-8deg) scale(1, 1); }
+  20% { transform: translateY(0) rotate(-8deg) scale(1.08, 0.9); }
+  45% { transform: translateY(-26px) rotate(-3deg) scale(0.95, 1.06); }
+  70% { transform: translateY(0) rotate(-10deg) scale(1.06, 0.94); }
+}
+@keyframes px-hop-shadow {
+  0%, 100%, 70% { transform: scaleX(1); opacity: 0.25; }
+  45% { transform: scaleX(0.6); opacity: 0.12; }
+}
+@keyframes px-sway {
+  0%, 100% { transform: rotate(-7deg) translateX(-4px); }
+  50% { transform: rotate(7deg) translateX(4px); }
+}
+@keyframes px-note-up {
+  0% { transform: translate(0, 0) rotate(0); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate(var(--dx, 20px), -90px) rotate(20deg); opacity: 0; }
+}
+@keyframes px-twinkle {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+@keyframes px-drift {
+  from { transform: translateX(0); }
+  to { transform: translateX(60px); }
+}
+
+/* ---- Animation classes (reusable by screens too) ---- */
+
+.px-hop { animation: px-hop 1.1s steps(6) infinite; transform-origin: 50% 100%; }
+.px-hop-shadow { animation: px-hop-shadow 1.1s steps(6) infinite; }
+.px-sway { animation: px-sway 1.6s steps(5) infinite; transform-origin: 50% 100%; }
+.px-note { animation: px-note-up 2.4s steps(8) infinite; }
+.px-twinkle { animation: px-twinkle 1.8s steps(3) infinite; }
+.px-drift { animation: px-drift 9s steps(18) infinite alternate; }
+
+/* ---- Mascot buttons ---- */
+
+.px-mascot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.px-mascot:focus-visible {
+  outline: 4px dashed var(--ink);
+  outline-offset: 6px;
+}
+/* Squish on press. Scales a wrapper so it does not fight the sprite's own animation. */
+.px-mascot-body { display: block; }
+.px-mascot:active .px-mascot-body { transform: scale(0.9); }
+
+.px-bubble {
+  position: relative;
+  display: block;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: var(--paper);
+  border: var(--border-thin) solid var(--ink);
+  box-shadow: 4px 4px 0 var(--ink);
+  font-family: var(--font-kao);
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.px-ground-shadow {
+  display: block;
+  background: var(--ink);
+}
+
+.px-note-glyph {
+  position: absolute;
+  font-family: var(--font-body);
+  pointer-events: none;
+}
+
+/* ---- Background layer ---- */
+
+.px-sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.px-sky > * { position: absolute; }
