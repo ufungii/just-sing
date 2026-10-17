@@ -62,6 +62,18 @@ instrumental keeps players in time. But this check
 assumes the player sings on the song's clock, so a line sung more than about a second late
 is not credited.
 
+**A real hum is harder to reject than our synthetic one (correction).** The "aah" control above is
+resynthesised, and a real human hum passes the first test more easily. The test recording is Daniel
+humming 34 s of Love Scenario with no words, from memory and without the music. It cannot be
+placed on the song's clock, so we gave the check its best case: for each line, the start time in the
+recording with the largest gain. Under that search, every one of the 54 lines cleared the hum test
+(median gain +0.12, against +0.21 for his worded take under the same search). Both tests together
+matched **32/54 lines for the hum, against 44/54 for words**. So the check separates humming from
+words better than chance, but it does **not** reject real humming reliably. The search gives each
+line about 140 tries, which favours both takes; the app uses one fixed start time. The fair test,
+a hum sung along with the instrumental, is still to do. Until then, do not claim that humming
+cannot pass.
+
 ## Not shown yet (limits)
 
 - **Same tune, wrong words** is not directly tested. The controls show that the words matter
