@@ -12,7 +12,7 @@ Three modes, in priority order:
 2. **Spoken Korean pronunciation practice (core, separate mode).** The player reads a short lyric phrase aloud at normal speaking pace and gets word-level feedback. It never affects the singing score.
 3. **Battle (deferred, stretch).** Two players take turns on the same clip under identical scoring rules; higher total wins, equal totals tie. **Do not start battle work (UI, schema, rooms) until solo karaoke and spoken practice work end to end.** Keep the scoring engine mode-agnostic so battle is just two turns of it. Local shared-laptop first; online two-computer rooms are a further stretch and cut first.
 
-Platform: a **browser web app** (React + Vite frontend served alongside FastAPI). No game engine, no downloadable client. **Current focus: solo only.**
+Platform: a **desktop app built with Electron**, a thin client that opens the shared server's own URL (React + Vite frontend served alongside FastAPI). The **browser version keeps working** next to it as the dev path and for judges; Electron-only code is feature-checked (`if (window.electronAPI)`) so the web path never breaks. No game engine, and no Python is bundled in the app. **Current focus: solo only.**
 
 Planned demo clips (~30 s each, chosen by the team): Girls' Generation "Kissing You" and TWICE "What Is Love?". Get **one** working end to end before touching the second.
 
@@ -30,7 +30,7 @@ The singing screen is rhythm-game first: target notes and the live trace dominat
 
 | Role | Owns |
 |---|---|
-| Frontend | React + TypeScript + Vite UI, Canvas pitch lane, audio clock, mic capture, live pitch (Pitchy), **the TypeScript port of the scoring engine**, lyrics, results, practice screen, `web/` |
+| Frontend | React + TypeScript + Vite UI, Canvas pitch lane, audio clock, mic capture, live pitch (Pitchy), **the TypeScript port of the scoring engine**, lyrics, results, practice screen, the Electron shell (a window plus the Auth0 login helper), `web/`, `desktop/` |
 | Full-stack/infra | FastAPI, Tiger Data (Postgres), Auth0, Vultr deploy, domain, FFmpeg audio normalization, practice-upload endpoint, `api/` |
 | ML A (pipeline) | Offline per-song processing in `ml/pipeline/`: stems, reference pitch, hand review, manifest assembly. Also backs ML B up on data prep (TTS/recordings for evals) once the first clip is done. |
 | ML B (pitch + pronunciation + evals) | The Python **reference scoring engine** `ml/scoring/`, the local pronunciation scorer `ml/pronunciation/`, shared test fixtures, the evaluation harness `ml/evals/`, and calibration of thresholds/weights. Owns `ml/scoring/pitch.py`. |
@@ -89,8 +89,8 @@ Do not change a contract without telling the whole team; update `contracts/`, th
 
 - **FastAPI** (Python 3.11), single Uvicorn worker. Keep the API importable without PyTorch/Demucs; model-backed endpoints (pronunciation) load lazily and run blocking inference outside the async event loop, one request at a time with an explicit busy/retry response.
 - **Tiger Data (Postgres)** via SQLAlchemy 2 + psycopg 3 + Alembic migrations committed to the repo, plus an idempotent seed for the prepared clips. Browsers never touch the database. Store structured results and versions, **not** raw recordings; recordings stay session-local and temp uploads are deleted after assessment or failure.
-- **Auth0** for login (saved history, leaderboard); guests can play without an account.
-- **Vultr** VM for the public deployment; a domain via GoDaddy. Mic needs HTTPS in a secure context, so remote players use the HTTPS URL. A Cloudflare Quick Tunnel is fine for early two-computer testing.
+- **Auth0** for login (saved history, leaderboard); guests can play without an account. The Electron app is an Auth0 **Native application** that logs in through the system browser with PKCE. The API's token check (signature, issuer, audience) does not change.
+- **Hosting:** one shared FastAPI server and one Tiger Data database for every client. For the demo a team laptop runs the server behind a Cloudflare tunnel, and each Electron app loads that URL, so the guest cookie stays same-origin and no CORS work is needed (CORS and `SameSite=None; Secure` cookies are only needed if an app ever loads from a different origin than the server). Mic needs HTTPS in a secure context, so remote players use the HTTPS URL. **Vultr** VM plus a GoDaddy domain is a stretch goal. An offline fallback is a local Postgres on the demo laptop only, using the same migrations and `DATABASE_URL`; SQLite is not an option without changing `api/tables.py`.
 - **Gemini** (MLH): translations, optional romanization cross-check, and the coaching blurb. Never scoring decisions.
 - Online battle rooms (if reached): WebSocket events + HTTP durable actions, state machine in Postgres, idempotent result saves, reconnect via snapshot. Time-box it; if flaky, demo local battle and label online incomplete.
 
@@ -104,6 +104,7 @@ ml/evals/          evaluation harness and results
 ml/data/           LOCAL ONLY, gitignored (audio, stems, model outputs)
 api/               FastAPI backend
 web/               React + Vite frontend
+desktop/           Electron shell (window + Auth0 login helper); loads the server URL
 contracts/         example files, schemas/Pydantic models, shared test fixtures
 ```
 
@@ -117,7 +118,7 @@ contracts/         example files, schemas/Pydantic models, shared test fixtures
 
 ## Hard rules
 
-- **The repo is public.** Never commit copyrighted audio or video (no mp3/wav/flac/mp4/webm), model weights, or secrets. `ml/data/` is gitignored. Demo songs stay local; the public repo ships the processing scripts and royalty-free/CC test audio. The **deployed public instance must not serve copyrighted audio**; copyrighted demo clips run only from a team machine, and the public deployment ships a CC/royalty-free clip.
+- **The repo is public.** Never commit copyrighted audio or video (no mp3/wav/flac/mp4/webm), model weights, or secrets. `ml/data/` is gitignored. Demo songs stay local; the public repo ships the processing scripts and royalty-free/CC test audio. The **deployed public instance must not serve copyrighted audio**; copyrighted demo clips run only from a team machine, and the public deployment ships a CC/royalty-free clip. A tunnel from a team laptop is a public URL: keep it out of the README and Devpost, and make the royalty-free clip the always-on default.
 - Never commit API keys. Use `.env` (gitignored) and keep `.env.example` with fake values. Keep `DATABASE_URL` and API keys server-side only.
 - Judges read the code and the git history. Write clear, commented, well-named code. Make small, frequent commits with meaningful messages. Never create filler commits.
 - Do the heavy ML offline. Runtime scoring must be fast enough for a live demo.
@@ -151,7 +152,7 @@ Results go in a table in the README. The README must have a "Design decisions an
 - ML A (`ml/pipeline-demo-song`): prove one real Demucs separation on the actual machine, extract the reference contour, hand ML B a rough manifest, then hand-review notes/phrases/exclusions and finalize `song.json`. Then help ML B with eval data (TTS speech, teammate recordings).
 - ML B (`ml/pitch-score`): `pitch_contour()` + pitch scoring + pytest on synthetic melodies (done, v0.1.0); next shared fixtures, timing, `ml/evals-degradation`, then `ml/pronunciation-baselines`, then calibration. Share the scoring spec/fixtures with Frontend early.
 - Frontend: Vite + React + TS, Web Audio clock, mic + Pitchy, pitch lane from the example manifest, TS scoring port against the fixtures.
-- Full-stack: FastAPI scaffold, catalog + manifest endpoints, practice-upload endpoint with FFmpeg normalization, Tiger Data schema/migrations, a hello-world Vultr deploy early.
+- Full-stack: FastAPI scaffold, catalog + manifest endpoints, practice-upload endpoint with FFmpeg normalization, Tiger Data schema/migrations, a hello-world tunnel deploy early (Vultr is a stretch goal).
 - First milestone: one clip, one singer, correctly synchronized pitch trace, and a good take reliably beating a bad take. Then spoken practice end to end. Battle and extras come after.
 
 ## How to work with me
