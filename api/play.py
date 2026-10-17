@@ -338,10 +338,15 @@ def claim_guest(request: Request, account=Depends(current_guest), s: Session = D
 
 @router.get("/leaderboard")
 def leaderboard(clip_id: str, s: Session = Depends(get_db)):
-    """Best accepted total per logged-in player on a clip. Guests are not ranked."""
+    """Best accepted total per logged-in player on the clip's current version. Only solo runs count:
+    in a local battle the second singer is not the account owner. Guests are not ranked."""
+    song = CATALOG.get(clip_id)
+    if not song:
+        return []
     rows = s.execute(
         select(GuestSession.display_name, func.max(TurnAttempt.total).label("best"))
         .join(Match, Match.guest_id == GuestSession.id).join(TurnAttempt, TurnAttempt.match_id == Match.id)
-        .where(Match.clip_id == clip_id, Match.room_id.is_(None), TurnAttempt.state == "accepted", GuestSession.auth0_sub.is_not(None))
+        .where(Match.clip_id == clip_id, Match.clip_version == song.version, Match.mode == "solo",
+               TurnAttempt.state == "accepted", GuestSession.auth0_sub.is_not(None))
         .group_by(GuestSession.id).order_by(func.max(TurnAttempt.total).desc()).limit(20)).all()
     return [{"display_name": n, "total": t} for n, t in rows]

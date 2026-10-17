@@ -94,3 +94,29 @@ def test_parallel_first_requests_create_one_account():
         assert codes == [200] * 8
         with get_engine().connect() as c:
             assert c.execute(text("select count(*) from guest_session where auth0_sub=:s"), {"s": sub}).scalar() == 1
+
+
+def play(c, h, attempt_id, score):
+    c.post(f"/api/turns/{attempt_id}/begin", json={}, headers=h)
+    body = {"phrases": [{**GOOD["phrases"][0], "pitch": score, "timing": score}]}
+    return c.post(f"/api/turns/{attempt_id}/result", json=body, headers={**h, "Idempotency-Key": str(score)})
+
+
+def test_leaderboard_counts_only_own_solo_scores_on_current_version(monkeypatch):
+    """Regression: every accepted attempt in a no-room match was credited to the match owner, so a
+    friend's local-battle score ranked under the owner's name; old clip versions were mixed in too."""
+    from api import play as play_module
+    c, h = TestClient(app), {"Authorization": f"Bearer {token('test|lb')}"}
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo", "players": ["me", "friend"]}, headers=h).json()
+    play(c, h, m["attempt_id"], 40)
+    second = next(a["id"] for a in c.get(f"/api/matches/{m['match_id']}", headers=h).json()["attempts"] if a["slot"] == 1)
+    play(c, h, second, 95)  # the friend's score
+    solo = c.post("/api/matches", json={"clip_id": "synthetic-demo"}, headers=h).json()
+    play(c, h, solo["attempt_id"], 50)
+
+    totals = [r["total"] for r in c.get("/api/leaderboard?clip_id=synthetic-demo").json()]
+    assert 95 not in totals and 50 in totals
+
+    bumped = play_module.CATALOG["synthetic-demo"].model_copy(update={"version": 2})
+    monkeypatch.setitem(play_module.CATALOG, "synthetic-demo", bumped)
+    assert 50 not in [r["total"] for r in c.get("/api/leaderboard?clip_id=synthetic-demo").json()]
