@@ -70,9 +70,11 @@ Microphones need HTTPS, and remote players need a public URL. A Quick Tunnel giv
 ```bash
 sudo pacman -S cloudflared                                   # Arch; other OS: developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads
 COOKIE_SECURE=1 .venv/bin/uvicorn api.main:app --port 8000   # terminal 1: Secure cookie, because the public URL is HTTPS
-cloudflared tunnel --url http://localhost:8000               # terminal 2: prints https://<random>.trycloudflare.com
+cloudflared tunnel --protocol http2 --url http://localhost:8000   # terminal 2: prints https://<random>.trycloudflare.com
 python -m api.scripts.smoke_public https://<random>.trycloudflare.com   # terminal 3: end-to-end check
 ```
+
+`--protocol http2` matters on campus or corporate Wi-Fi, which often blocks the UDP that `cloudflared` tries first (the log shows `Failed to dial a quic connection` and the public URL answers error 1033). Look for `Registered tunnel connection` in its output.
 
 The smoke script plays a full two-player room over the public URL and checks the cookie flags, WebSockets, the
 origin check, live progress, turns and the winner. The URL changes every time the tunnel restarts, and it is
