@@ -155,7 +155,16 @@ curl -b jar -X POST localhost:8000/api/turns/88a2.../result -H 'content-type: ap
 Rules worth knowing:
 - Send per phrase `{phrase_id, pitch, timing, coverage}` (`timing` may be `null` when no note starts inside the phrase; it is then
   scored on pitch alone). The response phrases are `{phrase_id, pitch, timing|null, score, coverage, rating}`, all server-computed.
-- The result must contain **every phrase of the clip exactly once** (`phrase_mismatch` otherwise).
+- The result must contain **every phrase of the clip exactly once** (`phrase_mismatch` otherwise), or, for a practice
+  section, exactly the phrases of the range.
+- **Practice section** (solo only): `POST /api/turns/{id}/begin` with `{"register":0,"range":{"start":12.0,"end":30.5}}`.
+  The scored phrases are those with `start >= range.start - 0.05` and `end <= range.end + 0.05` (seconds from clip start);
+  none -> 422 `invalid_range` (also for non-finite/out-of-clip values, or any range in a local/online battle). The range is
+  normalized to first-phrase start .. last-phrase end, fixed for the attempt (repeat begin with another range -> 409
+  `attempt_already_started`), and the result must contain exactly those phrase IDs; totals are weighted over them only.
+  Responses (`Score`, `GET /api/matches/{id}`, `/api/history` rows) carry `range: {start,end} | null` (null = full clip).
+  Practice runs are excluded from the leaderboard. No migration: while started the range sits in `phrase_results` as
+  `{"range":...}`; once accepted it is derived from the scored phrase IDs.
 - Sending the **same** `Idempotency-Key` again returns the same result and changes nothing, so retry freely after a
   lost response. A **different** key on a finished attempt gets `already_submitted`.
 - Local battle (`players` with two names): the second player's attempt appears in `GET /api/matches/{id}` after the
