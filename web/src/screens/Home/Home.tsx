@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { BoomboxKun, MicChan, PixelSky } from '../../components/pixel';
+import { useAccount } from '../../lib/auth';
+import { PixelButton } from '../../ui';
 import type { Screen } from '../../screens';
 import { KeyCard } from './KeyCard';
 import type { KeyCardProps } from './KeyCard';
@@ -58,6 +60,7 @@ function columnCount(grid: HTMLElement | null): number {
 
 /** Title menu: logo, mascots, and four keycap cards. */
 export function Home({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
+  const account = useAccount();
   const [sel, setSel] = useState(0);
   const [pressed, setPressed] = useState<number | null>(null);
   const gridRef = useRef<HTMLElement>(null);
@@ -117,6 +120,21 @@ export function Home({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
           <span className="home-kao home-kao--rose" aria-hidden="true">
             ♬･˚｡♪ ˚☆˚♬˚.
           </span>
+          {account.enabled && !account.loading && (
+            <div className="home-account">
+              {account.name ? (
+                <>
+                  <span>signed in as {account.name}</span>
+                  <PixelButton size="sm" tone="paper" onClick={account.logout}>LOG OUT</PixelButton>
+                </>
+              ) : (
+                <>
+                  <span>playing as guest</span>
+                  <PixelButton size="sm" tone="sky" onClick={account.login}>LOG IN</PixelButton>
+                </>
+              )}
+            </div>
+          )}
         </header>
 
         <section className="home-hero">

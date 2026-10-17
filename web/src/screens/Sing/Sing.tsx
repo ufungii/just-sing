@@ -12,7 +12,7 @@ import { MicError, openMic, stopStream } from '../../audio/sources';
 import { ApiError, beginTurn, getManifest, submitResult } from '../../lib/api';
 import type { PhraseScore, Register, Song } from '../../lib/types';
 import { useNav, type SingSetup } from '../../routes';
-import { aggregate, buildTargetTrack, displayNotes, phraseSettlesAt, phraseTotal, registerRatio, scorePhrase, SCORING_CONFIG } from '../../scoring';
+import { aggregate, buildTargetTrack, displayNotes, phraseSettlesAt, phraseTotal, phraseWeights, registerRatio, scorePhrase, SCORING_CONFIG } from '../../scoring';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
 import { Countdown, Judgement } from './Judgement';
 import { Lyrics } from './Lyrics';
@@ -102,7 +102,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
       let latest: PhraseScore | null = null;
       for (const p of song.phrases) {
         if (ratedRef.current.has(p.id) || !settled(phraseSettlesAt(p))) continue;
-        latest = scorePhrase(song, p, target, engine.tracker.hz);
+        latest = scorePhrase(p, target, engine.tracker.hz);
         ratedRef.current.set(p.id, latest);
       }
       if (latest) {
@@ -114,7 +114,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
   );
 
   const finish = useCallback(async () => {
-    if (finishedRef.current || !song) return;
+    if (finishedRef.current || !song || !target) return;
     finishedRef.current = true;
     rateUpTo(() => true);
     engineRef.current?.close();
@@ -122,7 +122,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
     setPhase({ k: 'saving' });
 
     const phrases = song.phrases.map((p) => ratedRef.current.get(p.id) as PhraseScore);
-    const local = aggregate(song, phrases);
+    const local = aggregate(phrases, phraseWeights(song.phrases, target));
     let saved = null;
     if (setup.match) {
       await beginRef.current; // its failure lands in saveErrorRef
@@ -139,7 +139,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
       }
     }
     nav.go({ name: 'results', result: { setup, phrases, local, saved, saveError: saved ? null : saveErrorRef.current } });
-  }, [song, setup, nav, rateUpTo]);
+  }, [song, target, setup, nav, rateUpTo]);
 
   // ---------- the play loop: master clock -> UI, phrase ratings, end of clip ----------
   useEffect(() => {
@@ -199,7 +199,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
 
   // ---------- render ----------
   const rated = [...ratings.values()];
-  const running = song && rated.length ? aggregate(song, rated).total : 0;
+  const running = song && target && rated.length ? aggregate(rated, phraseWeights(song.phrases, target)).total : 0;
   const playing = phase.k === 'playing';
   const level = engineRef.current?.tracker.level ?? 0;
 

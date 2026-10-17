@@ -277,3 +277,5 @@
   .home-menu { grid-template-columns: minmax(0, 1fr); }
   .home-mascot { display: none; }
 }
+
+.home-account { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-size: 14px; }

@@ -90,7 +90,7 @@ export function PhraseChips({ phrases, song }: { phrases: PhraseScore[]; song: S
             </span>
             <span className="results-phrase__stats">
               <span title="pitch">P {whole(p.pitch)}</span>
-              <span title="timing">T {whole(p.timing)}</span>
+              <span title="timing">T {p.timing === null ? '–' : whole(p.timing)}</span>
               <span title="sung coverage">C {whole(p.coverage * 100)}%</span>
             </span>
             <span className={`results-rating results-rating--${p.rating}`}>{RATING_LABEL[p.rating]}</span>

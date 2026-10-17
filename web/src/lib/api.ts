@@ -17,10 +17,23 @@ export class ApiError extends Error {
   }
 }
 
+/** Set by the Auth0 bridge (lib/auth.tsx) when someone is logged in; guests leave it null. */
+let accessToken: (() => Promise<string | undefined>) | null = null;
+export const setAccessTokenProvider = (fn: typeof accessToken) => {
+  accessToken = fn;
+};
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  try {
+    const token = await accessToken?.();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+  } catch {
+    // token refresh failed: carry on as a guest rather than blocking play
+  }
   let res: Response;
   try {
-    res = await fetch(path, { credentials: 'same-origin', ...init });
+    res = await fetch(path, { credentials: 'same-origin', ...init, headers });
   } catch {
     throw new ApiError(0, 'network', 'Could not reach the server.', true);
   }
@@ -103,6 +116,8 @@ export const getCoach = (attemptId: string) =>
   request<{ status: 'ok' | 'unavailable'; coach_blurb: string | null }>(`/api/turns/${attemptId}/coach`, { method: 'POST' });
 export const rematch = (matchId: string) => request<NewMatch>(`/api/matches/${matchId}/rematch`, { method: 'POST' });
 export const getMatch = (matchId: string) => request<MatchView>(`/api/matches/${matchId}`);
+/** After login: attach this browser's guest history to the account (needs the bearer token and the guest cookie). */
+export const claimGuest = () => request<{ id: string; claimed_guest_history: boolean }>('/api/auth/claim', { method: 'POST' });
 export const getHistory = () => request<HistoryItem[]>('/api/history');
 
 // ---------- spoken practice ----------

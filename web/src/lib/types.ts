@@ -69,7 +69,8 @@ export interface PhraseScore {
   phrase_id: string;
   rating: Rating;
   pitch: number;
-  timing: number;
+  timing: number | null; // null: the phrase starts mid-note, so it is scored on pitch alone
+  score: number; // this phrase's 0-100 score (ratings and totals derive from it)
   coverage: number; // 0-1
 }
 
