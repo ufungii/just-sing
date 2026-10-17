@@ -24,7 +24,6 @@ import argparse
 import json
 import re
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
 from typing import Callable
 
@@ -77,14 +76,12 @@ def _resample(audio: np.ndarray, sr: int) -> np.ndarray:
     return y
 
 
-@lru_cache(maxsize=1)
 def _model():
-    import torch
-    from transformers import AutoProcessor, Wav2Vec2ForCTC
+    """The spoken-practice scorer's model (same weights), so a server running both loads it once."""
+    from .baselines import CTC_MODEL, _ctc
 
-    proc = AutoProcessor.from_pretrained(MODEL)
-    model = Wav2Vec2ForCTC.from_pretrained(MODEL).to("cuda" if torch.cuda.is_available() else "cpu").eval()
-    return proc, model
+    assert CTC_MODEL == MODEL, "lyric_match and baselines must use the same model"
+    return _ctc()
 
 
 def wav2vec2_features(y: np.ndarray, chunk_s: float = 20.0, context_s: float = 1.0) -> np.ndarray:

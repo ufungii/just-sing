@@ -6,7 +6,7 @@
     "late_after_s": 0.12
   },
   "pitch_config": {
-    "full_credit_cents": 70.0,
+    "full_credit_cents": 50.0,
     "zero_credit_cents": 200.0
   },
   "tolerance": 0.001,
@@ -1763,7 +1763,7 @@
             "end": 0.4,
             "status": "sung",
             "coverage": 1.0,
-            "pitch": 76.9,
+            "pitch": 66.7,
             "onset_delay_s": 0.0,
             "late": false
           },
@@ -1773,7 +1773,7 @@
             "end": 0.8,
             "status": "sung",
             "coverage": 1.0,
-            "pitch": 76.9,
+            "pitch": 66.7,
             "onset_delay_s": 0.0,
             "late": false
           }
@@ -1785,7 +1785,7 @@
             "end": 1.2000000000000002,
             "status": "sung",
             "coverage": 1.0,
-            "pitch": 76.9,
+            "pitch": 66.7,
             "onset_delay_s": 0.0,
             "late": false
           }

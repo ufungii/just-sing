@@ -150,6 +150,8 @@ export function Sing({ setup }: { setup: SingSetup }) {
     if (finishedRef.current || !song || !target) return;
     finishedRef.current = true;
     rateUpTo(() => true);
+    // Solo turns keep the voice for the lyric check on the results screen (uploaded once, never stored).
+    const take = !setup.battle && !setup.online ? engineRef.current?.recorder.toWav() ?? null : null;
     engineRef.current?.close();
     engineRef.current = null;
     setPhase({ k: 'saving' });
@@ -171,7 +173,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
         }
       }
     }
-    const result = { setup, phrases, local, saved, saveError: saved ? null : saveErrorRef.current };
+    const result = { setup, phrases, local, saved, saveError: saved ? null : saveErrorRef.current, take };
     if (setup.online) {
       const room = { id: setup.online.roomId, slot: setup.online.slot, prefs: { register: setup.register, offset: setup.calibrationOffset } };
       return nav.go({ name: 'online', room, notice: saved ? undefined : (saveErrorRef.current ?? 'Your score was not saved.') });
@@ -342,7 +344,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
             </span>
           </div>
         </div>
-        {song && <Lyrics lines={song.lines.filter((line) => selected.some((p) => song.lines[p.line_index] === line))} t={now} showRoman={showRoman} showTrans={showTrans} />}
+        {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman={showRoman} showTrans={showTrans} />}
       </Panel>
     </ScreenShell>
   );

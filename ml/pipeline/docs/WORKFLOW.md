@@ -2,6 +2,37 @@
 
 ## Reusable commands
 
+### Fixed 1v1 handoffs
+
+Manifest assembly writes `duet_sections` using whole lyric sections, alternating
+Player 1 and Player 2. Blank lines in the supplied text establish the default
+section boundaries. A saved `corrections.json` override can merge an intro or
+post-chorus into a longer musical section:
+
+```json
+"duet": {
+  "lyric_lines_sha256": "SHA256_OF_NEWLINE_JOINED_NONEMPTY_LYRIC_LINES",
+  "section_starts": [0, 8, 16, 24],
+  "starting_slot": 0
+}
+```
+
+Indices refer to display lines, including lines ineligible for scoring. Assembly
+assigns every scored phrase once; it never splits a lyric line between singers.
+Empty sections do not renumber later singers. A stale text hash rejects an
+override, and saved author-editor arrangements take priority.
+
+`ml.pipeline.crop` preserves the parent's section IDs and singer assignments.
+If a short demo otherwise gives all scored lines to one singer, it uses one
+whole-line boundary near the scored midpoint. That fallback is recorded in
+`song.review.json`; a clip with fewer than two scored lines cannot support two
+singers. Practice-range filtering keeps saved ownership instead of generating a
+new arrangement, and may reject a range with no scored phrases for one singer.
+
+Rebuild and version the affected manifests, refresh their fingerprints, share
+the matching local assets, restart the API and start a new match. Existing
+matches retain the arrangement frozen when they were created.
+
 ### Add another song in one command
 
 Use a local source with lead vocals and a UTF-8 lyrics file (one line per line).

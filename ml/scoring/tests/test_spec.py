@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 FIXTURES = Path(__file__).resolve().parents[3] / "contracts" / "fixtures"
-CFG = dict(full_c=70, zero_c=200, tol_s=0.0, full_s=0.10, zero_s=0.40, window_s=0.50,
-           L=4, stable_c=60, gap_s=0.12, pw=0.8, tw=0.2, perfect=82, great=65, okay=50, min_cov=0.25)
+CFG = dict(full_c=50, zero_c=200, tol_s=0.0, full_s=0.10, zero_s=0.40, window_s=0.50,
+           L=4, stable_c=60, gap_s=0.12, pw=0.8, tw=0.2, perfect=80, great=65, okay=40, min_cov=0.25)
 
 
 def voiced(x):

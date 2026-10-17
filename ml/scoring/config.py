@@ -13,7 +13,7 @@ SCORING_VERSION = "0.3.0"
 @dataclass(frozen=True)
 class PitchConfig:
     # Frames within this many cents of the target earn full credit.
-    full_credit_cents: float = 70.0
+    full_credit_cents: float = 50.0
     # Credit falls linearly to zero at this error. A soft ramp (not a hard
     # pass/fail) keeps the score smooth, which matters for monotonicity evals.
     zero_credit_cents: float = 200.0
@@ -44,11 +44,13 @@ class TimingConfig:
 class ScoreConfig:
     pitch_weight: float = 0.8
     timing_weight: float = 0.2
-    # Phrase rating bands on the 0-100 phrase score. Placeholders to calibrate
-    # against recordings; they are not established accuracy cutoffs.
-    perfect: float = 82.0
+    # Phrase rating bands on the 0-100 phrase score, set in 0.3.0 from real takes through the
+    # live tracker (ml/evals/band_calibration.py): the original singer's typical phrase is ~78-80,
+    # a decent amateur's ~60-64, a semitone off ~45-50, two semitones off ~20-25. One singer and
+    # two songs: a starting point, not validated cutoffs.
+    perfect: float = 80.0
     great: float = 65.0
-    okay: float = 50.0
+    okay: float = 40.0
     # Below this share of scoreable frames sung, a phrase is a Miss. Miss is
     # reserved for insufficient coverage, never for a mic failure.
     min_coverage: float = 0.25

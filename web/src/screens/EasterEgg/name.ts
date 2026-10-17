@@ -1,8 +1,13 @@
 import type { Nav } from '../../routes';
+import { blockedPlayerNameReason } from '../../lib/playerNamePolicy';
 
-/** Check completed name entries, not every keystroke, so prefixes like zibran123 still work. */
+/** Check completed entries rather than keystrokes, so ordinary longer names remain usable. */
 export function nameEasterEgg(nav: Pick<Nav, 'go'>, ...names: string[]): boolean {
-  if (!names.some(name => name.trim().toLowerCase() === 'zibran')) return false;
-  nav.go({ name: 'zibran' });
-  return true;
+  for (const name of names) {
+    const reason = blockedPlayerNameReason(name);
+    if (!reason) continue;
+    nav.go({ name: 'zibran', playerName: reason === 'joke' ? name.trim() : undefined, reason });
+    return true;
+  }
+  return false;
 }
