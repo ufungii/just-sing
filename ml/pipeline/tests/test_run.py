@@ -42,6 +42,7 @@ class PreparationTests(unittest.TestCase):
             self.fail(f"Unexpected job: {module}")
 
     def test_selected_stems_publish_after_both_jobs_and_keep_only_two_audio_files(self):
+        self.args.language = 'en'
         with patch.object(run, "DATA", self.data), patch.object(run, "command", side_effect=self.fake_inference) as jobs, patch.object(run, "decoded_frames", return_value=88200), patch("ml.pipeline.manifest.write_manifest") as manifest:
             folder = run.prepare(self.args)
         manifest.assert_called_once()
@@ -50,6 +51,8 @@ class PreparationTests(unittest.TestCase):
         self.assertEqual((folder / "instrumental.mp3").read_bytes(), self.backing.read_bytes())
         metadata = json.loads((folder / "preparation.json").read_text())
         self.assertEqual(metadata["duration_seconds"], 2)
+        self.assertEqual(metadata['language'], 'en')
+        self.assertEqual(jobs.call_args_list[0].args[-2:], ('--language', 'en'))
         self.assertEqual(metadata["audio"]["vocals"], "vocals.mp3")
         self.assertEqual(len(list(self.data.rglob("*.mp3"))), 2)
         self.assertFalse(any((self.data / ".preparing").iterdir()))
@@ -93,7 +96,8 @@ class PreparationTests(unittest.TestCase):
     def test_source_recipe_keeps_baseline_vocals_and_masters_only_residual_backing(self):
         self.args.clip = self.vocals
         self.args.vocals = self.args.instrumental = None
-        separation_python = self.root / "ml/pipeline/separation/.venv/Scripts/python.exe"
+        separation_python = self.root / "demucs-env/python"
+        self.args.separation_python = separation_python
         separation_python.parent.mkdir(parents=True)
         separation_python.write_bytes(b"fixture interpreter; subprocess calls are mocked")
         models = []

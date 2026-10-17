@@ -14,6 +14,9 @@ ml/pipeline/.venv/Scripts/python.exe -m ml.pipeline.run --id next-song --title "
 Optional `--start 45 --duration 30` prepares a short excerpt. Its lyrics file must
 contain only the words sung in that excerpt, and times start at zero for the clip.
 Without these options, the full supplied recording is prepared.
+Use `--language en` for English recordings; the default is `ko` for Korean and
+mixed Korean/English songs. English lines remain eligible for singing while
+their Korean-only `practice_text` stays empty.
 
 The command separates original htdemucs vocals and a vocal-specific fine-tuned
 residual instrumental, masters only the instrumental, exports the two selected
