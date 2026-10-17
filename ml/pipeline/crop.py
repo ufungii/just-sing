@@ -2,15 +2,15 @@
 
 import argparse
 import copy
-import hashlib
 import json
 from math import isfinite
 from pathlib import Path
 import subprocess
 import tempfile
 
-from .manifest import ROOT, digest, read, write_manifest
-from .run import decoded_frames
+from .audio import decoded_frames
+from .common import ROOT, digest, read
+from .manifest import write_manifest
 
 
 def rebase_lines(track, start, end):

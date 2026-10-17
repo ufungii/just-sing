@@ -13,7 +13,7 @@ import imageio_ffmpeg
 import soundfile as sf
 
 
-ROOT = Path(__file__).resolve().parents[2]
+from .common import ROOT
 
 
 def main() -> None:

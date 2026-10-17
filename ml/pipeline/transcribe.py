@@ -8,7 +8,7 @@ from pathlib import Path
 import time
 
 
-ROOT = Path(__file__).resolve().parents[2]
+from .common import ROOT
 CACHE = ROOT / "ml/data/model-cache"
 
 

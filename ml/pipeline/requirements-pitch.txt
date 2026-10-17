@@ -1,4 +1,4 @@
-# CPU pitch environment (Python 3.11), also used by download_audio.py.
+# CPU pitch environment (Python 3.11); acquisition is in requirements-download.txt.
 # First install torch/torchaudio from https://download.pytorch.org/whl/cpu.
 torch==2.8.0+cpu
 torchaudio==2.8.0+cpu

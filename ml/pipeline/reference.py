@@ -5,8 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from .align_lyrics import decode_audio
-from ml.scoring.pitch import pitch_contour
+from .audio import decode_audio
 
 
 def main():
@@ -16,8 +15,17 @@ def main():
     args = parser.parse_args()
     if args.output.exists():
         parser.error("Reference exists; use a new output path to preserve review changes")
+    # ML B owns this shared adapter. Keep importing the pipeline lightweight;
+    # extraction requires their reference_contour change to be merged first.
+    try:
+        from ml.scoring.pitch import reference_contour
+    except ImportError as error:
+        raise RuntimeError(
+            "Reference extraction needs ML B's ml.scoring.pitch.reference_contour; "
+            "update the shared scoring branch before preparing new pitch tracks."
+        ) from error
     audio = decode_audio(args.audio).numpy()
-    contour = pitch_contour(audio, progress=lambda seconds: print(f"Reference pitch: through {seconds:.1f}s", flush=True))
+    contour = reference_contour(audio, progress=lambda seconds: print(f"Reference pitch: through {seconds:.1f}s", flush=True))
     result = {"status": "unreviewed", "reviewed": False,
               "duration": len(audio) / 16000, "source_audio_sha256": hashlib.sha256(args.audio.read_bytes()).hexdigest(),
               **contour, "excluded": [], "notes": [],

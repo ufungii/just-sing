@@ -3,7 +3,7 @@
 import hashlib
 import unittest
 
-from .align_lyrics import anchor_windows, lyric_sections, lrc_track
+from ..align_lyrics import anchor_windows, lyric_sections, lrc_track
 
 
 class AnchorTests(unittest.TestCase):

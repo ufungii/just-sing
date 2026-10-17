@@ -4,11 +4,19 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from .crop import rebase_lines
-from .text import korean_practice_text, apply_cached_translations
+from ..crop import rebase_lines
+from ..text import korean_practice_text, apply_cached_translations
+from ..manifest import scoreable_seconds
 
 
 class QualityTests(unittest.TestCase):
+    def test_phrase_eligibility_counts_voiced_frames_outside_exclusions(self):
+        ref = {"hop_seconds": 0.02, "hz": [220, None, 220, 220, 220],
+               "excluded": [{"start": 0.04, "end": 0.06}]}
+        self.assertAlmostEqual(scoreable_seconds(ref, 0, 0.1), 0.06)
+        self.assertAlmostEqual(scoreable_seconds(ref, 0.001, 0.08), 0.02)
+        self.assertEqual(scoreable_seconds(ref, 0.02, 0.06), 0)
+
     def test_practice_requires_whole_line_korean_without_latin(self):
         self.assertEqual(korean_practice_text("그림자조차 길을 잃게 해"), "그림자조차 길을 잃게 해")
         self.assertEqual(korean_practice_text("Key는 내가 쥘게"), "")
@@ -19,7 +27,7 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(korean_practice_text("Just English words"), "")
 
     def test_translation_cache_binds_text_and_preserves_manual_edits(self):
-        root = Path(__file__).resolve().parents[2] / "ml/data/test-runs"
+        root = Path(__file__).resolve().parents[3] / "ml/data/test-runs"
         root.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="text-quality-", dir=root) as temporary:
             path = Path(temporary) / "translations.json"

@@ -1,188 +1,227 @@
-# Prepared songs and synchronized lyrics
+# API
 
-This is the first backend slice: catalog, local audio playback, reviewed lyric
-JSON, VTT subtitles, and a timestamp lookup for debugging. It does not load
-PyTorch/Demucs, run inference, or generate lyrics during playback. No database
-is required for these prepared file assets.
+FastAPI backend for the karaoke app: song catalog, guest and Auth0 sessions, solo / local / online matches,
+spoken-practice uploads, and online rooms. It never touches the singing clock: pitch tracking and phrase
+ratings happen in the client, which submits the finished phrase results once.
 
-## Run locally (PowerShell, repository root)
+Data shapes (song manifest, score, practice result, error) are defined in [`../contracts/`](../contracts/).
+The Pydantic models in `models.py` mirror them, and `tests/test_contracts.py` fails if they drift.
+Change a contract in its own small PR and tell the team.
 
-```powershell
-uv --cache-dir ml/data/.uv-cache venv --python 3.11 api/.venv
-uv --cache-dir ml/data/.uv-cache pip install --python api/.venv/Scripts/python.exe -r api/requirements-dev.txt
-$env:JUST_SING_LOCAL_DEMO_AUDIO = "1"
-api/.venv/Scripts/python.exe -m uvicorn api.main:app --host 127.0.0.1 --port 8000
+## Run it
+
+Python 3.11 per CLAUDE.md (tested on 3.12). FFmpeg and `ffprobe` must be installed for practice uploads.
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r api/requirements.txt
+cp .env.example .env          # then fill in real values; .env is gitignored
+
+alembic -c api/alembic.ini upgrade head   # create/upgrade tables
+python -m api.seed                        # insert clip metadata (safe to repeat)
+uvicorn api.main:app --reload             # run from the repo root
+pytest api                                # tests; the DB tests need DATABASE_URL
 ```
 
-Open **http://127.0.0.1:8000/live/** for the local karaoke preview, or
-`http://127.0.0.1:8000/docs` for the API. The default data directory is `ml/data/`;
-override it with `JUST_SING_DATA_DIR`. Localhost Vite origins on port 5173 are
-allowed. The backend binds to loopback in the documented command.
+Interactive docs: `http://localhost:8000/docs`. Without `DATABASE_URL`, the catalog endpoints still work and
+the database tests are skipped. Without Auth0 values, guests still work and bearer tokens get `auth_unavailable`.
+Without a pronunciation scorer, `/api/practice` answers `status: "unavailable"`.
 
-Audio serving defaults to disabled. The explicit local-demo flag above is for
-team-machine use: `CLAUDE.md` prohibits serving copyrighted demo audio from the
-public deployment. Never mount the entire data directory: it also contains
-model weights, drafts, and processing reports.
+## Environment
 
-## HTTP endpoints
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | `postgresql+psycopg://...` (SQLAlchemy needs that scheme, not `postgres://`). Server-side only. |
+| `AUTH0_DOMAIN` | Tenant domain, no `https://`. |
+| `AUTH0_AUDIENCE` | The Auth0 API identifier. Login requests must pass the same `audience`, or Auth0 issues an opaque token we cannot verify. |
+| `COOKIE_SECURE` | `1` on public HTTPS so the guest cookie is Secure. Leave `0` on `http://localhost`. |
+| `GUEST_TTL_DAYS` | Guest session lifetime, default 7. Expired guests and their data are deleted hourly. |
+| `ALLOWED_ORIGINS` | Extra browser origins allowed to open WebSockets. The server's own host is always allowed. |
+| `GEMINI_API_KEY` | Server-side only. Enables coaching blurbs; without it they answer `unavailable`. |
+| `GEMINI_MODEL` | Model for blurbs, default `gemini-3.5-flash-lite`. Google retires older models for new accounts, so if blurbs go `unavailable`, check this first. |
+| `WEB_DIST` | Folder with the built frontend. Default `web/dist`. |
+| `RECONNECT_GRACE_SECONDS` | Extra time after a clip ends before a started turn is treated as lost, default 60. |
 
-| GET path | Response |
-| --- | --- |
-| `/api/health` | Readiness and whether local audio is enabled |
-| `/api/songs` | Available song metadata and lyric/audio URLs |
-| `/api/songs/{id}/audio/instrumental` | Selected playback asset; supports byte ranges and HEAD for seeking |
-| `/api/songs/{id}/audio/vocals` | Prepared raw vocal stem for review |
-| `/api/songs/{id}/lyrics` | Status, song/version/duration, and timed `lines`/`words` |
-| `/api/songs/{id}/lyrics.vtt` | Reviewed line-level WebVTT; 503 when unavailable |
-| `/api/songs/{id}/lyrics/at?time_seconds=45.2` | Debug lookup of current line/word; no server timer |
-| `/api/songs/{id}/lyrics/preview` | Local-only reviewed timeline or explicitly labeled supplied-text alignment draft |
-| `/api/songs/{id}/reference` | Local-only cached reference Hz at 20 ms intervals |
-| `/api/scoring-config` | Versioned provisional scoring configuration |
+## Frontend: one origin
 
-`POST /api/songs/{id}/score-preview` accepts `scoring_version`, fixed `register`
-(-12, 0, or 12 semitones), `latency_seconds`, and `observations` containing
-`{time, hz}` in clip seconds/Hz (`null` for unvoiced). It returns per-line feedback
-and duration-weighted totals. This endpoint is local-demo only and stores nothing.
-Scoring uses the manifest's filtered `phrases`, not every display line. The
-preview response includes those same windows for browser scoring. A dropped
-phrase remains visible as lyrics but contributes no score.
+The server also serves the built frontend, so the browser (and Electron, which loads the server's URL) talks to one
+origin: the guest cookie works and no CORS setup is needed.
 
-`GET /api/demo-handoff` downloads the locally generated 30-second demo package
-when local-demo serving is enabled. It includes MP3s, manifests and review notes.
-
-Times are seconds relative to the selected audio's start. Intervals include
-their start and exclude their end. Before a line, between lines/words, and
-after the end, the applicable active index is `null`.
-
-The backend reads a final `song.json` using the existing `contracts/` shape,
-or preparation metadata plus an explicitly reviewed `lyrics.reviewed.json`.
-Generated drafts carry a separate `song.review.json`; they are not promoted to
-reviewed lyrics merely because `song.json` exists. Their local preview remains
-available. The manifest builder preserves the shared contract's field shape.
-The response preserves the contract's line fields. No shared contract was
-changed. It never reads `lyrics.draft.json`, and it rejects invalid timing,
-overlapping lines, words outside their lines, non-finite timestamps, mismatched
-versions, and reviewed sidecars bound to different audio bytes.
-
-Russian Roulette has 73 supplied lyric lines and 231 whitespace words aligned
-against the original vocal estimate using MMS_FA. The preview endpoint exposes
-these real acoustic alignment timestamps with `status: "draft"`, `reviewed: false`.
-The canonical reviewed endpoint remains unavailable until listening review.
-Most words have low CTC posterior on this singing recording; inspect the alignment
-report and correct timings by listening before using them for judged performance.
-The selected audio files are `ml/data/russian-roulette/instrumental.mp3` and
-`ml/data/russian-roulette/vocals.mp3` (the original vocal estimate).
-`preparation.json` points both audio roles at these canonical filenames.
-
-## Browser synchronization
-
-Fetch lyrics once before playback, then select the line and word on each animation
-frame using the same playback clock as the music. Do not poll `/lyrics/at`, use a
-wall-clock timer, or stream a new lyric from the server every second.
-
-The reference adapter is [examples/lyrics_clock.js](examples/lyrics_clock.js):
-
-```javascript
-const track = await loadLyrics("russian-roulette");
-const stop = followPlayback(track, getPlaybackSeconds, updateLyricDisplay);
-// Call stop() when leaving/resetting the screen.
+```bash
+cd web && npm run build        # produces web/dist
+uvicorn api.main:app           # now http://localhost:8000/ is the app, /api and /ws are the backend
 ```
 
-The frontend owns `getPlaybackSeconds`, derived from its AudioContext schedule,
-seek position, and paused state. For example, while playing:
-`seekOffset + audioContext.currentTime - scheduledStartTime`; while paused,
-return the frozen pause position. A countdown may yield negative time, which
-shows no active lyric. Seeking jumps directly to the correct interval; pause
-keeps the current line/word highlighted. Render lyric text using React's normal
-text rendering or `textContent`, not `innerHTML`.
+Rules: a real file in `web/dist` is served as is; any other non-API path returns `index.html` so client-side routes
+survive a reload; unknown `/api/...` paths return the normal JSON error. If `web/dist` does not exist, `/` answers
+`frontend_not_built`.
 
-The runnable implementation is in `web/live/`; the adapter reexports its clock
-helper. The preview shows active words, the next line, a seekable timestamp sheet,
-the reference pitch and the user's trace. Play/Pause/seek use one AudioContext
-clock. Enable the microphone explicitly, preferably with headphones; Pitchy runs
-locally on sample-timestamped AudioWorklet windows. Only time/Hz observations are
-sent to the local scoring endpoint, not microphone recordings.
+For hot-reload development, run `npm run dev` and proxy the backend so the page is still same-origin (otherwise the
+cookie will not be sent). In `web/vite.config.ts`:
 
-The song picker lists prepared songs from the catalog; use the
-[one-command preparation workflow](../ml/pipeline/README.md#add-another-song-in-one-command)
-for new songs, then refresh the preview. **Vocal guide** mixes the selected original
-vocal estimate over the instrumental. Both sources start at the same AudioContext
-time and seek offset; toggling the guide fades its gain without restarting or
-changing scores. The vocal volume slider adjusts the guide during playback
-without restarting; the combined mix reduces backing gain to leave headroom.
-Vocal guide and romanized lyrics are enabled by default, with vocal volume at 50%.
-The slider is boosted: at 50% the guide matches the backing gain; at 100% its
-gain is twice the backing. At 0% the guide is muted.
-**Romanized lyrics** switches the current line, next line and timestamp sheet,
-reusing word intervals when spacing matches. Missing romanization falls back to
-original text. Both switches work during playback and pause.
+```ts
+server: { proxy: { "/api": "http://localhost:8000", "/ws": { target: "ws://localhost:8000", ws: true } } }
+```
 
-The current Russian Roulette preview uses fixed line entrances to avoid drift
-through repeated choruses. It keeps each line visible until the next entrance
-and preserves the supplied section breaks in the timestamp sheet. Unreviewed
-word timings can still be compressed by the speech aligner; word highlighting
-is a normal, always-enabled lyric feature using those automatic estimates.
-Music breaks display `♫⋆｡♪ ₊˚♬ﾟ.`.
+## Public demo through a Cloudflare tunnel
 
-The preview scores lyric intervals provisionally. Reviewed singing phrase ends
-must extend through held notes and may differ from word-display timings. The
-reference still needs octave/harmony corrections and excluded regions. Thresholds
-are an uncalibrated baseline; timing offset is a fixed manual correction, not
-device calibration. This scores melody/timing, not pronunciation or lyric accuracy.
-Seeking or changing register/offset starts a fresh attempt. Browser and Python
-scores use the same fixtures and version; a mismatch is displayed explicitly.
+Microphones need HTTPS, and remote players need a public URL. A Quick Tunnel gives both from a laptop, no account needed.
 
-## Publish a corrected, reviewed timeline
+```bash
+sudo pacman -S cloudflared                                   # Arch; other OS: developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads
+COOKIE_SECURE=1 .venv/bin/uvicorn api.main:app --port 8000   # terminal 1: Secure cookie, because the public URL is HTTPS
+cloudflared tunnel --protocol http2 --url http://localhost:8000   # terminal 2: prints https://<random>.trycloudflare.com
+python -m api.scripts.smoke_public https://<random>.trycloudflare.com   # terminal 3: end-to-end check
+```
 
-First obtain correct Korean lyric text, align it to the vocal recording, then
-check the line/word timings by listening. A text file alone does not establish
-timing. Store this local JSON in the song's gitignored directory:
+`--protocol http2` matters on campus or corporate Wi-Fi, which often blocks the UDP that `cloudflared` tries first (the log shows `Failed to dial a quic connection` and the public URL answers error 1033). Look for `Registered tunnel connection` in its output.
+
+The smoke script plays a full two-player room over the public URL and checks the cookie flags, WebSockets, the
+origin check, live progress, turns and the winner. The URL changes every time the tunnel restarts, and it is
+public: do not put it in the README or Devpost. Real copyrighted clips are served from this laptop only.
+The script leaves `smoke-*` guests in the database; they expire with the 7-day cleanup.
+
+## Conventions
+
+- **Times** are seconds from clip start. **Scores** are 0-100, rounded to 2 decimals. **Pitch** is Hz in manifests.
+- **Ratings** are lowercase slugs: `perfect`, `great`, `okay`, `bad`, `miss`. The UI maps them to labels.
+- **Register** is `-12`, `0` or `12` semitones, chosen before the turn.
+- **Identity:** either the `guest_token` cookie (set by `POST /api/guests`) or `Authorization: Bearer <Auth0 access token>`.
+  A bearer token wins if both are sent.
+- **Errors** always use one envelope; show `message`, branch on `code`, retry only when `retryable` is true:
 
 ```json
-{
-  "reviewed": true,
-  "lines": [
-    {
-      "start": 1.0,
-      "end": 3.0,
-      "text": "Your checked lyric line",
-      "romanized": "",
-      "translation": "",
-      "practice_text": "Your checked lyric line",
-      "words": [
-        { "text": "Your", "start": 1.0, "end": 1.5 }
-      ]
-    }
-  ]
-}
+{"error": {"code": "room_full", "message": "That room is full.", "retryable": false, "request_id": "..."}}
 ```
 
-This is illustrative text, not Russian Roulette lyrics or real timestamps.
-Leave `words` empty if only line timings have been reviewed; do not invent word
-times by splitting the line duration evenly.
+| Status | Codes |
+|---|---|
+| 401 | `not_authenticated`, `invalid_token` |
+| 403 | `host_only`, `not_your_seat` |
+| 404 | `clip_not_found`, `phrase_not_found`, `match_not_found`, `attempt_not_found`, `room_not_found`, `audio_missing` |
+| 409 | `not_your_turn`, `attempt_not_started`, `attempt_closed`, `attempt_invalidated`, `already_submitted`, `cannot_retry`, `use_room_rematch`, `room_full`, `room_started`, `not_ready`, `not_finished` |
+| 410 | `room_expired` |
+| 413 / 422 | `audio_too_large`, `audio_too_long`, `unsupported_audio`, `phrase_mismatch`, `invalid_register`, `invalid_request` |
+| 429 | `pronunciation_busy` (retryable), `too_many_joins` (retryable) |
+| 503 | `catalog_not_seeded`, `auth_unavailable`, `room_code_unavailable` |
 
-```powershell
-api/.venv/Scripts/python.exe -m api.publish_lyrics --song russian-roulette --input ml/data/russian-roulette/lyrics.corrected.json
+## Endpoints
+
+| Method | Route | Purpose |
+|---|---|---|
+| GET | `/api/health`, `/api/ready` | Liveness; readiness (`catalog`, `database`, `pronunciation`) |
+| GET | `/api/clips`, `/api/clips/{id}/manifest` | Prepared catalog; full manifest |
+| GET | `/api/clips/{id}/audio` | Instrumental only, supports `Range` |
+| POST | `/api/guests` | Create guest `{display_name}`; sets the cookie |
+| POST | `/api/auth/claim` | After login, send bearer token + guest cookie to move guest history to the account |
+| POST | `/api/matches` | `{clip_id}` for solo, plus `players: ["A","B"]` for local battle |
+| POST | `/api/turns/{attempt_id}/begin` | `{register, calibration_offset?}` |
+| POST | `/api/turns/{attempt_id}/result` | Final phrase results; needs an `Idempotency-Key` header |
+| GET | `/api/matches/{id}` | Match, players, attempts, scores, `winner_slot` |
+| POST | `/api/matches/{id}/retry` | Replace a lost or abandoned turn with a fresh attempt |
+| POST | `/api/matches/{id}/rematch` | New local/solo match with the same players (online: use the room) |
+| GET | `/api/history`, `/api/leaderboard?clip_id=` | Your saved results; best totals of logged-in players |
+| POST | `/api/turns/{attempt_id}/coach` | Coaching blurb for a finished turn: `{status: ok\|unavailable, coach_blurb}`. Generated once, then cached. |
+| POST | `/api/practice` | Multipart: `clip_id`, `phrase_id`, `audio` (WAV/MP3/WebM/Ogg, max 5 MB and 15 s) |
+| POST | `/api/rooms`, `/api/rooms/join` | Create `{clip_id}`; join `{code}` |
+| GET | `/api/rooms/{id}` | Snapshot (members only) |
+| POST | `/api/rooms/{id}/ready`, `/clip`, `/start`, `/rematch`, `/abort` | Lobby and lifecycle (`clip`, `start`, `rematch`, `abort` are host-only) |
+| WS | `/ws/rooms/{id}` | Presence, snapshots, provisional progress |
+
+## Example: a solo game
+
+```bash
+curl -c jar -X POST localhost:8000/api/guests -H 'content-type: application/json' -d '{"display_name":"Ann"}'
+# {"id":"c2b5...","display_name":"Ann"}
+
+curl -b jar -X POST localhost:8000/api/matches -H 'content-type: application/json' -d '{"clip_id":"synthetic-demo"}'
+# {"match_id":"e4cd...","attempt_id":"88a2...","scoring_version":"0.1.0"}
+
+curl -b jar -X POST localhost:8000/api/turns/88a2.../begin -H 'content-type: application/json' \
+  -d '{"register":0,"calibration_offset":0.12}'
+# {"attempt_id":"88a2...","state":"started"}
+
+# ...the client plays, rates each phrase locally, then submits once:
+curl -b jar -X POST localhost:8000/api/turns/88a2.../result -H 'content-type: application/json' \
+  -H 'Idempotency-Key: abc-1' \
+  -d '{"phrases":[{"phrase_id":"p1","rating":"great","pitch":82,"timing":70,"coverage":0.9}]}'
+# {"mode":"solo","clip_id":"synthetic-demo","clip_version":1,"scoring_version":"0.1.0","register":0,
+#  "total":79.6,"pitch":82.0,"timing":70.0,"phrases":[...],"coach_blurb":null}
 ```
 
-The command validates timing against the prepared duration and writes
-`lyrics.reviewed.json`, bound to a SHA-256 of the preferred instrumental.
-It refuses to overwrite an existing reviewed track. Preserve the old track
-and increment the song version when replacing a reviewed release. Publishing
-here writes a local file only; it does not deploy or upload anything.
+Rules worth knowing:
+- The result must contain **every phrase of the clip exactly once** (`phrase_mismatch` otherwise).
+- Sending the **same** `Idempotency-Key` again returns the same result and changes nothing, so retry freely after a
+  lost response. A **different** key on a finished attempt gets `already_submitted`.
+- Local battle (`players` with two names): the second player's attempt appears in `GET /api/matches/{id}` after the
+  first result is saved. `winner_slot` is the higher total at one decimal, or `null` for a tie.
 
-## Checks
+## Example: an online room
 
-```powershell
-New-Item -ItemType Directory -Path ml/data/test-runs -Force | Out-Null
-api/.venv/Scripts/python.exe -m pytest api/test_lyrics_api.py -q -p no:cacheprovider --basetemp ml/data/test-runs/lyrics-api
-api/.venv/Scripts/python.exe -m pytest ml/scoring/test_live.py -q -p no:cacheprovider
-deno test --allow-read=contracts/fixtures web/live/live_test.js api/examples/lyrics_clock_test.js
-```
+1. Host `POST /api/rooms {clip_id}` and shares the returned `code`; the friend `POST /api/rooms/join {code}`.
+2. Each calls `POST /api/rooms/{id}/ready {ready: true}`; the host calls `/start` (returns `match_id`, `attempt_id`).
+3. Both open `ws://host/ws/rooms/{id}` (guest cookie, or `?access_token=` for Auth0). The server sends `room_snapshot`
+   immediately and after every durable change.
+4. The singer runs `begin` then `result` exactly as in solo. Only the active seat may call them (`not_your_seat` otherwise).
+5. The other player sees `result_saved`, then their own turn opens; after the last result, `match_finished`. Both read the
+   same winner from `GET /api/rooms/{id}` (`match.winner_slot`).
 
-Tests use invented phrases and synthetic audio, not the rejected song drafts.
-They cover boundaries, gaps, pause/backward seek, bad timing, stale audio/version,
-draft rejection, path containment, VTT, range requests, and API/ML isolation.
-Shared scoring fixtures cover correct/wrong pitch, fixed register, silence,
-missing frames, early/late entry and note changes, fixed latency, exclusions,
-rests and weighted aggregation. Browser hardware microphone testing is separate.
+WebSocket messages (all JSON with a `type` and an `id`):
+
+| Direction | Types |
+|---|---|
+| Client → server | `heartbeat`, `progress` (`data`), `phrase_rating` (`data`). Progress and ratings are accepted only from the active singer. |
+| Server → client | `room_snapshot` (includes `state_version`; ignore older versions), `heartbeat_ack`, `turn_progress`, `phrase_rating`, `result_saved`, `match_finished`, `error` |
+
+Limits: messages over 2 KB or more than 30 per second get an `error`; a socket silent for 45 s is closed (send a
+`heartbeat` every ~15 s); browsers sending a foreign `Origin` are refused. **Live progress and badges are provisional;
+only a committed `result` counts.** After a reconnect, trust the fresh snapshot, not what you buffered.
+
+**Lost turns:** a started turn that is not finished within the clip length + grace period is invalidated and the match
+becomes `retry_required`. Call `POST /api/matches/{id}/retry` for a fresh `attempt_id`. A tab that is still open after a
+network blip can submit the same attempt with the same `Idempotency-Key` as long as the deadline has not passed.
+
+## Where things live
+
+| File | Role |
+|---|---|
+| `main.py` | App, health/ready, catalog and audio routes, error handlers |
+| `play.py` | Guests, Auth0 identity, matches, turns, history, leaderboard, claim |
+| `rooms.py` | Rooms, WebSocket hub, snapshots |
+| `practice.py` | Spoken-practice upload and the pluggable scorer |
+| `models.py`, `tables.py` | Pydantic contracts; SQLAlchemy tables |
+| `retention.py` | Hourly guest cleanup; lost-turn recovery every 15 s |
+| `clip_catalog.py`, `catalog/<id>/manifest.json` | Validated manifests (audio files go next to them, gitignored) |
+| `migrations/` | Alembic migrations (committed) |
+
+## Coaching blurb
+
+After a turn is scored, call `POST /api/turns/{attempt_id}/coach`. Gemini gets only the measured numbers (totals,
+per-phrase rating, pitch, timing, coverage, register) and writes 2-3 friendly sentences. It never changes a score,
+rating or winner. If there is no key, or Gemini fails or times out (10 s), the answer is
+`{"status": "unavailable", "coach_blurb": null}`: show the results without it and retry later. A successful blurb is
+saved and also appears as `coach_blurb` on the attempt's score in `GET /api/matches/{id}`.
+
+## Hooks for other roles
+
+- **ML A (pronunciation):** set `api.practice.scorer` to an object with a `provider` string and
+  `assess(wav_path, expected_text) -> [{"text": ..., "score": 0-100}]`. It receives 16 kHz mono WAV. Raise on failure;
+  the API reports `status: "error"` (never a score). Only one assessment runs at a time.
+- **ML B (scoring):** `play.py` recomputes totals with a **stand-in** (duration-weighted mean of phrase pitch and timing,
+  80/20). Replace it with a call into `ml/scoring` once that exists, and keep `scoring_version` in step.
+- **Real clips:** put `manifest.json` and the instrumental in `api/catalog/<id>/`, then run `python -m api.seed`.
+  Audio is gitignored; never commit copyrighted audio.
+
+## Known limits
+
+- Scoring is a placeholder; ratings are stored as the client submitted them, not recomputed.
+- Client-submitted phrase results are validated, not cheat-proof.
+- One Uvicorn worker only: socket handles and the join rate limiter are in memory. More workers need shared event delivery.
+- Not yet verified: Python 3.11, two real computers over HTTPS, an Electron PKCE login, restart mid-turn recovery.
+- `connected` in a snapshot only counts sockets open on this server process; after any reconnect, fetch `GET /api/rooms/{id}` for the truth.
+
+## Local lyric and audio preview
+
+The offline ML preview runs separately with `uvicorn api.local_demo:app`.
+See [LOCAL_DEMO.md](LOCAL_DEMO.md) for the local song picker, vocal guide and
+lyric-timing workflow. This entry point does not replace the backend above.

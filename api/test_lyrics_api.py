@@ -1,7 +1,6 @@
 import hashlib
 import json
 from pathlib import Path
-from pathlib import Path
 import sys
 import subprocess
 import wave
@@ -9,7 +8,7 @@ import wave
 from fastapi.testclient import TestClient
 import pytest
 
-from api.main import create_app
+from api.local_demo import create_app
 
 
 @pytest.fixture

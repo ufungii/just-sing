@@ -7,22 +7,26 @@ keeps the shared contract shape without implying automatic timings were reviewed
 import argparse
 import hashlib
 import json
-from math import isfinite, log2
+from math import ceil, isfinite, log2
 from pathlib import Path
 from statistics import median
 from .text import korean_practice_text, apply_cached_translations
-from ml.scoring.live import score_phrase
+from .common import ROOT, digest, read
 
-ROOT = Path(__file__).resolve().parents[2]
 GENERATOR = "ml.pipeline.manifest"
 
 
-def read(path):
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def digest(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def scoreable_seconds(reference, start, end):
+    """Count voiced, non-excluded frames for eligibility; do not rate singing."""
+    hop = reference["hop_seconds"]
+    first = max(0, ceil(start / hop - 1e-9))
+    last = min(len(reference["hz"]), ceil(end / hop - 1e-9))
+    excluded = reference.get("excluded", [])
+    return hop * sum(
+        reference["hz"][i] is not None
+        and not any(region["start"] <= i * hop < region["end"] for region in excluded)
+        for i in range(first, last)
+    )
 
 
 def display_notes(reference, duration):
@@ -113,7 +117,7 @@ def build_manifest(folder):
     start = provenance.get("clip_start_seconds", 0)
     phrases, dropped = [], []
     for i, line in enumerate(lines):
-        seconds = score_phrase(reference, [], line["start"], line["end"])["scoreable_seconds"]
+        seconds = scoreable_seconds(reference, line["start"], line["end"])
         if i in partial_lines or seconds < 0.5 - 1e-9:
             dropped.append({"id": f"p{i+1}", "line_index": i, "scoreable_seconds": seconds,
                             "reason": "partial clip boundary" if i in partial_lines else "under_0.5_seconds_scoreable"})

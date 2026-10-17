@@ -12,7 +12,7 @@ import sys
 import wave
 
 
-ROOT = Path(__file__).resolve().parents[2]
+from .common import ROOT
 
 
 def write_test_audio(path: Path) -> None:

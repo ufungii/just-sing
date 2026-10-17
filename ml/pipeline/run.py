@@ -5,7 +5,6 @@ it can appear in the catalog. Run with the pipeline Python environment.
 """
 
 import argparse
-import hashlib
 import json
 from math import isfinite
 from pathlib import Path
@@ -15,12 +14,8 @@ import subprocess
 import sys
 import tempfile
 
-ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / "ml/data"
-
-
-def digest(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+from .audio import decoded_frames
+from .common import DATA, ROOT, digest
 
 
 def command(*args):
@@ -34,14 +29,6 @@ def export_mp3(source, destination):
     else:
         command(imageio_ffmpeg.get_ffmpeg_exe(), "-v", "error", "-n", "-i", source,
                 "-vn", "-ar", "44100", "-ac", "2", "-c:a", "libmp3lame", "-b:a", "320k", destination)
-
-
-def decoded_frames(path):
-    import imageio_ffmpeg
-    decoded = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-v", "error", "-i", str(path),
-                              "-ar", "44100", "-ac", "2", "-f", "s16le", "-"],
-                             check=True, capture_output=True)
-    return len(decoded.stdout) // 4
 
 
 def parser():
@@ -59,7 +46,8 @@ def parser():
     return result
 
 
-def prepare(args):
+def validate_inputs(args):
+    """Check source selection and protect existing preparations before processing."""
     if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}", args.id):
         raise ValueError("Use a song ID containing letters, digits, underscores or hyphens")
     selected = bool(args.vocals and args.instrumental)
@@ -81,6 +69,40 @@ def prepare(args):
     separation_python = ROOT / "ml/pipeline/separation/.venv/Scripts/python.exe"
     if not selected and not separation_python.exists():
         raise ValueError("Install the separate Demucs environment first (see ml/pipeline/README.md)")
+    return inputs, destination, separation_python
+
+def select_stems(args, workspace, separation_python):
+    """Reuse selected stems or apply the baseline-vocal/residual-backing recipe."""
+    processing = {}
+    if args.vocals and args.instrumental:
+        vocal_input, backing_input = args.vocals, args.instrumental
+    else:
+        # Keep the original vocal estimate, while using the preferred
+        # fine-tuned residual + mastering recipe for the backing.
+        recipes = [
+            ("baseline", "htdemucs", 0.25, "predicted"),
+            ("backing", "04573f0d", 0.5, "residual"),
+        ]
+        for name, model, overlap, method in recipes:
+            parameters = [separation_python, "-m", "ml.pipeline.separate", "--input", args.clip,
+                          "--output", workspace / name, "--model", model, "--overlap", overlap,
+                          "--instrumental-method", method, "--start", args.start]
+            if args.duration is not None:
+                parameters += ["--duration", args.duration]
+            command(*parameters)
+            processing[name] = json.loads((workspace / name / "separation.json").read_text())
+        vocal_input = workspace / "baseline/stems/htdemucs/vocals.wav"
+        from .enhance import enhance
+        mastered = workspace / "mastered"
+        mastered.mkdir()
+        processing["mastering"] = enhance(workspace / "backing/stems/04573f0d/instrumental-residual.wav",
+                                           mastered, -16, 25)
+        backing_input = mastered / processing["mastering"]["mp3"]
+    return vocal_input, backing_input, processing
+
+
+def prepare(args):
+    inputs, destination, separation_python = validate_inputs(args)
     work_root = (DATA / ".preparing").resolve()
     if not work_root.is_relative_to(DATA.resolve()):
         raise ValueError("Preparation directory must stay inside ml/data")
@@ -91,28 +113,7 @@ def prepare(args):
             raise ValueError("Invalid temporary workspace")
         output = workspace / args.id
         output.mkdir()
-        processing = {}
-        if selected:
-            vocal_input, backing_input = args.vocals, args.instrumental
-        else:
-            # Keep the original vocal estimate, while using the preferred
-            # fine-tuned residual + mastering recipe for the backing.
-            for name, model, overlap, method in [("baseline", "htdemucs", 0.25, "predicted"),
-                                                   ("backing", "04573f0d", 0.5, "residual")]:
-                parameters = [separation_python, "-m", "ml.pipeline.separate", "--input", args.clip,
-                              "--output", workspace / name, "--model", model, "--overlap", overlap,
-                              "--instrumental-method", method, "--start", args.start]
-                if args.duration is not None:
-                    parameters += ["--duration", args.duration]
-                command(*parameters)
-                processing[name] = json.loads((workspace / name / "separation.json").read_text())
-            vocal_input = workspace / "baseline/stems/htdemucs/vocals.wav"
-            from .enhance import enhance
-            mastered = workspace / "mastered"
-            mastered.mkdir()
-            processing["mastering"] = enhance(workspace / "backing/stems/04573f0d/instrumental-residual.wav",
-                                               mastered, -16, 25)
-            backing_input = mastered / processing["mastering"]["mp3"]
+        vocal_input, backing_input, processing = select_stems(args, workspace, separation_python)
         for role, source in [("vocals", vocal_input), ("instrumental", backing_input)]:
             export_mp3(source, output / f"{role}.mp3")
         counts = {role: decoded_frames(output / f"{role}.mp3") for role in ("vocals", "instrumental")}

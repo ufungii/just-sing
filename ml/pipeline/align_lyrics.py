@@ -5,15 +5,15 @@ import hashlib
 import json
 from pathlib import Path
 import re
-import subprocess
 import time
 from math import isfinite
 
 from .romanize import romanize_text
 from .text import korean_practice_text, apply_cached_translations
+from .audio import decode_audio
+from .common import ROOT
 
 
-ROOT = Path(__file__).resolve().parents[2]
 SAMPLE_RATE = 16000
 HOP = 320
 RECEPTIVE_CENTER = 199.5
@@ -61,18 +61,6 @@ def normalize_words(lines):
                 raise ValueError(f"Unalignable word on lyric line {line_index + 1}")
             words.append({"line_index": line_index, "text": original, "normalized": normalized})
     return words
-
-
-def decode_audio(path):
-    import imageio_ffmpeg
-    import numpy as np
-    import torch
-
-    result = subprocess.run([
-        imageio_ffmpeg.get_ffmpeg_exe(), "-v", "error", "-i", str(path),
-        "-ar", str(SAMPLE_RATE), "-ac", "1", "-f", "f32le", "-",
-    ], check=True, capture_output=True)
-    return torch.from_numpy(np.frombuffer(result.stdout, dtype="<f4").copy())
 
 
 def anchor_windows(corrections, texts, duration, audio_hash):

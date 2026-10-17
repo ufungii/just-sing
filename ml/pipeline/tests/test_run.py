@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from . import run
-from .romanize import romanize_text, romanize_track
+from .. import run
+from ..romanize import romanize_text, romanize_track
 
 
 class PreparationTests(unittest.TestCase):
@@ -93,6 +93,9 @@ class PreparationTests(unittest.TestCase):
     def test_source_recipe_keeps_baseline_vocals_and_masters_only_residual_backing(self):
         self.args.clip = self.vocals
         self.args.vocals = self.args.instrumental = None
+        separation_python = self.root / "ml/pipeline/separation/.venv/Scripts/python.exe"
+        separation_python.parent.mkdir(parents=True)
+        separation_python.write_bytes(b"fixture interpreter; subprocess calls are mocked")
         models = []
         def jobs(*args):
             if args[2] != "ml.pipeline.separate":
@@ -112,7 +115,7 @@ class PreparationTests(unittest.TestCase):
             (destination / "master.mp3").write_bytes(b"mastered backing")
             return {"mp3": "master.mp3"}
         import shutil
-        with patch.object(run, "DATA", self.data), patch.object(run, "command", side_effect=jobs), patch.object(run, "decoded_frames", return_value=88200), patch.object(run, "export_mp3", side_effect=shutil.copyfile), patch("ml.pipeline.enhance.enhance", side_effect=mastering), patch("ml.pipeline.manifest.write_manifest"):
+        with patch.object(run, "ROOT", self.root), patch.object(run, "DATA", self.data), patch.object(run, "command", side_effect=jobs), patch.object(run, "decoded_frames", return_value=88200), patch.object(run, "export_mp3", side_effect=shutil.copyfile), patch("ml.pipeline.enhance.enhance", side_effect=mastering), patch("ml.pipeline.manifest.write_manifest"):
             folder = run.prepare(self.args)
         self.assertEqual(models, ["htdemucs", "04573f0d"])
         self.assertEqual((folder / "vocals.mp3").read_bytes(), b"baseline vocal")
