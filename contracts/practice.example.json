@@ -2,12 +2,12 @@
   "clip_id": "example-song",
   "phrase_id": "p1",
   "locale": "ko-KR",
-  "provider": "local-ctc",
+  "provider": "faster-whisper",
   "status": "ok",
-  "overall": null,
+  "overall": 73,
   "words": [
-    { "text": "안녕", "score": 0.0 },
-    { "text": "내", "score": 0.0 },
-    { "text": "사랑", "score": 0.0 }
+    { "text": "안녕", "score": 92 },
+    { "text": "내", "score": 88 },
+    { "text": "사랑", "score": 40 }
   ]
 }

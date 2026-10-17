@@ -1,21 +1,14 @@
 {
   "mode": "solo",
   "clip_id": "example-song",
-  "clip_version": "1",
+  "clip_version": 1,
   "scoring_version": "0.1.0",
   "register": 0,
   "total": 0,
   "pitch": 0,
   "timing": 0,
   "phrases": [
-    {
-      "phrase_id": "p1",
-      "pitch": 0,
-      "timing": 0,
-      "score": 0,
-      "coverage": 0,
-      "rating": "Miss"
-    }
+    { "phrase_id": "p1", "rating": "miss", "score": 0, "pitch": 0, "timing": 0, "coverage": 0 }
   ],
   "coach_blurb": "string"
 }
