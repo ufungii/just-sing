@@ -1,0 +1,11 @@
+# Python 3.11. API stays importable without PyTorch/Demucs.
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+python-multipart>=0.0.9   # practice uploads (later)
+sqlalchemy>=2.0           # database work (later)
+psycopg[binary]>=3.2
+alembic>=1.13
+httpx>=0.27               # FastAPI TestClient
+pytest>=8
+python-dotenv>=1.0
