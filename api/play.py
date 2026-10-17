@@ -8,14 +8,15 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from .auth import verify_bearer
 from .db import get_engine
 from .errors import ApiError
 from .main import CATALOG
 from .models import PhraseScore, Score
-from .tables import Clip, GuestSession, Match, MatchPlayer, TurnAttempt
+from .tables import Clip, GuestSession, Match, MatchPlayer, PracticeAttempt, TurnAttempt
 
 router = APIRouter(prefix="/api")
 
@@ -33,10 +34,32 @@ def _hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def current_guest(request: Request, s: Session = Depends(get_db)) -> GuestSession:
+ACCOUNT_TTL = timedelta(days=3650)  # logged-in accounts do not expire like guests
+
+
+def _account_for(s: Session, sub: str) -> GuestSession:
+    """Find or create the session row that belongs to an Auth0 user."""
+    acct = s.scalar(select(GuestSession).where(GuestSession.auth0_sub == sub))
+    if not acct:
+        acct = GuestSession(display_name="Player", auth0_sub=sub, token_hash=_hash(secrets.token_hex(32)),
+                            expires_at=datetime.now(timezone.utc) + ACCOUNT_TTL)
+        s.add(acct)
+        s.commit()
+    return acct
+
+
+def _cookie_guest(request: Request, s: Session) -> GuestSession | None:
     token = request.cookies.get("guest_token")
-    guest = token and s.scalar(select(GuestSession).where(
+    return token and s.scalar(select(GuestSession).where(
         GuestSession.token_hash == _hash(token), GuestSession.expires_at > datetime.now(timezone.utc)))
+
+
+def current_guest(request: Request, s: Session = Depends(get_db)) -> GuestSession:
+    """A valid Auth0 bearer token wins; otherwise the guest cookie."""
+    bearer = request.headers.get("authorization", "")
+    if bearer.lower().startswith("bearer "):
+        return _account_for(s, verify_bearer(bearer[7:]))
+    guest = _cookie_guest(request, s)
     if not guest:
         raise ApiError(401, "not_authenticated", "Create a guest session first (POST /api/guests).")
     return guest
@@ -181,3 +204,31 @@ def history(guest=Depends(current_guest), s: Session = Depends(get_db)):
                      .order_by(Match.created_at.desc())).all()
     return [{"match_id": m.id, "clip_id": m.clip_id, "created_at": m.created_at, "total": t}
             for m, t in rows]
+
+
+@router.post("/auth/claim")
+def claim_guest(request: Request, account=Depends(current_guest), s: Session = Depends(get_db)):
+    """After login: attach this browser's guest history to the Auth0 account.
+    Send both the bearer token and the guest cookie."""
+    guest = _cookie_guest(request, s)
+    if not account.auth0_sub:
+        raise ApiError(401, "invalid_token", "Send the Auth0 bearer token with this request.")
+    moved = False
+    if guest and guest.id != account.id and not guest.auth0_sub:
+        for table in (Match, PracticeAttempt):
+            s.execute(update(table).where(table.guest_id == guest.id).values(guest_id=account.id))
+        guest.expires_at = datetime.now(timezone.utc)  # the guest cookie is spent
+        moved = True
+    s.commit()
+    return {"id": account.id, "claimed_guest_history": moved}
+
+
+@router.get("/leaderboard")
+def leaderboard(clip_id: str, s: Session = Depends(get_db)):
+    """Best accepted total per logged-in player on a clip. Guests are not ranked."""
+    rows = s.execute(
+        select(GuestSession.display_name, func.max(TurnAttempt.total).label("best"))
+        .join(Match, Match.guest_id == GuestSession.id).join(TurnAttempt, TurnAttempt.match_id == Match.id)
+        .where(Match.clip_id == clip_id, TurnAttempt.state == "accepted", GuestSession.auth0_sub.is_not(None))
+        .group_by(GuestSession.id).order_by(func.max(TurnAttempt.total).desc()).limit(20)).all()
+    return [{"display_name": n, "total": t} for n, t in rows]
