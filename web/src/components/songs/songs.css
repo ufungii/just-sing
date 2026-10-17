@@ -1,0 +1,276 @@
+/*
+ * Song select: the arcade song wheel and the album "jacket", in the soft pink pixel style.
+ * Tones map to the keycap palette in styles/tokens.css (face, light bevel, dark side).
+ */
+
+.song-banner--pink, .song-jacket--pink { --face: var(--pink); --bevel: var(--pink-light); --side: var(--pink-dark); }
+.song-banner--sky, .song-jacket--sky { --face: var(--sky); --bevel: var(--sky-light); --side: var(--sky-dark); }
+.song-banner--mint, .song-jacket--mint { --face: var(--mint); --bevel: var(--mint-light); --side: var(--mint-dark); }
+.song-banner--lav, .song-jacket--lav { --face: var(--lav); --bevel: var(--lav-light); --side: var(--lav-dark); }
+.song-banner--butter, .song-jacket--butter { --face: var(--butter); --bevel: #fff0a8; --side: #c9a400; }
+
+.song-kao { font-family: var(--font-kao); }
+
+/* ---------- wheel ---------- */
+
+.song-wheel { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.song-wheel__list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 520px;
+  margin: 0;
+  padding: 6px 18px 18px 6px; /* room for the extrude shadow and the pop-out */
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pink-dark) transparent;
+}
+
+.song-wheel__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  transition: padding-left 0.12s steps(3);
+}
+
+.song-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 18px;
+  border: var(--border-thin) solid var(--ink);
+  background: var(--face);
+  color: var(--ink);
+  text-align: left;
+  transform: skewX(-7deg);
+  box-shadow:
+    inset 4px 4px 0 var(--bevel),
+    inset -4px -6px 0 var(--side),
+    6px 8px 0 var(--ink);
+  transition: transform 0.08s steps(2), box-shadow 0.08s steps(2);
+}
+/* Unskew the content so text stays upright inside the slanted banner. */
+.song-banner > * { transform: skewX(7deg); }
+
+.song-banner:hover:not(:disabled) {
+  transform: skewX(-7deg) translate(-2px, -3px);
+  box-shadow:
+    inset 4px 4px 0 var(--bevel),
+    inset -4px -6px 0 var(--side),
+    8px 11px 0 var(--ink);
+}
+.song-banner:active:not(:disabled) {
+  transform: skewX(-7deg) translate(5px, 7px);
+  box-shadow:
+    inset 4px 4px 0 var(--bevel),
+    inset -4px -6px 0 var(--side),
+    1px 1px 0 var(--ink);
+}
+.song-banner:focus-visible { outline: 4px dashed var(--hot); outline-offset: 5px; }
+
+/* The chosen song pops out: bigger, lifted, ringed in paper white. */
+.song-banner.is-selected {
+  min-height: 78px;
+  border-width: var(--border);
+  transform: skewX(-7deg) translate(-4px, -6px);
+  box-shadow:
+    inset 0 0 0 3px var(--paper),
+    inset 6px 6px 0 var(--bevel),
+    inset -6px -8px 0 var(--side),
+    12px 14px 0 var(--ink);
+}
+.song-banner.is-selected .song-banner__title { font-size: 22px; }
+
+/* Not prepared yet: flat, dashed, faded. */
+.song-banner--soon {
+  --face: var(--paper);
+  --bevel: #ffffff;
+  --side: #f3d5e6;
+  border-style: dashed;
+  color: var(--ink-rose);
+  box-shadow: 3px 4px 0 rgb(59 35 64 / 0.35);
+  cursor: not-allowed;
+}
+
+.song-banner__thumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 3px solid var(--ink);
+  background: var(--side);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+}
+.song-banner--soon .song-banner__thumb { background: #f3d5e6; color: var(--ink-rose); border-style: dashed; }
+.song-banner.is-selected .song-banner__thumb { width: 52px; height: 52px; background: var(--paper); }
+
+.song-banner__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.song-banner__title {
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 1.15;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.song-banner__artist { font-size: 15px; }
+
+.song-banner__tag {
+  flex: none;
+  padding: 3px 8px;
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.song-banner--soon .song-banner__tag { border-style: dashed; background: transparent; }
+
+@keyframes song-point {
+  0%, 100% { transform: translate(0, -50%); }
+  50% { transform: translate(6px, -50%); }
+}
+.song-pointer {
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  z-index: 1;
+  shape-rendering: crispEdges;
+  animation: song-point 0.7s steps(2) infinite;
+}
+.song-wheel__item:has(.song-pointer) .song-banner { margin-left: 34px; }
+
+.song-wheel__hint {
+  margin: 0;
+  padding-right: 18px;
+  text-align: right;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--ink-rose);
+}
+
+.song-heart { display: block; shape-rendering: crispEdges; }
+
+/* ---------- jacket ---------- */
+
+.song-jacket {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+.song-jacket__art-wrap {
+  position: relative;
+  width: 300px;
+  height: 300px;
+  margin: 10px 0 0 10px;
+}
+
+@keyframes song-spin { to { transform: rotate(360deg); } }
+
+/* Slow pastel sunburst behind the jacket. */
+.song-jacket__rays {
+  position: absolute;
+  inset: -70px -110px -70px -70px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(var(--bevel) 0 10deg, transparent 10deg 24deg);
+  opacity: 0.75;
+  mask-image: radial-gradient(circle, #000 35%, transparent 70%);
+  animation: song-spin 30s linear infinite;
+}
+
+/* The disc peeking out of the case. */
+.song-jacket__disc {
+  position: absolute;
+  top: 22px;
+  left: 120px;
+  width: 256px;
+  height: 256px;
+  border: var(--border-thin) solid var(--ink);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, var(--ink) 0 9px, var(--face) 10px 30px, transparent 31px),
+    repeating-radial-gradient(circle, #f6eefc 0 6px, #e8dcf8 6px 9px);
+  box-shadow: 6px 8px 0 rgb(59 35 64 / 0.35);
+  animation: song-spin 5s linear infinite;
+}
+
+.song-jacket__art {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: var(--border) solid var(--ink);
+  background:
+    linear-gradient(90deg, rgb(59 35 64 / 0.18) 0 18px, transparent 18px),
+    var(--face);
+  box-shadow:
+    inset 0 0 0 4px var(--paper),
+    inset 8px 8px 0 var(--bevel),
+    inset -8px -10px 0 var(--side),
+    var(--extrude-lift) 0 var(--ink);
+}
+.song-jacket__art-label {
+  padding: 3px 10px;
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.song-jacket__info { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+
+/* Layered 3D title, like the logo: a plum shadow copy sits under the pink face. */
+.song-jacket__title {
+  position: relative;
+  margin: 4px 0 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 40px;
+  line-height: 1.05;
+  color: var(--hot);
+  overflow-wrap: anywhere;
+  isolation: isolate; /* keeps the ::before shadow above the panel background */
+}
+.song-jacket__title::before {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 5px;
+  z-index: -1;
+  color: var(--ink);
+}
+.song-jacket__artist { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 18px; }
+
+.song-jacket__chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.song-jacket__chip {
+  padding: 4px 10px;
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+}
+.song-jacket__chip--now { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+@media (max-width: 1180px) {
+  .song-jacket__art-wrap { width: 240px; height: 240px; }
+  .song-jacket__disc { width: 200px; height: 200px; left: 100px; }
+  .song-jacket__title { font-size: 32px; }
+}
