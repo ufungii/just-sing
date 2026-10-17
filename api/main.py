@@ -1,15 +1,11 @@
 """FastAPI entry point. Run from the repo root: uvicorn api.main:app --reload"""
-import json
-from pathlib import Path
-
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
 
+from .clip_catalog import CATALOG, CATALOG_DIR
 from .errors import ApiError, error_response
 from .models import ClipSummary, Song
-
-CATALOG_DIR = Path(__file__).parent / "catalog"
 
 app = FastAPI(title="K-Pop Karaoke API")
 
@@ -24,16 +20,6 @@ async def validation_handler(request: Request, e: RequestValidationError):
     return error_response(request, 422, "invalid_request", "The request body or parameters are invalid.")
 
 
-def load_catalog() -> dict[str, Song]:
-    """Validate every manifest at load time; a bad one raises with its path."""
-    songs = {}
-    for path in sorted(CATALOG_DIR.glob("*/manifest.json")):
-        song = Song.model_validate(json.loads(path.read_text(encoding="utf-8")))
-        songs[song.id] = song
-    return songs
-
-
-CATALOG = load_catalog()  # ponytail: loaded once at startup, restart to pick up new manifests
 
 
 @app.get("/api/health")
@@ -78,3 +64,7 @@ def instrumental(clip_id: str):
 from .play import router  # noqa: E402  (play.py imports CATALOG from this module)
 
 app.include_router(router)
+
+from .practice import router as practice_router  # noqa: E402
+
+app.include_router(practice_router)

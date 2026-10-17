@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from .db import get_engine
-from .main import CATALOG, CATALOG_DIR
+from .clip_catalog import CATALOG, CATALOG_DIR
 from .tables import Clip
 
 

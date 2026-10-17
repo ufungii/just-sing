@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from .auth import verify_bearer
 from .db import get_engine
 from .errors import ApiError
-from .main import CATALOG
+from .clip_catalog import CATALOG
 from .models import PhraseScore, Score
 from .tables import Clip, GuestSession, Match, MatchPlayer, PracticeAttempt, TurnAttempt
 
