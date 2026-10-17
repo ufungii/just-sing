@@ -111,6 +111,16 @@ export interface Practice {
   words: WordFeedback[];
 }
 
+/** Lyric check after a solo turn: line level, display only, never part of the score. */
+export type LyricStatus = 'match' | 'unclear' | 'not_sung' | 'not_covered';
+
+export interface LyricCheck {
+  clip_id: string;
+  status: 'ok' | 'unavailable' | 'error'; // 'unavailable' is not a result
+  lyric_match_version: string | null;
+  lines: { line_index: number; status: LyricStatus }[];
+}
+
 export interface HistoryItem {
   duet?: boolean;
   range?: TimeRange | null;

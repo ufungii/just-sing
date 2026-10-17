@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import and_, case, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
@@ -18,6 +18,7 @@ from . import auth
 from .auth import verify_bearer
 from .db import get_engine
 from .errors import ApiError
+from .name_policy import validate_player_name
 from .duets import metadata as duet_metadata, timed_sections
 from .clip_catalog import CATALOG
 from .models import PhraseResultIn, PhraseScore, Score, TimeRange
@@ -174,11 +175,21 @@ def current_guest(request: Request, s: Session = Depends(get_db)) -> GuestSessio
 class GuestIn(BaseModel):
     display_name: str = Field(min_length=1, max_length=40)
 
+    @field_validator('display_name')
+    @classmethod
+    def allowed_name(cls, name):
+        return validate_player_name(name)
+
 
 class MatchIn(BaseModel):
     clip_id: str
     players: list[str] | None = Field(None, min_length=2, max_length=2)  # two names = local battle
     duet: bool = False  # legacy clients can retain sequential full-clip turns
+
+    @field_validator('players')
+    @classmethod
+    def allowed_players(cls, names):
+        return None if names is None else [validate_player_name(name) for name in names]
 
 
 class BeginIn(BaseModel):
@@ -214,10 +225,18 @@ def require_clip(s: Session, clip_id: str):
     return song
 
 
+def require_player_name(name: str) -> str:
+    try:
+        return validate_player_name(name)
+    except ValueError:
+        raise ApiError(422, 'invalid_player_name', 'Choose a different player name.') from None
+
+
 def _new_match(s: Session, guest: GuestSession, clip_id: str, names: list[str],
                previous: uuid.UUID | None = None, room_id: uuid.UUID | None = None, duet: bool = False,
                practice_range: TimeRange | None = None):
     """Create a match and its first attempt. The caller commits, so it can join other changes."""
+    names = [require_player_name(name) for name in names]
     song = require_clip(s, clip_id)
     match = Match(guest_id=guest.id, mode="online" if room_id else "solo" if len(names) == 1 else "local",
                   clip_id=song.id, clip_version=song.version, scoring_version=SCORING_VERSION,

@@ -62,27 +62,27 @@ def _run(args: list[str], timeout: int) -> str:
     return r.stdout
 
 
-def _normalize(upload: UploadFile, tmp: Path) -> Path:
+def _normalize(upload: UploadFile, tmp: Path, max_bytes: int = MAX_BYTES, max_seconds: float = MAX_SECONDS) -> Path:
     src = tmp / "upload"
     size = 0
     with src.open("wb") as f:
         while chunk := upload.file.read(64 * 1024):
             size += len(chunk)
-            if size > MAX_BYTES:
-                raise ApiError(413, "audio_too_large", f"Audio must be under {MAX_BYTES // 1024 // 1024} MB.")
+            if size > max_bytes:
+                raise ApiError(413, "audio_too_large", f"Audio must be under {max_bytes // 1024 // 1024} MB.")
             f.write(chunk)
     # Decode first, then measure the result: browser recordings (streamed WebM) carry no duration in
     # their header. Decoding stops just past the limit, so a long upload is cheap to reject.
     wav = tmp / "speech.wav"
-    _run(["ffmpeg", "-nostdin", "-y", "-i", str(src), "-t", str(MAX_SECONDS + 1),
+    _run(["ffmpeg", "-nostdin", "-y", "-i", str(src), "-t", str(max_seconds + 1),
           "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(wav)], 30)
     out = _run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(wav)], 10)
     try:
         duration = float(out.strip())
     except ValueError:
         raise ApiError(422, "unsupported_audio", "Could not read the audio duration.")
-    if duration > MAX_SECONDS:
-        raise ApiError(422, "audio_too_long", f"Audio must be at most {MAX_SECONDS:.0f} seconds.")
+    if duration > max_seconds:
+        raise ApiError(422, "audio_too_long", f"Audio must be at most {max_seconds:.0f} seconds.")
     return wav
 
 

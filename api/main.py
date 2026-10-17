@@ -22,6 +22,7 @@ async def lifespan(_):
     hub.loop = asyncio.get_running_loop()
     task = asyncio.create_task(cleanup_loop())
     await asyncio.to_thread(practice.attach_scorer)  # no-op unless PRONUNCIATION_SCORER=1
+    await asyncio.to_thread(lyric_check.attach_checker)  # same flag and model; after the scorer so the model is warm
     yield
     task.cancel()
 
@@ -49,7 +50,7 @@ def health():
 @app.get("/api/ready")
 def ready():
     """Readiness, not liveness: a missing database or scorer is reported, never a crash."""
-    from . import practice
+    from . import lyric_check, practice
     db = "not_configured"
     if os.getenv("DATABASE_URL"):
         try:
@@ -59,7 +60,8 @@ def ready():
         except Exception:
             db = "unavailable"
     return {"catalog": len(CATALOG) > 0, "database": db,
-            "pronunciation": "available" if practice.scorer else "unavailable"}
+            "pronunciation": "available" if practice.scorer else "unavailable",
+            "lyric_check": "available" if lyric_check.checker else "unavailable"}
 
 
 @app.get("/api/clips", response_model=list[ClipSummary])
@@ -109,18 +111,26 @@ from . import practice  # noqa: E402
 
 app.include_router(practice.router)
 
+from . import lyric_check  # noqa: E402
+
+app.include_router(lyric_check.router)
+
+# Upload size caps checked from Content-Length before the body is read.
+UPLOAD_LIMITS = {"/api/practice": practice.MAX_BYTES, "/api/lyric-check": lyric_check.MAX_BYTES}
+
 
 @app.middleware("http")
 async def limit_practice_upload(request: Request, call_next):
-    """Refuse an oversize practice upload from its Content-Length header, before the body is read
+    """Refuse an oversize audio upload from its Content-Length header, before the body is read
     (the handler's own check only runs after Starlette has received the whole multipart body)."""
-    if request.method == "POST" and request.url.path == "/api/practice":
+    limit = UPLOAD_LIMITS.get(request.url.path)
+    if request.method == "POST" and limit:
         length = request.headers.get("content-length", "")
         if not length.isdigit():
             return error_response(request, 411, "length_required", "Send a Content-Length with the upload.")
-        if int(length) > practice.MAX_BYTES + 64 * 1024:  # a little headroom for the form fields
+        if int(length) > limit + 64 * 1024:  # a little headroom for the form fields
             return error_response(request, 413, "audio_too_large",
-                                  f"Audio must be under {practice.MAX_BYTES // 1024 // 1024} MB.")
+                                  f"Audio must be under {limit // 1024 // 1024} MB.")
     return await call_next(request)
 
 from .rooms import router as rooms_router  # noqa: E402
