@@ -1,28 +1,46 @@
 {
   "id": "example-song",
+  "version": "1",
   "title": "Example Song",
   "artist": "Example Artist",
+  "language": "ko",
+  "duration": 30.0,
+  "provenance": {
+    "source_url": "https://example.com/placeholder",
+    "crop_start": 61.0,
+    "crop_end": 91.0
+  },
   "audio": {
     "instrumental": "songs/example-song/instrumental.mp3",
     "vocals": "songs/example-song/vocals.mp3"
   },
-  "offset_ms": 0,
   "lines": [
     {
-      "start": 12.3,
-      "end": 15.8,
+      "start": 2.3,
+      "end": 5.8,
       "text": "안녕 내 사랑",
       "romanized": "annyeong nae sarang",
       "translation": "Hello, my love",
+      "practice_text": "안녕 내 사랑",
       "words": [
-        { "text": "안녕", "start": 12.3, "end": 12.9 },
-        { "text": "내", "start": 13.0, "end": 13.4 },
-        { "text": "사랑", "start": 13.5, "end": 15.8 }
+        { "text": "안녕", "start": 2.3, "end": 2.9 },
+        { "text": "내", "start": 3.0, "end": 3.4 },
+        { "text": "사랑", "start": 3.5, "end": 5.8 }
       ]
     }
   ],
-  "pitch_contour": {
+  "phrases": [
+    { "id": "p1", "line_index": 0, "start": 2.2, "end": 6.0 }
+  ],
+  "reference": {
     "hop_seconds": 0.02,
-    "cents": [null, 1250.5, 1262.1]
+    "hz": [null, 392.0, 395.1, 440.0],
+    "notes": [
+      { "start": 2.3, "end": 3.0, "midi": 67 },
+      { "start": 3.0, "end": 3.5, "midi": 69 }
+    ],
+    "excluded": [
+      { "start": 20.0, "end": 22.5, "reason": "backing vocals" }
+    ]
   }
 }

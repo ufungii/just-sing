@@ -32,8 +32,8 @@ The singing screen is rhythm-game first: target notes and the live trace dominat
 |---|---|
 | Frontend | React + TypeScript + Vite UI, Canvas pitch lane, audio clock, mic capture, live pitch (Pitchy), **the TypeScript port of the scoring engine**, lyrics, results, practice screen, `web/` |
 | Full-stack/infra | FastAPI, Tiger Data (Postgres), Auth0, Vultr deploy, domain, FFmpeg audio normalization, practice-upload endpoint, `api/` |
-| ML A (pipeline, then pronunciation) | Offline per-song processing in `ml/pipeline/`. After the first reviewed `song.json` exists, owns the local pronunciation scorer in `ml/pronunciation/`. |
-| ML B (scoring + evals) | The Python **reference scoring engine** `ml/scoring/`, shared test fixtures, the evaluation harness `ml/evals/`, and calibration of thresholds/weights. Owns `ml/scoring/pitch.py`. |
+| ML A (pipeline) | Offline per-song processing in `ml/pipeline/`: stems, reference pitch, hand review, manifest assembly. Also backs ML B up on data prep (TTS/recordings for evals) once the first clip is done. |
+| ML B (pitch + pronunciation + evals) | The Python **reference scoring engine** `ml/scoring/`, the local pronunciation scorer `ml/pronunciation/`, shared test fixtures, the evaluation harness `ml/evals/`, and calibration of thresholds/weights. Owns `ml/scoring/pitch.py`. |
 
 Stay inside the folder of the role you are helping unless asked. Do not edit other roles' folders without saying so.
 
@@ -147,9 +147,9 @@ Results go in a table in the README. The README must have a "Design decisions an
 ## Current status and immediate next steps
 
 - Repo skeleton exists; no feature code yet. Direction reconciled from two planning docs: solo karaoke + spoken practice are core, battle is stretch, infra from the original brief (Tiger Data, Auth0, Vultr, Gemini).
-- **Team, today:** agree on the manifest/score/practice contracts and pick the first clip; confirm the pronunciation handoff to ML A.
-- ML A (`ml/pipeline-demo-song`): prove one real Demucs separation on the actual machine, extract the reference contour, hand ML B a rough manifest, then hand-review notes/phrases/exclusions and finalize `song.json`. Then `ml/pronunciation-baselines`.
-- ML B (`ml/pitch-score`): `pitch_contour()` + pitch/timing scoring + shared fixtures + pytest on synthetic melodies; then `ml/evals-degradation`; then calibration. Share the scoring spec/fixtures with Frontend early.
+- **Team, today:** agree on the manifest/score/practice contracts and pick the first clip.
+- ML A (`ml/pipeline-demo-song`): prove one real Demucs separation on the actual machine, extract the reference contour, hand ML B a rough manifest, then hand-review notes/phrases/exclusions and finalize `song.json`. Then help ML B with eval data (TTS speech, teammate recordings).
+- ML B (`ml/pitch-score`): `pitch_contour()` + pitch scoring + pytest on synthetic melodies (done, v0.1.0); next shared fixtures, timing, `ml/evals-degradation`, then `ml/pronunciation-baselines`, then calibration. Share the scoring spec/fixtures with Frontend early.
 - Frontend: Vite + React + TS, Web Audio clock, mic + Pitchy, pitch lane from the example manifest, TS scoring port against the fixtures.
 - Full-stack: FastAPI scaffold, catalog + manifest endpoints, practice-upload endpoint with FFmpeg normalization, Tiger Data schema/migrations, a hello-world Vultr deploy early.
 - First milestone: one clip, one singer, correctly synchronized pitch trace, and a good take reliably beating a bad take. Then spoken practice end to end. Battle and extras come after.

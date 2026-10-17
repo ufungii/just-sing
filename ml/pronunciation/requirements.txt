@@ -1,0 +1,7 @@
+# Local spoken-Korean pronunciation scorer. Python 3.11.
+-r ../requirements.txt
+torch
+torchaudio
+transformers       # pretrained Korean wav2vec2 CTC model (verify license/size)
+faster-whisper     # Baseline A transcription
+rapidfuzz          # jamo-level text comparison

@@ -1,0 +1,13 @@
+{
+  "clip_id": "example-song",
+  "phrase_id": "p1",
+  "locale": "ko-KR",
+  "provider": "local-ctc",
+  "status": "ok",
+  "overall": null,
+  "words": [
+    { "text": "안녕", "score": 0.0 },
+    { "text": "내", "score": 0.0 },
+    { "text": "사랑", "score": 0.0 }
+  ]
+}

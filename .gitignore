@@ -2,6 +2,9 @@
 *.mp3
 *.wav
 *.flac
+*.mp4
+*.webm
+*.m4a
 
 # Model weights
 *.pt
