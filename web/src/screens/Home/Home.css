@@ -279,3 +279,56 @@
 }
 
 .home-account { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-size: 14px; }
+
+/* ---------- top-right corner: players, history, settings ---------- */
+
+.home-corner {
+  position: absolute;
+  top: 34px;
+  right: 40px;
+  z-index: 5;
+  display: flex;
+  gap: 14px;
+}
+
+.home-corner__btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 74px;
+  height: 70px;
+  border: var(--border-thin) solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow:
+    inset 4px 4px 0 #ffffff,
+    inset -4px -6px 0 #f3d5e6,
+    5px 7px 0 var(--ink);
+  transition: transform 0.08s steps(2), box-shadow 0.08s steps(2);
+}
+.home-corner__btn:nth-child(1) { background: var(--pink-light); }
+.home-corner__btn:nth-child(2) { background: var(--lav-light); }
+.home-corner__btn:nth-child(3) { background: var(--mint-light); }
+.home-corner__btn:hover {
+  transform: translate(-2px, -3px);
+  box-shadow:
+    inset 4px 4px 0 #ffffff,
+    inset -4px -6px 0 #f3d5e6,
+    7px 10px 0 var(--ink);
+}
+.home-corner__btn:active {
+  transform: translate(4px, 6px);
+  box-shadow:
+    inset 4px 4px 0 #ffffff,
+    inset -4px -6px 0 #f3d5e6,
+    1px 1px 0 var(--ink);
+}
+.home-corner__btn:focus-visible { outline: 4px dashed var(--hot); outline-offset: 5px; }
+.home-corner__label { font-family: var(--font-display); font-weight: 700; font-size: 9px; }
+
+@media (max-width: 1180px) {
+  .home-corner { top: 30px; right: 34px; gap: 10px; }
+  .home-corner__btn { width: 62px; height: 62px; }
+}
