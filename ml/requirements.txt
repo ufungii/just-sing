@@ -7,3 +7,4 @@ scipy>=1.11
 librosa>=0.10      # audio loading, pyin pitch tracker for CPU-only evals
 soundfile>=0.12
 pytest>=8
+matplotlib>=3.8   # optional: contour plots in ml/evals/inspect_reference.py
