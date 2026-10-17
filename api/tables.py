@@ -26,9 +26,12 @@ class GuestSession(Base):
     id: Mapped[uuid.UUID] = _id()
     display_name: Mapped[str] = mapped_column(String(40))
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)  # sha256 of the cookie token
-    auth0_sub: Mapped[str | None] = mapped_column(String(128), index=True)  # set when a guest logs in
+    auth0_sub: Mapped[str | None] = mapped_column(String(128))  # set when a guest logs in
     created_at: Mapped[datetime] = _now()
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # One account per Auth0 user, enforced by the database so parallel first requests cannot duplicate it.
+    __table_args__ = (Index("uq_guest_session_auth0_sub", "auth0_sub", unique=True,
+                            postgresql_where=text("auth0_sub IS NOT NULL")),)
 
 
 class Clip(Base):

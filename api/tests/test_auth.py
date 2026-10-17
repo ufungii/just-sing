@@ -80,3 +80,17 @@ def test_claim_moves_rooms_so_cleanup_keeps_working():
     assert host.post("/api/auth/claim", headers=auth_h).json()["claimed_guest_history"] is True
     cleanup_expired()  # must not raise
     assert host.get(f"/api/rooms/{room['id']}", headers=auth_h).status_code == 200  # the account keeps the room
+
+
+def test_parallel_first_requests_create_one_account():
+    """Regression: find-then-insert with no unique constraint let parallel first requests after login
+    create several accounts for one Auth0 user (reproduced: 7 of 8 users duplicated), splitting history."""
+    from concurrent.futures import ThreadPoolExecutor
+    for i in range(4):
+        sub = f"test|race{i}"
+        h = {"Authorization": f"Bearer {token(sub)}"}
+        with ThreadPoolExecutor(8) as pool:
+            codes = list(pool.map(lambda _: TestClient(app).get("/api/history", headers=h).status_code, range(8)))
+        assert codes == [200] * 8
+        with get_engine().connect() as c:
+            assert c.execute(text("select count(*) from guest_session where auth0_sub=:s"), {"s": sub}).scalar() == 1

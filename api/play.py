@@ -9,7 +9,8 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, func, or_, select, text, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from .auth import verify_bearer
@@ -57,10 +58,14 @@ def _account_for(s: Session, sub: str) -> GuestSession:
     """Find or create the session row that belongs to an Auth0 user."""
     acct = s.scalar(select(GuestSession).where(GuestSession.auth0_sub == sub))
     if not acct:
-        acct = GuestSession(display_name="Player", auth0_sub=sub, token_hash=_hash(secrets.token_hex(32)),
-                            expires_at=datetime.now(timezone.utc) + ACCOUNT_TTL)
-        s.add(acct)
+        # Insert-or-nothing: if a parallel request created the row first, the unique index makes this a
+        # no-op and the select below finds that row.
+        s.execute(pg_insert(GuestSession).values(
+            id=uuid.uuid4(), display_name="Player", auth0_sub=sub, token_hash=_hash(secrets.token_hex(32)),
+            expires_at=datetime.now(timezone.utc) + ACCOUNT_TTL,
+        ).on_conflict_do_nothing(index_elements=["auth0_sub"], index_where=text("auth0_sub IS NOT NULL")))
         s.commit()
+        acct = s.scalar(select(GuestSession).where(GuestSession.auth0_sub == sub))
     return acct
 
 
