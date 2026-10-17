@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { PixelButton } from '../../ui';
 import type { Song, TimeRange } from '../../lib/types';
 import { ClipTimeline, type LineMovePreview } from './ClipTimeline';
 import { boundaries, includedPhrases, snapBoundary } from './range';
@@ -135,17 +136,18 @@ export function CropWorkspace({song,range,onClose,onApply,onSaveClip,onPreview,o
     `${line.text} ${line.romanized}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   return <dialog ref={dialog} className={`crop-workspace${author?'':' crop-workspace--practice'}`} aria-labelledby={titleId} onCancel={event=>{event.preventDefault();close();}}>
     <header><div><h2 id={titleId}>{author?'Song timing and cropping':readOnly?'View practice section':'Choose a practice section'}</h2><p>{song.title} · {song.artist}</p></div>
-      <button type="button" onClick={close} disabled={saving}>Close / back</button></header>
+      {author?<button type="button" onClick={close} disabled={saving}>Close / back</button>
+        :<PixelButton size="sm" tone="paper" onClick={close} disabled={saving}>Close / back</PixelButton>}</header>
     {!author ? <PracticeSectionView song={song} selection={selection} position={position} disabled={controlsDisabled}
       onSeek={seek} onEdge={edge} onLineEdge={lineEdge} waveform={<Waveform peaks={peaks} duration={song.duration}/>}>
       <div className="practice-section-controls">
-        <button className="practice-preview" disabled={saving} onClick={()=>playing?onStop():onPreview(selection,selection.start)}>{playing?'Stop preview':'Preview selection'}</button>
-        <button disabled={saving||position>=song.duration} onClick={()=>onPreview({start:position,end:song.duration},position)}>Listen from playhead</button>
-        <div className="practice-set-edges"><button disabled={controlsDisabled} onClick={()=>edge('start',position,true)}>Set start here</button>
-          <button disabled={controlsDisabled} onClick={()=>edge('end',position,true)}>Set end here</button></div>
+        <PixelButton size="sm" tone="hot" disabled={saving} onClick={()=>playing?onStop():onPreview(selection,selection.start)}>{playing?'Stop preview':'Preview selection'}</PixelButton>
+        <PixelButton size="sm" tone="sky" disabled={saving||position>=song.duration} onClick={()=>onPreview({start:position,end:song.duration},position)}>Listen from playhead</PixelButton>
+        <div className="practice-set-edges"><PixelButton size="sm" tone="mint" disabled={controlsDisabled} onClick={()=>edge('start',position,true)}>Set start here</PixelButton>
+          <PixelButton size="sm" tone="pink" disabled={controlsDisabled} onClick={()=>edge('end',position,true)}>Set end here</PixelButton></div>
         <TimeField label="Section start" value={selection.start} disabled={controlsDisabled} onCommit={time=>edge('start',time)}/>
         <TimeField label="Section end" value={selection.end} disabled={controlsDisabled} onCommit={time=>edge('end',time)}/>
-        <button disabled={controlsDisabled} onClick={()=>{onStop();setSelection({start:0,end:song.duration});seek(0);}}>Select full song</button>
+        <PixelButton size="sm" tone="paper" disabled={controlsDisabled} onClick={()=>{onStop();setSelection({start:0,end:song.duration});seek(0);}}>Select full song</PixelButton>
       </div>
       <p className="practice-tip">{readOnly?'The host chooses the section. You can browse the lyrics and listen.':`${includedPhrases(song.phrases,selection).length} scored phrases · Boundaries snap to whole phrases`}{loading?' · Loading waveform…':''}</p>
     </PracticeSectionView> : <div className="crop-workspace__body">
@@ -200,7 +202,8 @@ export function CropWorkspace({song,range,onClose,onApply,onSaveClip,onPreview,o
     </div>}
     <footer>
       {error&&<p role="alert">{error}</p>}
-      {onApply&&<button disabled={controlsDisabled} onClick={()=>void apply()}>{saving?'Saving…':'Use this practice section'}</button>}
+      {onApply&&(author?<button disabled={controlsDisabled} onClick={()=>void apply()}>{saving?'Saving…':'Use this practice section'}</button>
+        :<PixelButton tone="hot" disabled={controlsDisabled} onClick={()=>void apply()}>{saving?'Saving…':'Use this practice section'}</PixelButton>)}
       {onSaveClip&&<form className="crop-save" onSubmit={event=>{event.preventDefault();void saveClip();}}>
         <label>New clip ID<input aria-label="New clip ID" required pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,79}" value={clipId} onChange={e=>setClipId(e.target.value)} disabled={saving}/></label>
         <label>New clip title<input aria-label="New clip title" required maxLength={200} value={clipTitle} onChange={e=>setClipTitle(e.target.value)} disabled={saving}/></label>
