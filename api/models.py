@@ -118,7 +118,7 @@ class Score(BaseModel):
     pitch: float = Score100
     timing: float = Score100
     phrases: list[PhraseScore]
-    coach_blurb: str
+    coach_blurb: str | None = None  # filled by Gemini later
 
 
 class WordFeedback(BaseModel):

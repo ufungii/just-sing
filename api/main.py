@@ -1,11 +1,11 @@
 """FastAPI entry point. Run from the repo root: uvicorn api.main:app --reload"""
 import json
-import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 
+from .errors import ApiError, error_response
 from .models import ClipSummary, Song
 
 CATALOG_DIR = Path(__file__).parent / "catalog"
@@ -13,23 +13,14 @@ CATALOG_DIR = Path(__file__).parent / "catalog"
 app = FastAPI(title="K-Pop Karaoke API")
 
 
-class ApiError(Exception):
-    def __init__(self, status: int, code: str, message: str, retryable: bool = False):
-        self.status, self.code, self.message, self.retryable = status, code, message, retryable
-
-
-def error_response(request: Request, e: ApiError) -> JSONResponse:
-    """Error envelope from contracts/error.example.json. Never include provider details."""
-    return JSONResponse(
-        status_code=e.status,
-        content={"error": {"code": e.code, "message": e.message, "retryable": e.retryable,
-                           "request_id": request.headers.get("x-request-id", uuid.uuid4().hex)}},
-    )
-
-
 @app.exception_handler(ApiError)
 async def api_error_handler(request: Request, e: ApiError):
-    return error_response(request, e)
+    return error_response(request, e.status, e.code, e.message, e.retryable)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_handler(request: Request, e: RequestValidationError):
+    return error_response(request, 422, "invalid_request", "The request body or parameters are invalid.")
 
 
 def load_catalog() -> dict[str, Song]:
@@ -70,3 +61,8 @@ def manifest(clip_id: str):
     if clip_id not in CATALOG:
         raise ApiError(404, "clip_not_found", f"No clip with id '{clip_id}'.")
     return CATALOG[clip_id]
+
+
+from .play import router  # noqa: E402  (play.py imports CATALOG from this module)
+
+app.include_router(router)
