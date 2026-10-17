@@ -1,0 +1,279 @@
+/*
+ * Home / title menu. Layout and keycap styling follow web/.design-ref/home-mockup.dc.html.
+ * Colours come from styles/tokens.css; the few logo shades that have no token yet are
+ * scoped to .home below.
+ */
+
+.home {
+  /* Logo extrude shades between --hot and --ink (not in tokens yet). */
+  --logo-rose: #c93a7e;
+  --logo-plum: #8c2f63;
+  --banner-shade: #f3d5e6;
+
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  padding: 40px 48px 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+.home .pixel {
+  display: block;
+  shape-rendering: crispEdges;
+}
+
+.home-frame {
+  position: absolute;
+  inset: 16px;
+  border: 6px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: inset 0 0 0 4px var(--paper);
+  pointer-events: none;
+}
+
+.home-inner {
+  position: relative;
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ---------- motion (stepped so it reads as pixel art) ---------- */
+
+@keyframes home-wave {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+@keyframes home-point {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(8px); }
+}
+
+.home .wave { display: inline-block; animation: home-wave 1.4s steps(4) infinite; }
+.home .wave:hover { animation-duration: 0.35s; }
+.home .point { animation: home-point 0.7s steps(2) infinite; }
+
+/* ---------- small text bits ---------- */
+
+.home-kao {
+  font-family: var(--font-kao);
+  font-size: 20px;
+  white-space: nowrap;
+}
+.home-kao--rose { color: var(--ink-rose); }
+.home-kao--hot { color: var(--hot); }
+.home-kao--soft { color: var(--ink-soft); }
+
+/* ---------- header ---------- */
+
+.home-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ---------- hero: logo, mascots, banner ---------- */
+
+.home-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+}
+
+.home-stage {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: clamp(10px, 1.6vw, 22px);
+  width: 100%;
+}
+
+.home-logo {
+  display: flex;
+  align-items: flex-end;
+  margin: 0 0 0.29em;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(60px, 7.3vw, 104px);
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--hot);
+}
+
+.home-logo__letter { position: relative; }
+.home-logo__space { width: 0.45em; }
+.home-logo__sizer { position: relative; color: transparent; }
+.home-logo__layer { position: absolute; left: 0; }
+.home-logo__layer--ink { top: 0.135em; color: var(--ink); }
+.home-logo__layer--plum { top: 0.096em; color: var(--logo-plum); }
+.home-logo__layer--rose { top: 0.048em; color: var(--logo-rose); }
+.home-logo__layer--face { top: 0; color: var(--hot); }
+
+/* MicChan / BoomboxKun bring their own bubble, animation and bottom margin. */
+.home-mascot { flex-shrink: 0; }
+
+.home-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+  padding: 10px 22px;
+  background: var(--paper);
+  border: var(--border-thin) solid var(--ink);
+  box-shadow:
+    inset 4px 4px 0 #fff,
+    inset -4px -5px 0 var(--banner-shade),
+    6px 7px 0 var(--ink);
+}
+.home-banner__ko { font-family: var(--font-ko); font-size: 26px; color: var(--hot); }
+.home-banner__en { font-family: var(--font-display); font-weight: 700; font-size: 18px; }
+
+.home-tagline {
+  margin: 10px 0 0;
+  font-weight: 500;
+  font-size: 20px;
+}
+
+/* ---------- menu keycaps ---------- */
+
+.home-menu {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 28px;
+  margin-top: 26px;
+}
+
+.home-key {
+  --face: var(--pink);
+  --bevel: var(--pink-light);
+  --side: var(--pink-dark);
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-height: 204px;
+  padding: 18px 20px 22px;
+  border: var(--border) solid var(--ink);
+  background: var(--face);
+  color: var(--ink);
+  text-align: left;
+  box-shadow:
+    inset 6px 6px 0 var(--bevel),
+    inset -6px -9px 0 var(--side),
+    var(--extrude) 0 var(--ink);
+  transition: transform 0.08s steps(2), box-shadow 0.08s steps(2);
+}
+.home-key--mint { --face: var(--mint); --bevel: var(--mint-light); --side: var(--mint-dark); }
+.home-key--sky { --face: var(--sky); --bevel: var(--sky-light); --side: var(--sky-dark); }
+.home-key--lav { --face: var(--lav); --bevel: var(--lav-light); --side: var(--lav-dark); }
+
+.home-key:hover,
+.home-key.is-selected {
+  transform: translate(-4px, -6px);
+  box-shadow:
+    inset 6px 6px 0 var(--bevel),
+    inset -6px -9px 0 var(--side),
+    var(--extrude-lift) 0 var(--ink);
+}
+
+.home-key:active,
+.home-key.is-pressed {
+  transform: translate(8px, 10px);
+  box-shadow:
+    inset 6px 6px 0 rgb(255 255 255 / 0.5),
+    inset -6px -9px 0 rgb(59 35 64 / 0.25),
+    var(--extrude-press) 0 var(--ink);
+}
+
+.home-key:focus-visible { outline: 4px dashed var(--hot); outline-offset: 8px; }
+
+.home-key__pointer {
+  position: absolute;
+  left: 50%;
+  top: -44px;
+  margin-left: -18px;
+  display: block;
+  width: 40px;
+  height: 34px;
+}
+
+.home-key__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  min-height: 48px;
+}
+
+.home-key__title { font-family: var(--font-display); font-weight: 700; font-size: 26px; line-height: 1; }
+.home-key__sub { font-weight: 500; font-size: 16px; }
+.home-key__kao { margin-top: auto; font-family: var(--font-kao); font-size: 16px; }
+
+/* ---------- footer ---------- */
+
+.home-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 28px;
+  padding: 20px 0 34px;
+}
+
+.home-footer__note { font-family: var(--font-display); font-weight: 700; font-size: 14px; }
+
+/* ---------- narrower windows (~1024): 2x2 cards, tighter hero ---------- */
+
+@media (max-width: 1180px) {
+  .home { padding: 36px 40px 0; }
+  .home-menu { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 32px; margin-top: 30px; }
+  /* Wide 2x2 keycaps: icon in its own column so each card is short. */
+  .home-key {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-areas:
+      'icon title'
+      'icon sub'
+      'icon kao';
+    align-content: start;
+    column-gap: 16px;
+    row-gap: 6px;
+    min-height: 0;
+  }
+  .home-key__top { display: contents; }
+  .home-key__top > svg { grid-area: icon; align-self: center; justify-self: center; }
+  .home-key__title { grid-area: title; align-self: center; }
+  .home-key__sub { grid-area: sub; }
+  .home-key__kao { grid-area: kao; margin-top: 2px; }
+  .home-footer { padding-top: 16px; }
+  .home-footer > .home-kao { display: none; }
+}
+
+/* Shorter windows (e.g. a 1440x900 desktop window minus its title bar): tighten vertical rhythm. */
+@media (max-height: 880px) {
+  .home { padding-top: 32px; }
+  .home-inner { gap: 12px; }
+  .home-menu { margin-top: 32px; }
+  .home-key { row-gap: 6px; padding-top: 14px; padding-bottom: 18px; }
+  .home-tagline { margin-top: 4px; }
+  .home-footer { padding: 14px 0 24px; }
+}
+@media (max-height: 880px) and (min-width: 1181px) {
+  .home-key { min-height: 176px; }
+}
+
+@media (max-width: 760px) {
+  .home { padding: 32px 28px 0; }
+  .home-menu { grid-template-columns: minmax(0, 1fr); }
+  .home-mascot { display: none; }
+}
