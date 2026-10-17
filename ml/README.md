@@ -37,6 +37,8 @@ Tests: `.venv/bin/python -m pytest ml` (speech tests skip themselves there) and 
 - **API, after a song:** `phrase_weights(ref_hz, phrases, hop_seconds=..., excluded=...)` once per clip, then `finalize_turn(submitted_phrases, weights, expected_phrase_ids=..., register=...)`. It validates the browser's per-phrase results, ignores any client-claimed score or rating, recomputes everything, and raises `ValueError` on bad input. Needs only numpy.
 - **API, pronunciation practice:** `ml.pronunciation.baselines.assess(audio, expected_text)`. Returns per-word scores (0-100) in the shape of `contracts/practice.example.json`. Needs PyTorch, so run it outside the main API process. Convert uploads first: `ffmpeg -i in -ac 1 -ar 16000 out.wav`.
 - **Pipeline:** `pitch_contour(audio, sr, backend="crepe")` builds the reference, so the reference and the evals share one extractor.
+- **Frontend's TypeScript port:** follow `scoring/SPEC.md` and test against `contracts/fixtures/`. `scoring/tests/test_spec.py` is an independent plain-Python implementation written only from the spec that passes the fixtures, so it can be translated line by line.
+- **As soon as a vocals stem exists:** `ml/pronunciation/.venv/bin/python -m ml.evals.rough_reference vocals.wav --id <song>` extracts the reference, proposes rough phrases, runs the inspector, and checks the scorer on the real contour (all output under the gitignored `ml/data/<song>/`).
 - **Before handing over a manifest:** `python -m ml.evals.inspect_reference song.json --plot contour.png` checks structure and flags octave jumps, heavy exclusions, notes too short to time, and phrases with nothing to grade.
 
 ## How the singing score works
