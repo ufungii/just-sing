@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, asGuest, createMatch, getClips, savedName } from '../../lib/api';
-import type { ClipSummary, Register, TimeRange } from '../../lib/types';
+import type { Register, TimeRange } from '../../lib/types';
 import { useNav } from '../../routes';
 import type { SingSetup } from '../../routes';
 import { Notice, Panel, PixelButton, ScreenShell, Segmented } from '../../ui';
 import { MicCheck } from './MicCheck';
 import { TimingCheck, loadCalibration } from './TimingCheck';
 import { PracticeRangePicker } from '../../components/timeline/PracticeRangePicker';
+import { SongJacket } from '../../components/songs/SongJacket';
+import { SongWheel, useSongEntries } from '../../components/songs/SongWheel';
+import type { Clips } from '../../components/songs/SongWheel';
 import './SoloSetup.css';
+
+export type { Clips };
 
 /** The server's display-name limit. */
 export const NAME_MAX = 40;
@@ -18,13 +23,7 @@ export const REGISTERS: { value: Register; label: string }[] = [
   { value: 12, label: 'HIGH 8VA' },
 ];
 
-export type Clips = { kind: 'loading' } | { kind: 'error'; detail: string | null } | { kind: 'ok'; clips: ClipSummary[] };
 type Start = { kind: 'idle' } | { kind: 'starting' } | { kind: 'unsaved'; message: string };
-
-function formatDuration(seconds: number): string {
-  const s = Math.round(seconds);
-  return s < 60 ? `~${s} s` : `~${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
 
 /**
  * Solo setup: pick a clip, a name and a voice range, check the mic, optionally measure the
@@ -42,10 +41,13 @@ export function SoloSetup() {
   const [start, setStart] = useState<Start>({ kind: 'idle' });
 
   const { clips, loadClips } = useClips();
-  // One clip: nothing to choose, so pick it.
+  const entries = useSongEntries(clips);
+  // Start on the first playable song so the jacket isn't empty.
   useEffect(() => {
-    if (clips.kind === 'ok' && clips.clips.length === 1) setClipId(clips.clips[0].id);
-  }, [clips]);
+    const first = entries.find((e) => e.clip);
+    if (first?.clip) setClipId((id) => id ?? first.clip!.id);
+  }, [entries]);
+  const chosen = entries.find((e) => e.clip?.id === clipId) ?? null;
 
   const trimmed = name.trim();
   const missing = [!clipId && 'a song', !trimmed && 'your name', !micOk && 'a mic check'].filter(Boolean) as string[];
@@ -72,12 +74,23 @@ export function SoloSetup() {
 
   return (
     <ScreenShell title="SOLO SING" kao="(ﾉ≧▽≦)ﾉ">
-      <div className="solo-grid">
-        <Panel tone="pink" label="1 · PICK A SONG" className="solo-songs">
-          <ClipList clips={clips} selected={clipId} onSelect={(id) => { setClipId(id); setRange(null); }} onRetry={loadClips} />
-          {clipId && <PracticeRangePicker clipId={clipId} range={range} onChange={setRange} disabled={start.kind === 'starting'} />}
-        </Panel>
+      <div className="solo-ribbon">
+        <span className="solo-ribbon__stage">STAGE 01</span>
+        <span className="solo-ribbon__title">SELECT MUSIC</span>
+        <span lang="ko" className="solo-ribbon__ko">
+          <span className="song-kao" aria-hidden="true">♪</span> 곡을 골라요! <span className="song-kao" aria-hidden="true">♪</span>
+        </span>
+      </div>
 
+      <Panel tone="pink" label="1 · PICK A SONG" className="solo-stage">
+        <div className="solo-stage__row">
+          <SongJacket entry={chosen} />
+          <SongWheel clips={clips} selected={clipId} onSelect={(id) => { setClipId(id); setRange(null); }} onRetry={loadClips} />
+        </div>
+        {clipId && <PracticeRangePicker clipId={clipId} range={range} onChange={setRange} disabled={start.kind === 'starting'} />}
+      </Panel>
+
+      <div className="solo-grid solo-grid--setup">
         <div className="solo-side">
           <Panel label="2 · YOU" className="solo-you">
             <label className="solo-field">
@@ -159,53 +172,5 @@ export function useClips() {
   return { clips, loadClips };
 }
 
-export function ClipList({
-  clips,
-  selected,
-  onSelect,
-  onRetry,
-}: {
-  clips: Clips;
-  selected: string | null;
-  onSelect: (id: string) => void;
-  onRetry: () => void;
-}) {
-  if (clips.kind === 'loading') return <Notice>Loading songs…</Notice>;
-  if (clips.kind === 'error')
-    return (
-      <Notice
-        tone="error"
-        action={
-          <PixelButton tone="paper" size="sm" onClick={onRetry}>
-            RETRY
-          </PixelButton>
-        }
-      >
-        Can’t reach the server, so no songs yet. {clips.detail}
-      </Notice>
-    );
-  if (clips.clips.length === 0) return <Notice tone="warn">No songs are installed on the server yet.</Notice>;
-
-  return (
-    <ul className="solo-clips" role="list">
-      {clips.clips.map((c) => (
-        <li key={c.id}>
-          <button
-            type="button"
-            className={`solo-clip${c.id === selected ? ' is-selected' : ''}`}
-            aria-pressed={c.id === selected}
-            onClick={() => onSelect(c.id)}
-          >
-            <span className="solo-clip__title">{c.title}</span>
-            <span className="solo-clip__artist">{c.artist}</span>
-            <span className="solo-clip__meta">
-              <span>{formatDuration(c.duration)}</span>
-              {c.synthetic && <span className="solo-tag">TEST CLIP · NO AUDIO</span>}
-              {c.id === selected && <span className="solo-clip__check">♪ PICKED</span>}
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
+/** The song picker used by battle setup and the online lobby: the same wheel, without the jacket. */
+export const ClipList = SongWheel;
