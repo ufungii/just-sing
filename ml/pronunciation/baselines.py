@@ -1,10 +1,10 @@
 """Two local, free pronunciation baselines for SPOKEN Korean phrases.
 
 Both return the practice-result shape in contracts/practice.example.json with
-word-level scores in 0-1. They are automated checks, not validated by a fluent
+word-level scores on a 0-100 scale. They are automated checks, not validated by a fluent
 reviewer, and report words only (no phoneme diagnosis).
 
-  A  "whisper-jamo": transcribe with faster-whisper (no lyric prompt, or it
+  A  "faster-whisper": transcribe with faster-whisper (no lyric prompt, or it
      would echo the answer), then compare jamo with the expected text.
   B  "wav2vec2-ctc": force-align the expected text to a Korean wav2vec2 CTC
      model and take each syllable's posterior probability.
@@ -72,10 +72,10 @@ def assess_a(audio, expected: str, sr: int | None = None) -> dict:
 def score_a(heard: str, expected: str) -> dict:
     """Score an existing transcript (so one transcription can be checked against many texts)."""
     if not heard:
-        return _result("whisper-jamo", "error", reason="no_speech_detected")
+        return _result("faster-whisper", "error", reason="no_speech_detected")
     overall, words = score_words(expected, heard)
-    return _result("whisper-jamo", "ok", [{"text": w.text, "score": round(w.score, 3)} for w in words],
-                   round(overall, 3), heard=heard)
+    return _result("faster-whisper", "ok", [{"text": w.text, "score": round(100 * w.score, 1)} for w in words],
+                   round(100 * overall, 1), heard=heard)
 
 
 # --------------------------------------------------------------------------- #
@@ -136,7 +136,7 @@ def score_b(log_probs: np.ndarray, heard: str, expected: str) -> dict:
     for wi, sc in zip(owner, tok_scores):
         per_word[wi].append(sc)
 
-    out = [{"text": w, "score": round(float(np.mean(s)), 3) if s else None}
+    out = [{"text": w, "score": round(100 * float(np.mean(s)), 1) if s else None}
            for w, s in zip(words, per_word)]
     scored = [x for x in tok_scores]
-    return _result("wav2vec2-ctc", "ok", out, round(float(np.mean(scored)), 3), heard=heard)
+    return _result("wav2vec2-ctc", "ok", out, round(100 * float(np.mean(scored)), 1), heard=heard)

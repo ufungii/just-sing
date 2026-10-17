@@ -68,7 +68,7 @@ def cache_models_output(audios):
 
 
 def overall(res: dict) -> float:
-    return res["overall"] if res["status"] == "ok" and res["overall"] is not None else 0.0
+    return res["overall"] / 100 if res["status"] == "ok" and res["overall"] is not None else 0.0
 
 
 def evaluate_condition(audios) -> dict:
