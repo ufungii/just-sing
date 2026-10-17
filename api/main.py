@@ -1,12 +1,15 @@
 """FastAPI entry point. Run from the repo root: uvicorn api.main:app --reload"""
 import asyncio
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
+from sqlalchemy import text
 
 from .clip_catalog import CATALOG, CATALOG_DIR
+from .db import get_engine
 from .errors import ApiError, error_response
 from .models import ClipSummary, Song
 from .retention import cleanup_loop
@@ -42,8 +45,18 @@ def health():
 
 @app.get("/api/ready")
 def ready():
-    # Database and pronunciation are reported separately; neither is a liveness dependency.
-    return {"catalog": len(CATALOG) > 0, "database": "not_configured", "pronunciation": "unavailable"}
+    """Readiness, not liveness: a missing database or scorer is reported, never a crash."""
+    from . import practice
+    db = "not_configured"
+    if os.getenv("DATABASE_URL"):
+        try:
+            with get_engine().connect() as c:
+                c.execute(text("select 1"))
+            db = "ok"
+        except Exception:
+            db = "unavailable"
+    return {"catalog": len(CATALOG) > 0, "database": db,
+            "pronunciation": "available" if practice.scorer else "unavailable"}
 
 
 @app.get("/api/clips", response_model=list[ClipSummary])

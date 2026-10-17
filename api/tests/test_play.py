@@ -47,7 +47,7 @@ def test_solo_flow(guests):
 
     first = c.post(f"{url}/result", json=GOOD, headers=key)
     assert first.status_code == 200
-    assert first.json()["total"] == pytest.approx(0.8 * 80 + 0.2 * 60)
+    assert first.json()["total"] == 76.0  # exactly, not 76.00000000000001
     assert c.post(f"{url}/result", json=GOOD, headers=key).json() == first.json()  # replay
     assert c.post(f"{url}/result", json=GOOD, headers={"Idempotency-Key": "k2"}).status_code == 409
 
