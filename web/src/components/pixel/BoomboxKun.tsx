@@ -3,12 +3,12 @@ import { MascotButton } from './MascotButton';
 import { Px } from './Px';
 
 // Only characters the bundled DotGothic16 subset contains (no ω or ₊), so nothing falls back to another font.
-const LINES = ['♪ ˚☆ beat drop', '(=^･ｪ･^=) bzz', 'turn it up! ♫', '(｡-_-｡) zzz', '♬ volume 11 ♬'];
+const LINES = ['♪ ˚☆ beat drop', '(=^･ｪ･^=) bzz', 'turn it up! ♬', '(｡-_-｡) zzz', '♬ volume 11 ♬'];
 
 /** Rising notes: glyph, position, color, start delay and sideways drift (--dx), as in the mockup. */
 const NOTES: { ch: string; style: CSSProperties }[] = [
   { ch: '♪', style: { right: -6, top: 40, fontSize: 26, color: 'var(--ink-soft)', '--dx': '24px' } as CSSProperties },
-  { ch: '♫', style: { right: 30, top: 58, fontSize: 22, color: 'var(--hot)', animationDelay: '.8s', '--dx': '-10px' } as CSSProperties },
+  { ch: '♪', style: { right: 30, top: 58, fontSize: 22, color: 'var(--hot)', animationDelay: '.8s', '--dx': '-10px' } as CSSProperties },
   { ch: '♬', style: { right: -20, top: 74, fontSize: 20, color: 'var(--mint-dark)', animationDelay: '1.6s', '--dx': '30px' } as CSSProperties },
 ];
 
