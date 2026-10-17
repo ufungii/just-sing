@@ -40,10 +40,10 @@ def build_prompt(score: dict, phrase_count: int) -> str:
 def _generate(prompt: str) -> str:
     """One Gemini call. Raises on any problem; the caller turns that into 'unavailable'."""
     key = os.environ["GEMINI_API_KEY"]
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
     r = httpx.post(GEMINI_URL.format(model=model), headers={"x-goog-api-key": key}, timeout=10,
                    json={"contents": [{"parts": [{"text": prompt}]}],
-                         "generationConfig": {"temperature": 0.7, "maxOutputTokens": 200}})
+                         "generationConfig": {"temperature": 0.7, "maxOutputTokens": 400}})
     r.raise_for_status()
     return r.json()["candidates"][0]["content"]["parts"][0]["text"]
 

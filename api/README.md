@@ -38,7 +38,7 @@ Without a pronunciation scorer, `/api/practice` answers `status: "unavailable"`.
 | `GUEST_TTL_DAYS` | Guest session lifetime, default 7. Expired guests and their data are deleted hourly. |
 | `ALLOWED_ORIGINS` | Extra browser origins allowed to open WebSockets. The server's own host is always allowed. |
 | `GEMINI_API_KEY` | Server-side only. Enables coaching blurbs; without it they answer `unavailable`. |
-| `GEMINI_MODEL` | Model for blurbs, default `gemini-2.5-flash`. |
+| `GEMINI_MODEL` | Model for blurbs, default `gemini-3.5-flash-lite`. Google retires older models for new accounts, so if blurbs go `unavailable`, check this first. |
 | `WEB_DIST` | Folder with the built frontend. Default `web/dist`. |
 | `RECONNECT_GRACE_SECONDS` | Extra time after a clip ends before a started turn is treated as lost, default 60. |
 
