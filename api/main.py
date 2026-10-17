@@ -2,6 +2,7 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -13,6 +14,7 @@ from .db import get_engine
 from .errors import ApiError, error_response
 from .models import ClipSummary, Song
 from .retention import cleanup_loop
+
 
 @asynccontextmanager
 async def lifespan(_):
@@ -98,3 +100,25 @@ app.include_router(practice_router)
 from .rooms import router as rooms_router  # noqa: E402
 
 app.include_router(rooms_router)
+
+
+# ---- built frontend, served from the same origin so the guest cookie and WebSockets need no CORS ----
+
+def web_dist() -> Path:
+    """Folder with the built frontend (npm run build in web/). Read per request so tests can swap it."""
+    return Path(os.getenv("WEB_DIST") or Path(__file__).parents[1] / "web" / "dist")
+
+
+@app.get("/{path:path}", include_in_schema=False)
+def frontend(path: str):
+    """Serve a built file if it exists, else index.html so client-side routes survive a reload.
+    Registered last, so every /api and /ws route wins. Unknown /api paths keep the JSON error envelope."""
+    if path.startswith(("api/", "ws/")) or path in ("api", "ws"):
+        raise ApiError(404, "not_found", "No such endpoint.")
+    root = web_dist().resolve()
+    if not (root / "index.html").is_file():
+        raise ApiError(404, "frontend_not_built", "The frontend is not built on this server (run npm run build in web/).")
+    target = (root / path).resolve()
+    if path and target.is_file() and target.is_relative_to(root):  # never serve outside the build folder
+        return FileResponse(target)
+    return FileResponse(root / "index.html")

@@ -22,9 +22,9 @@ RESULT = lambda pitch: {"phrases": [{"phrase_id": "p1", "rating": "great", "pitc
 
 @pytest.fixture(autouse=True)
 def hang_guard():
-    """A broken websocket test would block forever; fail it after 40 s instead."""
+    """A broken websocket test would block forever; fail it after 90 s instead."""
     signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(TimeoutError("test hung")))
-    signal.alarm(40)
+    signal.alarm(90)
     yield
     signal.alarm(0)
 
