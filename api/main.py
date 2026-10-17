@@ -21,6 +21,7 @@ async def lifespan(_):
     from .rooms import hub
     hub.loop = asyncio.get_running_loop()
     task = asyncio.create_task(cleanup_loop())
+    await asyncio.to_thread(practice.attach_scorer)  # no-op unless PRONUNCIATION_SCORER=1
     yield
     task.cancel()
 

@@ -142,6 +142,7 @@ class Practice(BaseModel):
     locale: str
     provider: str
     status: Literal["ok", "unavailable", "error"]
+    overall: float | None = None  # 0-100, automated and not validated by a fluent reviewer; null unless status ok
     words: list[WordFeedback]
 
 
