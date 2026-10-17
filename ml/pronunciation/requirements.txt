@@ -7,3 +7,5 @@ torchaudio
 transformers       # pretrained Korean wav2vec2 CTC model (verify license/size)
 faster-whisper     # Baseline A transcription
 rapidfuzz          # jamo-level text comparison
+torchcrepe         # CREPE pitch backend (also used by tracker_eval)
+uroman             # romanizer required by the MMS-TTS Korean voice used to make eval speech
