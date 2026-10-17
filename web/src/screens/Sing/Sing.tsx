@@ -138,7 +138,8 @@ export function Sing({ setup }: { setup: SingSetup }) {
         }
       }
     }
-    nav.go({ name: 'results', result: { setup, phrases, local, saved, saveError: saved ? null : saveErrorRef.current } });
+    const result = { setup, phrases, local, saved, saveError: saved ? null : saveErrorRef.current };
+    nav.go(setup.battle ? { name: 'battleturn', result } : { name: 'results', result });
   }, [song, target, setup, nav, rateUpTo]);
 
   // ---------- the play loop: master clock -> UI, phrase ratings, end of clip ----------
@@ -189,7 +190,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
     finishedRef.current = true;
     engineRef.current?.close();
     engineRef.current = null;
-    nav.go({ name: 'solo' });
+    nav.go({ name: setup.battle ? 'battle' : 'solo' });
   };
 
   const getTime = useCallback(() => {
@@ -218,7 +219,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
         </div>
       }
     >
-      {song && <p className="sing-title">{song.title} <span>· {song.artist}</span></p>}
+      {song && <p className="sing-title">{setup.battle && <>P{setup.battle.turn + 1} {setup.playerName.toUpperCase()} · </>}{song.title} <span>· {song.artist}</span></p>}
 
       {isClick && <Notice tone="warn">No instrumental installed, so you are singing to a click track.</Notice>}
       {saveWarning && <Notice tone="warn">{saveWarning}</Notice>}
