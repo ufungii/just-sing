@@ -5,6 +5,7 @@
  */
 import { chromium, expect, test } from '@playwright/test';
 import path from 'node:path';
+import { addPlayer } from './duetHarness';
 
 const CLIP = process.env.E2E_CLIP ?? 'synthetic-demo';
 const LEAD = Number(process.env.E2E_LEAD ?? 6); // seconds of prefix in the WAVs (make_takes.py)
@@ -41,7 +42,7 @@ for (const take of ['good', 'wrong', 'silence'] as const) {
     const clips = await (await page.request.get('/api/clips')).json();
     const title = clips.find((c: any) => c.id === CLIP).title;
     await page.getByRole('button', { name: new RegExp(title.replace(/[()]/g, '.')) }).click();
-    await page.getByPlaceholder('e.g. Mina').fill(NAME);
+    await addPlayer(page, 'PLAYER', NAME);
     await page.getByRole('button', { name: 'TEST MIC' }).click();
     await expect(page.getByText('Mic works!')).toBeVisible({ timeout: 15_000 });
     await page.getByRole('button', { name: /START ♪/ }).click(); // timing check skipped (optional)

@@ -1,6 +1,6 @@
 # Task 2: song author tool — teammate handoff
 
-Build a standalone review app in `author/`. It lets a person listen to prepared songs, correct their lyrics/timing, and assign duet parts. Song ingestion, YouTube downloads, separation jobs, octave editing, and individual note editing are later work.
+The baseline review app is complete and merged through [PR #17](https://github.com/ufungii/just-sing/pull/17). This document records its original acceptance requirements. Current setup and features are in [author/README.md](../author/README.md). Later local work adds raw-audio preparation jobs, a full-screen crop workspace and live drag placement; source downloads and individual note/octave editing remain future work.
 
 ## App boundary and reusable code
 
@@ -27,7 +27,7 @@ Build a standalone review app in `author/`. It lets a person listen to prepared 
 - Store ownership by stable phrase IDs and player slots; derive timing from the existing phrases. Do not duplicate lyric text, timing, or player display names in the arrangement.
 - Validate known phrase IDs, unique section IDs, complete and unique scored-phrase coverage, chronological sections, and no lyric line split between owners/sections. Display missing or conflicting assignments clearly.
 
-The continuous multiplayer runtime is now included in PR #14 at the user’s request, with browser validation still pending. It supports the optional top-level field below. The author tool still needs to save its corrections and emit them through Rebuild:
+The continuous multiplayer runtime merged through PR #15 and its browser verification through PR #16. The PR #17 author tool saves assignments and emits them through Rebuild using the optional top-level field below:
 
 ```json
 {
@@ -49,7 +49,7 @@ Slots `0` and `1` are labelled Player 1 and Player 2 in the editor. These placeh
 - **Mark reviewed** updates the review flag. Saving a correction does not by itself establish that timings were reviewed by ear.
 - Ensure a rebuild preserves the saved text/timing, phrase boundaries, exclusions, translations, and part assignments.
 
-Relevant existing code: `ml/pipeline/align_lyrics.py`, `ml/pipeline/manifest.py`, `ml/pipeline/romanize.py`, and `ml/pipeline/docs/WORKFLOW.md`. The current pipeline needs extending for new author edits/duet fields; do not assume it already consumes them.
+Relevant code: `ml/pipeline/align_lyrics.py`, `ml/pipeline/manifest.py`, `ml/pipeline/romanize.py`, and `ml/pipeline/docs/WORKFLOW.md`. PR #17 includes correction/rebuild support for these author edits and duet fields.
 
 ## Acceptance checks
 

@@ -104,7 +104,7 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | 409 | `not_your_turn`, `attempt_not_started`, `attempt_closed`, `attempt_invalidated`, `already_submitted`, `cannot_retry`, `use_room_rematch`, `room_full`, `room_started`, `not_ready`, `not_finished`, `use_duet_ready`, `duet_closed`, `missed_start`, `restart_duet`, `duet_not_started` |
 | 410 | `room_expired` |
 | 411 | `length_required` (practice uploads must send a `Content-Length`; browsers do this for `FormData`) |
-| 413 / 422 | `audio_too_large`, `audio_too_long`, `unsupported_audio`, `phrase_mismatch`, `invalid_result`, `invalid_register`, `invalid_request`, `invalid_duet`, `invalid_duet_range` |
+| 413 / 422 | `audio_too_large`, `audio_too_long`, `unsupported_audio`, `phrase_mismatch`, `practice_unavailable`, `invalid_result`, `invalid_register`, `invalid_request`, `invalid_duet`, `invalid_duet_range` |
 | 429 | `pronunciation_busy` (retryable), `too_many_joins` (retryable) |
 | 503 | `catalog_not_seeded`, `auth_unavailable`, `room_code_unavailable` |
 
@@ -256,9 +256,9 @@ uvicorn api.main:app                    # restart to pick up new songs
 - **`practice_text`:** a line cut off at the clip edge has `practice_text: ""` and no phrase, and that is fine. A line that
   has a singing phrase may still have empty `practice_text` (English/mixed-language lyrics).
   Spoken practice separately requires Korean-only `practice_text`; unsupported phrases return
-  `422 practice_not_supported` before decoding or calling the model.
+  `422 practice_unavailable` before decoding or calling the model.
 - **Errors name the folder:** an invalid `song.json`, or two songs with the same `id`, stop the server at startup with the path.
-- **Audio:** `audio.instrumental` is a path relative to the song's folder. Only the instrumental is served.
+- **Audio:** instrumental and vocal paths are relative to the song's folder and served through their respective endpoints.
 
 ## Coaching blurb
 

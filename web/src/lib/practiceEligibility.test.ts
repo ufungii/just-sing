@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import song from '../../../../contracts/song.example.json';
-import { isSpokenKorean, practicePhrases } from './eligibility';
+import song from '../../../contracts/song.example.json';
+import { isSpokenKorean, practicePhrases } from './practicePhrases';
 
 describe('spoken Korean practice eligibility', () => {
   it.each([

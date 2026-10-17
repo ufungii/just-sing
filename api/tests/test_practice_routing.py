@@ -34,7 +34,7 @@ def test_unsupported_text_rejected_before_audio_or_model(isolated, monkeypatch, 
     response = client.post('/api/practice', data={'clip_id': song.id, 'phrase_id': phrase.id},
                            files={'audio': ('take.wav', b'invalid')})
     assert response.status_code == 422
-    assert response.json()['error']['code'] == 'practice_not_supported'
+    assert response.json()['error']['code'] == 'practice_unavailable'
     assert stored == []
 
 

@@ -1,5 +1,63 @@
 # Prepared songs and review notes
 
+## Additional local songs
+
+The following songs use the same original htdemucs vocal estimate and enhanced
+fine-tuned residual instrumental recipe. Each local folder contains matching
+`song.json`, `song.review.json`, `vocals.mp3`, and `instrumental.mp3` files;
+the corresponding `-demo` folder contains a matching 30-second crop.
+
+| Folder | Title | Artist | Selected YouTube video |
+| --- | --- | --- | --- |
+| `love-keyshia-cole` | Love | Keyshia Cole | `YKuHdOxj46I` |
+| `party-in-the-usa` | Party in the U.S.A. | Miley Cyrus | `vA2Lc9c3qN0` |
+| `soda-pop` | Soda Pop | Saja Boys | `_uu_izpVSEc` |
+| `last-christmas` | Last Christmas | Wham! | `KhqNTjbQ71A` |
+| `zombie` | Zombie | DAY6 | `TnRdJcrCt6c` |
+| `crazy` | CRAZY | LE SSERAFIM | `zRZHpWxCcYs` |
+
+English songs use `--language en`; their singing phrases remain available while
+Korean pronunciation exercises are disabled. Soda Pop retains Korean-only
+practice lines. Acoustic timestamps, stems, reference pitch, and translations
+remain drafts requiring listening review. `QUALITY_HANDOFF.json`,
+`INSPECTOR_REPORT.json`, and `TIMING_CROSSCHECK.json` record local checks.
+
+For the selected Last Christmas recording, the user chose to trim unsupported
+extended outro lyrics from the active timeline. All 88 supplied lines remain in
+`lyrics.supplied.txt`; `lyrics.active.txt` contains 67 active lines and
+`lyrics.unsupported-outro.txt` preserves the other 21. `OUTRO_REVIEW.json` records
+the selection, and audio/text-bound `corrections.json` preserves alignment windows.
+This decision is based on source comparisons and an automatic transcription,
+with listening review still pending. These lyric-bearing files stay outside Git.
+
+Zombie uses all 48 supplied lines / 203 words, preserving nine section breaks.
+The initial acoustic entrances compared against 48 matching LRCLIB cues show a
+median recording offset of 0.822 s and median absolute deviation of 0.075 s.
+Source cues plus that offset anchor the display lines; acoustic realignment
+places the words within those windows. Audio/text-bound corrections preserve
+this choice, including the four early entrances flagged in the initial draft.
+The post-adjustment source comparison is a consistency check, not independent
+validation. Stems, sustained-note ends, reference pitch and draft translations
+still require listening review.
+
+CRAZY preserves all 82 supplied lines in `lyrics.supplied.txt` and uses 79 active
+lines / 336 words. The user approved omitting three repeated Crazy lines before
+the final Act phrase because they are absent from the selected recording.
+`lyrics.active.txt`, `lyrics.omitted.txt`, and `LYRIC_SELECTION.json` record that
+choice. Repeated chants needed bounded acoustic realignment; external final
+chorus cues alone did not match this recording. The original draft, video-frame
+inspection and automatic waveform-repeat diagnostics remain local evidence.
+Repeat-derived Da windows and word highlights are provisional, with listening
+review still required. Both full-song and 30-second demo folders include the
+original vocal guide and enhanced instrumental on the same decoded timeline.
+
+Local team handoffs are `ml/data/handoff/zombie-karaoke.zip` and
+`ml/data/handoff/crazy-karaoke.zip`. Each archive includes the full-song and
+30-second demo folders with matching JSON, MP3s, review state and diagnostics.
+Copy those folders into a teammate's `ml/data/` directory and restart their API
+to refresh song selection. Pulling Git alone does not install these local assets;
+share the archives separately and keep their contents out of the public repo.
+
 ## Selected audio
 
 Russian Roulette uses:

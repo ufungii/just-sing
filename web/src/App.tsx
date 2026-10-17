@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavContext } from './routes';
 import type { Nav, Route, SingSetup } from './routes';
 import { Zibran } from './screens/EasterEgg/Zibran';
+import { setMenuMusicWanted } from './lib/menuMusic';
 import { Home } from './screens/Home/Home';
 import { SoloSetup } from './screens/Solo/SoloSetup';
 import { Sing } from './screens/Sing/Sing';
@@ -23,8 +24,22 @@ export function App() {
   }, []);
   const nav = useMemo<Nav>(() => ({ route, go, home: () => go({ name: 'home' }) }), [route, go]);
 
-  return <NavContext.Provider value={nav}>{renderRoute(route, go)}</NavContext.Provider>;
+  const music = MENU_MUSIC_SCREENS.has(route.name);
+  useEffect(() => setMenuMusicWanted(music), [music]);
+
+  return (
+    <NavContext.Provider value={nav}>
+      {renderRoute(route, go)}
+    </NavContext.Provider>
+  );
 }
+
+/**
+ * Screens with menu music. It is off wherever the microphone is in use or timing matters:
+ * solo and battle setup (mic and tap-along checks), the online lobby (mic check), singing,
+ * duets, and spoken practice. The battle hand-off / winner screen has no mic, so it keeps music.
+ */
+const MENU_MUSIC_SCREENS = new Set<Route['name']>(['home', 'results', 'history', 'battleturn']);
 
 /**
  * Development only: open a screen directly with a URL hash, e.g. http://localhost:5173/#sing.
