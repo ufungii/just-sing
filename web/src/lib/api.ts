@@ -3,7 +3,7 @@
  * Every call goes to the same origin (/api), which the Vite dev server proxies to FastAPI and
  * which FastAPI serves itself in production, so the httpOnly guest cookie just works.
  */
-import type { ClipSummary, HistoryItem, MatchView, NewMatch, PhraseScore, Practice, Register, Score, Song } from './types';
+import type { ClipSummary, HistoryItem, MatchView, NewMatch, PhraseScore, Practice, Register, Score, Song, TimeRange } from './types';
 
 /** The API's error envelope, or a network failure (code "network"). Branch on `code`, show `message`. */
 export class ApiError extends Error {
@@ -113,10 +113,10 @@ export const vocalsUrl = (clipId: string) => `/api/clips/${encodeURIComponent(cl
 /** Solo by default; two player names make a local battle (player 1's attempt comes back, player 2's appears after). */
 export const createMatch = (clipId: string, players?: [string, string]) =>
   request<NewMatch>('/api/matches', json(players ? { clip_id: clipId, players } : { clip_id: clipId }));
-export const beginTurn = (attemptId: string, register: Register, calibrationOffset: number | null) =>
+export const beginTurn = (attemptId: string, register: Register, calibrationOffset: number | null, range?: TimeRange | null) =>
   request<{ attempt_id: string; state: string }>(
     `/api/turns/${attemptId}/begin`,
-    json({ register, calibration_offset: calibrationOffset }),
+    json({ register, calibration_offset: calibrationOffset, ...(range ? { range } : {}) }),
   );
 /** Submit the finished phrase results once. Reuse the same key on retry so nothing is counted twice. */
 export const submitResult = (attemptId: string, phrases: PhraseScore[], idempotencyKey: string, guideUsed = false) =>

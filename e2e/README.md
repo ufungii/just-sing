@@ -31,3 +31,14 @@ inside the timing tolerance.
 Asserted: good > `E2E_GOOD_FLOOR`; good > wrong + 10; silence < 5; the match is in `/api/history` and the History
 screen; a non-empty coach bubble; no console/page errors (401 guest bootstrap and the 404 for the missing
 instrumental are expected and filtered). Absolute totals are not asserted beyond those margins.
+
+
+## Practice-section ranges
+
+`npx playwright test range.spec.ts` uses local `russian-roulette` assets and generated in-browser fake microphones (no take WAVs needed).
+It checks pointer and keyboard snapping, full reset, synchronized instrumental/vocal preview (with instrumental fallback when vocals are missing), a count-in before a middle phrase, matching instrumental/guide offsets,
+selected-only saved results and history, host-only room edits, save-failure recovery, readiness reset and reconnect recovery.
+Both online singers must save exactly the same phrase IDs. This does not validate real-mic accuracy or lyric timing.
+
+`E2E_PORT` overrides port 8765; `E2E_REUSE_SERVER=0` requires a fresh server rather than reusing one on that port.
+Run with an isolated test database/schema when checking retention or server startup, so background cleanup never reaches hand-played rows.

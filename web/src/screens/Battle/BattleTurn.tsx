@@ -158,7 +158,7 @@ export function MatchBoard({ match, song }: { match: MatchView; song: ReturnType
           <Panel key={p.slot} tone={p.slot === 0 ? 'pink' : 'sky'} label={`P${p.slot + 1} · ${p.display_name.toUpperCase()}`}>
             {score ? (
               <>
-                <ScoreSummary total={score.total} pitch={score.pitch} timing={score.timing} guided={score.guided} />
+                <ScoreSummary total={score.total} pitch={score.pitch} timing={score.timing} guided={score.guided} range={score.range} />
                 <PhraseChips phrases={score.phrases} song={song} />
               </>
             ) : (

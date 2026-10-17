@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, asGuest, createMatch, getClips, savedName } from '../../lib/api';
-import type { ClipSummary, Register } from '../../lib/types';
+import type { ClipSummary, Register, TimeRange } from '../../lib/types';
 import { useNav } from '../../routes';
 import type { SingSetup } from '../../routes';
 import { Notice, Panel, PixelButton, ScreenShell, Segmented } from '../../ui';
 import { MicCheck } from './MicCheck';
 import { TimingCheck, loadCalibration } from './TimingCheck';
+import { PracticeRangePicker } from '../../components/timeline/PracticeRangePicker';
 import './SoloSetup.css';
 
 /** The server's display-name limit. */
@@ -33,6 +34,7 @@ function formatDuration(seconds: number): string {
 export function SoloSetup() {
   const nav = useNav();
   const [clipId, setClipId] = useState<string | null>(null);
+  const [range, setRange] = useState<TimeRange | null>(null);
   const [name, setName] = useState(savedName);
   const [register, setRegister] = useState<Register>(0);
   const [micOk, setMicOk] = useState(false);
@@ -53,7 +55,7 @@ export function SoloSetup() {
     if (!clipId) return;
     nav.go({
       name: 'sing',
-      setup: { runId: crypto.randomUUID(), clipId, register, calibrationOffset: offset, playerName: trimmed, match },
+      setup: { runId: crypto.randomUUID(), clipId, range, register, calibrationOffset: offset, playerName: trimmed, match },
     });
   }
 
@@ -72,7 +74,8 @@ export function SoloSetup() {
     <ScreenShell title="SOLO SING" kao="(ﾉ≧▽≦)ﾉ">
       <div className="solo-grid">
         <Panel tone="pink" label="1 · PICK A SONG" className="solo-songs">
-          <ClipList clips={clips} selected={clipId} onSelect={setClipId} onRetry={loadClips} />
+          <ClipList clips={clips} selected={clipId} onSelect={(id) => { setClipId(id); setRange(null); }} onRetry={loadClips} />
+          {clipId && <PracticeRangePicker clipId={clipId} range={range} onChange={setRange} disabled={start.kind === 'starting'} />}
         </Panel>
 
         <div className="solo-side">

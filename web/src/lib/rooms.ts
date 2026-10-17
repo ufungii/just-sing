@@ -6,7 +6,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import { bearerToken, request } from './api';
-import type { MatchView, NewMatch, Rating } from './types';
+import type { MatchView, NewMatch, Rating, TimeRange } from './types';
 
 export interface RoomSnapshot {
   id: string;
@@ -14,6 +14,7 @@ export interface RoomSnapshot {
   state: 'lobby' | 'playing' | 'finished' | 'aborted';
   state_version: number;
   clip_id: string;
+  range: TimeRange | null;
   members: { slot: number; display_name: string; ready: boolean; connected: boolean }[];
   match: MatchView | null;
   /** The caller's own seat; only on HTTP responses, not on shared snapshots. */
@@ -28,6 +29,7 @@ export const joinRoom = (code: string) => call<RoomSnapshot>('/api/rooms/join', 
 export const getRoom = (id: string) => call<RoomSnapshot>(`/api/rooms/${id}`);
 export const setReady = (id: string, ready: boolean) => call<RoomSnapshot>(`/api/rooms/${id}/ready`, { ready });
 export const setRoomClip = (id: string, clipId: string) => call<RoomSnapshot>(`/api/rooms/${id}/clip`, { clip_id: clipId });
+export const setRoomRange = (id: string, range: TimeRange | null) => call<RoomSnapshot>(`/api/rooms/${id}/range`, { range });
 export const startRoom = (id: string) => call<NewMatch>(`/api/rooms/${id}/start`, {});
 export const rematchRoom = (id: string) => call<NewMatch>(`/api/rooms/${id}/rematch`, {});
 export const abortRoom = (id: string) => call<RoomSnapshot>(`/api/rooms/${id}/abort`, {}, 'POST');

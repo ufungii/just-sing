@@ -10,6 +10,7 @@ import { useNav } from '../../routes';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
 import { PhraseChips, ScoreSummary } from '../Results/PhraseChips';
 import { useManifest } from '../Results/useManifest';
+import { rangeLabel } from '../../components/timeline/range';
 import './History.css';
 
 type List =
@@ -120,6 +121,7 @@ export function History() {
                   <span className="history-row__clip">
                     <span className="history-row__title">{clip?.title ?? item.clip_id}</span>
                     {clip && <span className="history-row__artist">{clip.artist}</span>}
+                    {item.range && <span className="history-row__artist">Practice section · {rangeLabel(item.range)}</span>}
                   </span>
                   <span className="history-row__date">{dateFmt.format(new Date(item.created_at))}</span>
                   <span className="history-row__total">{Math.round(item.total)}</span>
@@ -156,7 +158,7 @@ function MatchDetail({ detail, clipId, onRetry }: { detail: Detail; clipId: stri
       )}
       {detail.state === 'ok' && (
         <>
-          <ScoreSummary total={detail.score.total} pitch={detail.score.pitch} timing={detail.score.timing} guided={detail.score.guided} />
+          <ScoreSummary total={detail.score.total} pitch={detail.score.pitch} timing={detail.score.timing} guided={detail.score.guided} range={detail.score.range} />
           <PhraseChips phrases={detail.score.phrases} song={song} />
         </>
       )}

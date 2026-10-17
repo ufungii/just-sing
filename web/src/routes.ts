@@ -3,13 +3,14 @@
  * screens move with `useNav().go(route)`. No URL router yet: the desktop shell loads one page.
  */
 import { createContext, useContext } from 'react';
-import type { PhraseScore, Register, Score } from './lib/types';
+import type { PhraseScore, Register, Score, TimeRange } from './lib/types';
 
 /** Chosen on the solo setup screen and handed to the singing screen. */
 export interface SingSetup {
   /** Unique per singing run (crypto.randomUUID()), so a rematch always starts a fresh screen. */
   runId: string;
   clipId: string;
+  range?: TimeRange | null;
   register: Register;
   /** Device latency in seconds from the tap-along check, or null if skipped. One value per device, never per take. */
   calibrationOffset: number | null;

@@ -245,6 +245,16 @@ def test_practice_range_scores_only_included_phrases(guests, monkeypatch):
     assert c.get("/api/history").json()[0]["range"] == {"start": 5.0, "end": 15.0}
 
 
+def test_unscoreable_range_is_rejected_before_playback(guests, monkeypatch):
+    from api import play
+    four_phrase_clip(monkeypatch)
+    monkeypatch.setitem(play._weight_cache, ("synthetic-demo", 1), [10, 0, 0, 10])
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    r = c.post(f"/api/turns/{m['attempt_id']}/begin", json={"range": {"start": 5, "end": 15}})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_range"
+
+
 def test_full_clip_has_null_range_and_battle_rejects_range(guests, monkeypatch):
     four_phrase_clip(monkeypatch)
     c = new_guest(guests)

@@ -7,6 +7,7 @@
  * song: the run continues and the results screen explains that it was not saved.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { includedPhrases, rangeLabel } from '../../components/timeline/range';
 import { COUNT_IN, SingEngine } from '../../audio/engine';
 import { MicError, openMic, stopStream } from '../../audio/sources';
 import { ApiError, beginTurn, getManifest, submitResult } from '../../lib/api';
@@ -74,6 +75,10 @@ export function Sing({ setup }: { setup: SingSetup }) {
   const target = useMemo(() => (song ? buildTargetTrack(song, setup.register) : null), [song, setup.register]);
   const notes = useMemo(() => (song ? displayNotes(song).map((n) => ({ ...n, hz: n.hz * registerRatio(setup.register) })) : []), [song, setup.register]);
 
+  const selected = useMemo(() => song ? includedPhrases(song.phrases, setup.range) : [], [song, setup.range]);
+  const rangeStart = setup.range?.start ?? 0;
+  const rangeEnd = setup.range?.end ?? song?.duration ?? 0;
+
   // ---------- load manifest, audio and mic (again on RETRY) ----------
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +90,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
     lastLive.current = 0;
     setRatings(new Map());
     setJudge(null);
-    setNow(-COUNT_IN);
+    setNow(rangeStart - COUNT_IN);
     setPhase({ k: 'loading' });
 
     (async () => {
@@ -93,7 +98,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
         const s = await getManifest(setup.clipId);
         if (cancelled) return;
         setSong(s);
-        engine = await SingEngine.create(setup.clipId, s.duration, setup.calibrationOffset);
+        engine = await SingEngine.create(setup.clipId, s.duration, setup.calibrationOffset, setup.range ?? null);
         if (cancelled) return engine.close();
         engineRef.current = engine;
         setIsClick(engine.backing.isClick);
@@ -117,7 +122,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
       engine?.close();
       if (engineRef.current === engine) engineRef.current = null;
     };
-  }, [setup.clipId, setup.calibrationOffset, attempt]);
+  }, [setup.clipId, setup.calibrationOffset, setup.range, rangeStart, attempt]);
 
   // ---------- rating and finishing ----------
   const rateUpTo = useCallback(
@@ -125,7 +130,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
       const engine = engineRef.current;
       if (!song || !target || !engine) return;
       let latest: PhraseScore | null = null;
-      for (const p of song.phrases) {
+      for (const p of selected) {
         if (ratedRef.current.has(p.id) || !settled(phraseSettlesAt(p))) continue;
         latest = scorePhrase(p, target, engine.tracker.hz);
         ratedRef.current.set(p.id, latest);
@@ -136,7 +141,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
         setJudge(latest);
       }
     },
-    [song, target, setup.online],
+    [song, target, selected, setup.online],
   );
 
   const finish = useCallback(async () => {
@@ -147,8 +152,8 @@ export function Sing({ setup }: { setup: SingSetup }) {
     engineRef.current = null;
     setPhase({ k: 'saving' });
 
-    const phrases = song.phrases.map((p) => ratedRef.current.get(p.id) as PhraseScore);
-    const local = aggregate(phrases, phraseWeights(song.phrases, target));
+    const phrases = selected.map((p) => ratedRef.current.get(p.id) as PhraseScore);
+    const local = aggregate(phrases, phraseWeights(selected, target));
     let saved = null;
     if (setup.match) {
       await beginRef.current; // its failure lands in saveErrorRef
@@ -170,7 +175,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
       return nav.go({ name: 'online', room, notice: saved ? undefined : (saveErrorRef.current ?? 'Your score was not saved.') });
     }
     nav.go(setup.battle ? { name: 'battleturn', result } : { name: 'results', result });
-  }, [song, target, setup, nav, rateUpTo]);
+  }, [song, target, selected, setup, nav, rateUpTo]);
 
   // ---------- the play loop: master clock -> UI, phrase ratings, end of clip ----------
   useEffect(() => {
@@ -189,14 +194,14 @@ export function Sing({ setup }: { setup: SingSetup }) {
       }
       // A phrase is final once its user frames are analysed, or a beat later if capture has stalled.
       const analysed = engine.tracker.analysed * hop;
-      if (t >= 0 && guideRef.current.on && guideRef.current.vol > 0 && engine.vocals) guideUsedRef.current = true;
+      if (t >= rangeStart && t < rangeEnd && guideRef.current.on && guideRef.current.vol > 0 && engine.vocals) guideUsedRef.current = true;
       if (setup.online && t - lastLive.current >= 0.5) {
         lastLive.current = t;
         const rated = [...ratedRef.current.values()];
-        sendLive('progress', { t, running: rated.length ? aggregate(rated, phraseWeights(song.phrases, target!)).total : 0 });
+        sendLive('progress', { t, running: rated.length ? aggregate(rated, phraseWeights(selected, target!)).total : 0 });
       }
       rateUpTo((settlesAt) => analysed >= settlesAt || t >= settlesAt + 0.5);
-      if (t >= song.duration + 0.3) {
+      if (t >= Math.max(rangeEnd + 0.3, ...selected.map((p) => phraseSettlesAt(p) + 0.1))) {
         void finish();
         return;
       }
@@ -204,14 +209,14 @@ export function Sing({ setup }: { setup: SingSetup }) {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [phase.k, song, target, setup.online, rateUpTo, finish]);
+  }, [phase.k, song, target, selected, rangeStart, rangeEnd, setup.online, rateUpTo, finish]);
 
   const start = async () => {
     const engine = engineRef.current;
     if (!engine || phase.k !== 'ready' || startedRef.current) return;
     startedRef.current = true;
     if (setup.match && !beginRef.current) {
-      beginRef.current = beginTurn(setup.match.attemptId, setup.register, setup.calibrationOffset).then(
+      beginRef.current = beginTurn(setup.match.attemptId, setup.register, setup.calibrationOffset, setup.range).then(
         () => undefined,
         (e) => {
           saveErrorRef.current = `Your score won't be saved: ${errorText(e)}`;
@@ -238,12 +243,12 @@ export function Sing({ setup }: { setup: SingSetup }) {
 
   const getTime = useCallback(() => {
     const t = engineRef.current?.clipTime();
-    return t === undefined || !Number.isFinite(t) ? -COUNT_IN : t;
-  }, []);
+    return t === undefined || !Number.isFinite(t) ? rangeStart - COUNT_IN : t;
+  }, [rangeStart]);
 
   // ---------- render ----------
   const rated = [...ratings.values()];
-  const running = song && target && rated.length ? aggregate(rated, phraseWeights(song.phrases, target)).total : 0;
+  const running = song && target && rated.length ? aggregate(rated, phraseWeights(selected, target)).total : 0;
   const playing = phase.k === 'playing';
   const level = engineRef.current?.tracker.level ?? 0;
 
@@ -274,6 +279,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
     >
       {song && <p className="sing-title">{setup.battle && <>P{setup.battle.turn + 1} {setup.playerName.toUpperCase()} · </>}{song.title} <span>· {song.artist}</span></p>}
 
+      {setup.range && <p className="solo-hint">Practice section · {rangeLabel(setup.range)}</p>}
       {isClick && <Notice tone="warn">No instrumental installed, so you are singing to a click track.</Notice>}
       {saveWarning && <Notice tone="warn">{saveWarning}</Notice>}
 
@@ -305,12 +311,12 @@ export function Sing({ setup }: { setup: SingSetup }) {
           </div>
         )}
         {phase.k === 'saving' && <div className="sing-overlay"><p className="sing-overlay__text">TALLYING UP...</p></div>}
-        {playing && now < 0 && <Countdown value={String(Math.ceil(-now))} />}
-        {playing && now >= 0 && now < 0.8 && <Countdown value="SING!" />}
+        {playing && now < rangeStart && <Countdown value={String(Math.ceil(rangeStart - now))} />}
+        {playing && now >= rangeStart && now < rangeStart + 0.8 && <Countdown value="SING!" />}
         {judge && (playing || phase.k === 'saving') && <Judgement key={judge.phrase_id} rating={judge.rating} score={phraseTotal(judge)} />}
 
         <div className="sing-progress" aria-hidden="true">
-          <div className="sing-progress__fill" style={{ width: `${song ? Math.max(0, Math.min(1, now / song.duration)) * 100 : 0}%` }} />
+          <div className="sing-progress__fill" style={{ width: `${song ? Math.max(0, Math.min(1, (now - rangeStart) / (rangeEnd - rangeStart))) * 100 : 0}%` }} />
         </div>
       </div>
 
@@ -347,7 +353,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
             </span>
           </div>
         </div>
-        {song && <Lyrics lines={song.lines} t={now} showRoman={showRoman} showTrans={showTrans} />}
+        {song && <Lyrics lines={song.lines.filter((line) => selected.some((p) => song.lines[p.line_index] === line))} t={now} showRoman={showRoman} showTrans={showTrans} />}
       </Panel>
     </ScreenShell>
   );

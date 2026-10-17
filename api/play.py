@@ -91,6 +91,21 @@ def _started_range(attempt: TurnAttempt) -> TimeRange | None:
     return TimeRange(**pr["range"]) if isinstance(pr, dict) and pr.get("range") else None
 
 
+def _match_range(s: Session, match: Match) -> TimeRange | None:
+    """Online range lives on the draft match's original host attempt. After acceptance its
+    scored phrase IDs preserve the same range. Retries keep the original attempt, so a guest
+    cannot replace the host's choice, even after a restart. No new schema is needed."""
+    first = s.scalars(select(TurnAttempt).where(TurnAttempt.match_id == match.id, TurnAttempt.slot == 0)
+                      .order_by(TurnAttempt.attempt_number).limit(1)).first()
+    if first is None:
+        return None
+    if isinstance(first.phrase_results, list):
+        song = CATALOG.get(match.clip_id)
+        return _range_of(song, [p["phrase_id"] for p in first.phrase_results]) \
+            if song and song.version == match.clip_version else None
+    return _started_range(first)
+
+
 def get_db():
     with Session(get_engine()) as s:
         yield s
@@ -148,7 +163,7 @@ class MatchIn(BaseModel):
 class BeginIn(BaseModel):
     register: int = Field(0, description="semitones: -12, 0 or 12")
     calibration_offset: float | None = None  # seconds, from the latency setup step
-    range: TimeRange | None = None  # practice section, solo only; omitted = full clip
+    range: TimeRange | None = None  # online: omitted means the host's frozen selection
 
 
 class ResultIn(BaseModel):
@@ -247,10 +262,20 @@ def begin_turn(attempt_id: uuid.UUID, body: BeginIn, guest=Depends(current_guest
     if attempt.state not in ("pending", "started"):
         raise ApiError(409, "attempt_closed", "This attempt already has a result.")
     song = _frozen_song(match)
-    if body.range is not None and match.mode != "solo":
-        raise ApiError(422, "invalid_range", "A practice range is only supported in solo matches.")
-    inc = _included(song, body.range)
-    rng = _range_of(song, [p.id for p in inc]) if body.range else None  # normalized to whole phrases
+    requested = body.range
+    if match.mode == "online":
+        host_range = _match_range(s, match)
+        if requested is not None:
+            supplied = _range_of(song, [p.id for p in _included(song, requested)])
+            if supplied != host_range:
+                raise ApiError(422, "invalid_range", "Both singers must use the host's practice section.")
+        requested = host_range
+    elif requested is not None and match.mode != "solo":
+        raise ApiError(422, "invalid_range", "A practice range is not supported in local battles.")
+    inc = _included(song, requested)
+    rng = _range_of(song, [p.id for p in inc]) if requested else None
+    if requested and not any(w > 0 for p, w in zip(song.phrases, _weights(song)) if p in inc):
+        raise ApiError(422, "invalid_range", "The section must contain scoreable reference notes.")
     if attempt.state == "started":  # a repeated begin never extends the deadline or changes register/range
         if body.register != attempt.register or rng != _started_range(attempt):
             raise ApiError(409, "attempt_already_started", "This turn already started with another register or range.")
