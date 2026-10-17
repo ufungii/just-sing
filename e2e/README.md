@@ -52,3 +52,18 @@ remaining distinct from practice sections. A simulated failed save retries with 
 scheduled playback timestamps within 150 ms, and deliberately offset one browser's wall clock by one hour.
 A reload after the shared start is refused without replaying one player; an explicit host restart creates a new unscheduled barrier. Screenshots mask the lyric display. These checks do not establish real microphone accuracy or physical-device
 synchronization; test those with two computers/headphones. `E2E_CLIP` does not override these duet/range specs.
+
+## Player-name Easter egg regression
+
+These UI-only checks cover the Players dialog (add/rename by blur or Enter),
+selection of an already-saved Zibran profile, returning home, and ordinary longer
+names. They mock API requests and use isolated browser storage; no database or mic
+is needed. Run from `e2e/`:
+
+```sh
+npx playwright test --config players-easter-egg.config.ts
+# To use an existing system Chromium instead of Playwright's browser:
+E2E_CHROMIUM=/usr/bin/chromium npx playwright test --config players-easter-egg.config.ts
+```
+
+The test runner starts a temporary Vite server on port 5189 and stops it afterward.
