@@ -37,6 +37,8 @@ Without a pronunciation scorer, `/api/practice` answers `status: "unavailable"`.
 | `COOKIE_SECURE` | `1` on public HTTPS so the guest cookie is Secure. Leave `0` on `http://localhost`. |
 | `GUEST_TTL_DAYS` | Guest session lifetime, default 7. Expired guests and their data are deleted hourly. |
 | `ALLOWED_ORIGINS` | Extra browser origins allowed to open WebSockets. The server's own host is always allowed. |
+| `GEMINI_API_KEY` | Server-side only. Enables coaching blurbs; without it they answer `unavailable`. |
+| `GEMINI_MODEL` | Model for blurbs, default `gemini-2.5-flash`. |
 | `WEB_DIST` | Folder with the built frontend. Default `web/dist`. |
 | `RECONNECT_GRACE_SECONDS` | Extra time after a clip ends before a started turn is treated as lost, default 60. |
 
@@ -101,6 +103,7 @@ server: { proxy: { "/api": "http://localhost:8000", "/ws": { target: "ws://local
 | POST | `/api/matches/{id}/retry` | Replace a lost or abandoned turn with a fresh attempt |
 | POST | `/api/matches/{id}/rematch` | New local/solo match with the same players (online: use the room) |
 | GET | `/api/history`, `/api/leaderboard?clip_id=` | Your saved results; best totals of logged-in players |
+| POST | `/api/turns/{attempt_id}/coach` | Coaching blurb for a finished turn: `{status: ok\|unavailable, coach_blurb}`. Generated once, then cached. |
 | POST | `/api/practice` | Multipart: `clip_id`, `phrase_id`, `audio` (WAV/MP3/WebM/Ogg, max 5 MB and 15 s) |
 | POST | `/api/rooms`, `/api/rooms/join` | Create `{clip_id}`; join `{code}` |
 | GET | `/api/rooms/{id}` | Snapshot (members only) |
@@ -172,6 +175,14 @@ network blip can submit the same attempt with the same `Idempotency-Key` as long
 | `retention.py` | Hourly guest cleanup; lost-turn recovery every 15 s |
 | `clip_catalog.py`, `catalog/<id>/manifest.json` | Validated manifests (audio files go next to them, gitignored) |
 | `migrations/` | Alembic migrations (committed) |
+
+## Coaching blurb
+
+After a turn is scored, call `POST /api/turns/{attempt_id}/coach`. Gemini gets only the measured numbers (totals,
+per-phrase rating, pitch, timing, coverage, register) and writes 2-3 friendly sentences. It never changes a score,
+rating or winner. If there is no key, or Gemini fails or times out (10 s), the answer is
+`{"status": "unavailable", "coach_blurb": null}`: show the results without it and retry later. A successful blurb is
+saved and also appears as `coach_blurb` on the attempt's score in `GET /api/matches/{id}`.
 
 ## Hooks for other roles
 

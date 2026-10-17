@@ -3,7 +3,7 @@ slot (and later a room) without changing these tables. Audio and manifests stay 
 import uuid
 from datetime import datetime
 
-from sqlalchemy import (Boolean, DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, String,
+from sqlalchemy import (Boolean, DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, String, Text,
                         UniqueConstraint, func, text)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -81,6 +81,7 @@ class TurnAttempt(Base):
     total: Mapped[float | None] = mapped_column(Float)
     created_at: Mapped[datetime] = _now()
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    coach_blurb: Mapped[str | None] = mapped_column(Text)  # written by Gemini after scoring; never affects it
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # clip length + reconnect grace
     __table_args__ = (
