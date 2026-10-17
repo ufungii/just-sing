@@ -219,3 +219,12 @@ saved and also appears as `coach_blurb` on the attempt's score in `GET /api/matc
 - One Uvicorn worker only: socket handles and the join rate limiter are in memory. More workers need shared event delivery.
 - Not yet verified: Python 3.11, two real computers over HTTPS, an Electron PKCE login, restart mid-turn recovery.
 - `connected` in a snapshot only counts sockets open on this server process; after any reconnect, fetch `GET /api/rooms/{id}` for the truth.
+
+## Local lyric and audio preview
+
+The main backend mounts the offline ML preview at `/karaoke/live/`.
+Set `JUST_SING_LOCAL_DEMO_AUDIO=1` on the team machine to enable prepared-song
+audio and provisional scoring. The home screen's SOLO SING button opens it.
+It can also run separately with `uvicorn api.local_demo:app`.
+See [LOCAL_DEMO.md](LOCAL_DEMO.md) for the local song picker, vocal guide and
+lyric-timing workflow. This entry point does not replace the backend above.

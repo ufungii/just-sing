@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Just Sing · live lyrics</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <a href="/" class="small">Home</a>
+  <label class="song-picker">Song <select id="song" aria-label="Song"></select></label>
+  <header><span class="eyebrow">JUST SING / LOCAL PREVIEW</span><h1 id="title">Loading song…</h1><p id="status" role="status">Loading prepared assets.</p></header>
+  <p class="notice">Automatic lyric timing and reference pitch need listening review. Scores below are provisional melody/timing feedback—not pronunciation assessment.</p>
+  <section class="stage" aria-label="Live singing">
+    <canvas id="lane" width="1200" height="220" aria-label="Target and microphone pitch"></canvas>
+    <div class="legend"><span>● Target melody</span><span>● Your pitch</span></div>
+    <p id="line" class="line" aria-live="off">Preparing timestamps…</p><p id="next" class="next"></p>
+    <div class="timeline"><span id="clock">0:00.00</span><input id="seek" type="range" min="0" max="212" step="0.01" value="0" aria-label="Playback position"><span id="duration">—</span></div>
+    <div class="controls"><button id="play" disabled>Play</button><button id="reset">Reset</button><button id="mic">Enable microphone</button><label>Register <select id="register"><option value="0">Original</option><option value="-12">Octave lower</option><option value="12">Octave higher</option></select></label><label>Capture correction <input id="latency" type="number" min="-500" max="500" step="10" value="0"> ms</label></div>
+    <div class="controls"><label><input id="vocals" type="checkbox" checked disabled> Vocal guide</label><label class="vocal-volume">Vocal volume <input id="vocalVolume" type="range" min="0" max="100" step="1" value="50" disabled> <output id="vocalVolumeValue" for="vocalVolume">50%</output></label><label><input id="romanized" type="checkbox" checked> Romanized lyrics</label><span id="vocalStatus" class="small"></span></div>
+    <p id="micStatus" class="small">Microphone off. Use wired headphones. Capture correction is manual; timing is uncalibrated.</p>
+  </section>
+  <section class="scores" aria-label="Provisional score"><div><small>Total</small><strong id="total">—</strong></div><div><small>Pitch</small><strong id="pitch">—</strong></div><div><small>Timing</small><strong id="timing">—</strong></div><div><small>Line feedback</small><strong id="badge">Mic off</strong></div></section>
+  <p id="feedback" class="small">Play to inspect synchronization. Enable the microphone to compare your pitch with the prepared target.</p>
+  <details><summary>Line timestamps · click a line to seek</summary><ol id="sheet"></ol></details>
+</main>
+<script type="module" src="app.js"></script>
+</body></html>

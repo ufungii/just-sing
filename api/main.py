@@ -105,6 +105,12 @@ from .coach import router as coach_router  # noqa: E402
 
 app.include_router(coach_router)
 
+from .local_demo import create_app as create_karaoke_demo  # noqa: E402
+
+# Keep the local playback API isolated from production /api and /ws routes.
+# Audio and draft scoring remain opt-in via JUST_SING_LOCAL_DEMO_AUDIO.
+app.mount("/karaoke", create_karaoke_demo(), name="karaoke-demo")
+
 
 # ---- built frontend, served from the same origin so the guest cookie and WebSockets need no CORS ----
 
