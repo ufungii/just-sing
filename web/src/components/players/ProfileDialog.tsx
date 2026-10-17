@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useNav } from '../../routes';
+import { nameEasterEgg } from '../../screens/EasterEgg/name';
 import { AVATAR_IDS, PLAYER_NAME_MAX, addPlayer, nameProblem, removePlayer, updatePlayer, usePlayers } from '../../lib/players';
 import type { AvatarId, Player } from '../../lib/players';
 import { Notice, PixelButton } from '../../ui';
@@ -104,6 +106,7 @@ function PlayerForm({
   onSave: (name: string, avatar: AvatarId) => void;
   onCancel?: () => void;
 }) {
+  const nav = useNav();
   const [name, setName] = useState(player?.name ?? '');
   const [avatar, setAvatar] = useState<AvatarId>(player?.avatar ?? 'bunny');
   const [tried, setTried] = useState(false);
@@ -114,6 +117,7 @@ function PlayerForm({
       className="players-form"
       onSubmit={(e) => {
         e.preventDefault();
+        if (nameEasterEgg(nav, name)) return;
         setTried(true);
         if (!problem) onSave(name, avatar);
       }}
@@ -129,6 +133,7 @@ function PlayerForm({
           autoComplete="nickname"
           placeholder="e.g. Mina"
           onChange={(e) => setName(e.target.value)}
+          onBlur={(e) => { nameEasterEgg(nav, e.currentTarget.value); }}
         />
       </label>
 

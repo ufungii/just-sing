@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
+import { useNav } from '../../routes';
+import { nameEasterEgg } from '../../screens/EasterEgg/name';
 import { rememberPlayer, usePlayers } from '../../lib/players';
 import { PixelAvatar } from './PixelAvatar';
 import { ProfileDialog } from './ProfileDialog';
@@ -20,6 +22,7 @@ export function PlayerPicker({
   onChange: (id: string) => void;
   disabledId?: string | null;
 }) {
+  const nav = useNav();
   const { players } = usePlayers();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -54,6 +57,7 @@ export function PlayerPicker({
     }
     const p = players[i];
     if (!p || p.id === disabledId) return;
+    if (nameEasterEgg(nav, p.name)) return;
     onChange(p.id);
     rememberPlayer(p.id);
     setOpen(false);
