@@ -1,3 +1,4 @@
+import { nameEasterEgg } from '../EasterEgg/name';
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, asGuest, createMatch, getClips } from '../../lib/api';
 import type { Register, TimeRange } from '../../lib/types';
@@ -56,6 +57,7 @@ export function SoloSetup() {
   const ready = missing.length === 0 && start.kind !== 'starting';
 
   function sing(match: SingSetup['match']) {
+    if (nameEasterEgg(nav, trimmed)) return;
     if (!clipId) return;
     nav.go({
       name: 'sing',
@@ -64,6 +66,7 @@ export function SoloSetup() {
   }
 
   async function onStart() {
+    if (nameEasterEgg(nav, trimmed)) return;
     if (!clipId || !trimmed) return;
     setStart({ kind: 'starting' });
     try {

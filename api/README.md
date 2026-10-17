@@ -253,9 +253,10 @@ uvicorn api.main:app                    # restart to pick up new songs
 - **Draft vs reviewed:** `GET /api/clips` returns `reviewed: true` only when `song.review.json` says `"reviewed": true`.
   Drafts are served too, so they can be played and tried, and the UI should label them. A song with no review file counts as
   not reviewed.
-- **`practice_text`:** English/mixed-language lines can have singing phrases with empty `practice_text`;
-  the spoken-Korean screen skips them and `/api/practice` rejects them before decoding. A line cut off
-  at the clip edge has `practice_text: ""` and no phrase. Singing eligibility is separate from spoken practice.
+- **`practice_text`:** a line cut off at the clip edge has `practice_text: ""` and no phrase, and that is fine. A line that
+  has a singing phrase may still have empty `practice_text` (English/mixed-language lyrics).
+  Spoken practice separately requires Korean-only `practice_text`; unsupported phrases return
+  `422 practice_unavailable` before decoding or calling the model.
 - **Errors name the folder:** an invalid `song.json`, or two songs with the same `id`, stop the server at startup with the path.
 - **Audio:** instrumental and vocal paths are relative to the song's folder and served through their respective endpoints.
 

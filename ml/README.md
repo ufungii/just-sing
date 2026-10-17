@@ -37,10 +37,14 @@ Tests: `.venv/bin/python -m pytest ml` (speech tests skip themselves there) and 
 
 - **API, after a song:** `phrase_weights(ref_hz, phrases, hop_seconds=..., excluded=...)` once per clip, then `finalize_turn(submitted_phrases, weights, expected_phrase_ids=..., register=...)`. It validates the browser's per-phrase results, ignores any client-claimed score or rating, recomputes everything, and raises `ValueError` on bad input. Needs only numpy.
 - **API, pronunciation practice:** `ml.pronunciation.baselines.assess(audio, expected_text)`. Returns per-word scores (0-100) in the shape of `contracts/practice.example.json`. Needs PyTorch, so run it outside the main API process. Convert uploads first: `ffmpeg -i in -ac 1 -ar 16000 out.wav`.
-- **Pipeline:** `pitch_contour(audio, sr, backend="crepe")` builds the reference, so the reference and the evals share one extractor.
+- **API, lyric check after a song:** `ml.pronunciation.lyric_match.lyric_match(take, sr, load_fingerprints(path), offset_s=...)` returns match / unclear / not sung per lyric line. Display only, needs PyTorch, about 10 s on CPU for a 35 s take. Result shape and UI proposal: [LYRIC_MATCH.md](pronunciation/LYRIC_MATCH.md).
+- **Pipeline:** `pitch_contour(audio, sr, backend="crepe")` builds the reference, so the reference and the evals share one extractor. After line timings are final, `python -m ml.pronunciation.lyric_match fingerprint --manifest ... --vocals ... --out ml/data/<song>/lyric_fingerprints.npz` (speech environment).
 - **Frontend's TypeScript port:** follow `scoring/SPEC.md` and test against `contracts/fixtures/`. `scoring/tests/test_spec.py` is an independent plain-Python implementation written only from the spec that passes the fixtures, so it can be translated line by line.
 - **As soon as a vocals stem exists:** `ml/pronunciation/.venv/bin/python -m ml.evals.rough_reference vocals.wav --id <song>` extracts the reference, proposes rough phrases, runs the inspector, and checks the scorer on the real contour (all output under the gitignored `ml/data/<song>/`).
 - **Before handing over a manifest:** `python -m ml.evals.inspect_reference song.json --plot contour.png` checks structure and flags octave jumps, heavy exclusions, notes too short to time, and phrases with nothing to grade.
+
+For a real spoken recording, see [the spoken-practice integration check](pronunciation/SPOKEN_PRACTICE.md)
+and `python -m ml.evals.check_practice --help` in the speech environment.
 
 ## How the singing score works
 
@@ -58,8 +62,9 @@ and a tested TypeScript handoff patch. See [WORD_FEEDBACK.md](scoring/WORD_FEEDB
 `score_take` now returns and prints this feedback for local recordings. It detects
 singing during each scheduled word window, not which words were sung. It never
 changes total scores. Defaults still need calibration on real player takes; frontend
-results-screen wiring is pending. Option 2 (reference/player speech embeddings)
-remains an unproven research direction and is not implemented.
+results-screen wiring is pending. Option 2 (compare the player's sung line with the original
+singer's, using speech-model features) is now implemented at **line level** in
+`pronunciation/lyric_match.py`; see the evaluation below and [LYRIC_MATCH.md](pronunciation/LYRIC_MATCH.md).
 
 ## Evaluation results
 
@@ -117,6 +122,18 @@ Test speech is generated locally with Meta's MMS-TTS Korean voice.
 
 **Whisper autocorrects.** On 25 of 39 clips where one sound was changed, Whisper's transcript contained the *correct* word; it reported the sound actually said only twice. So `assess()` uses B, which scores the expected text against the audio and cannot autocorrect. Both methods are weak on single-sound errors (n = 39, so the top-1 rates carry roughly ±0.15 uncertainty).
 
+### Lyrics while singing (`lyric_match_eval.py` → `results/lyric_match_<take>.md`)
+Speech recognisers fail on sung Korean (right vs wrong lyrics AUC 0.62-0.65, `results/sung_lyrics.md`), so the lyric check compares each sung line with the original singer's same line (wav2vec2 layer 6 + DTW). A line matches only if it is clearly closer to the original than a **wordless hum of the player's own melody** (same tune, rhythm and loudness, no words) and closer than most of the song's other lines. Two real amateur takes, with controls made from the same takes:
+
+| | Love Scenario (54 lines) | Last Christmas (9 lines) |
+|---|---|---|
+| real take | 96% match | 89% |
+| player's melody as "aah" | 0% | 0% |
+| real take, wrong place in the song | 8% | 0% |
+| quiet | 0% (not sung) | 0% |
+
+Without the hum test, "aah" passed 76% of lines: the tune alone was doing the work. The 0.06 hum margin was chosen on these two takes, and "same tune, wrong words" sung for real is not yet tested. Line level only; word-level flags are not reliable yet (`results/no_rerecord_controls_*.md`).
+
 ### Pitch time tolerance (`tolerance_eval.py` → `results/tolerance.md`)
 Strict frame-by-frame pitch scoring counts lateness twice (pitch and timing). `PitchConfig.time_tolerance_s` (**default 0.1 s since scoring version 0.2.0**) lets the player's pitch track shift by up to that much, **once per phrase**; the timing score still measures the lateness. Synthetic melody: a take 0.1 s late goes from 87.9 to 100, 0.2 s late from 69.1 to 81.2, while a 100-cent-detuned take stays at 73.3. With the real Pitchy at the recommended tracker settings (48 kHz, 2048-sample window, clarity 0.65, gate 0.005), mean of the three real clips:
 
@@ -139,11 +156,13 @@ So it forgives small lateness (up to 0.1 s scores like a perfect take) and nothi
 - **Heavy work offline.** Separation and CREPE run once per song; the live path only needs a light tracker and arithmetic.
 - **Local pretrained models for pronunciation, no paid API.** Free, offline, and something we can evaluate ourselves. We chose forced alignment over transcription after measuring Whisper's autocorrection.
 - **Spoken, not sung, pronunciation.** Speech recognizers are unreliable on singing; practice uses spoken lines and never affects the singing score.
+- **Lyrics while singing: compare with the original singer, not a transcript.** We measured transcription failing on singing, so the sung-lyric check compares sound with sound. Its control is a hum built from the player's own melody, so a correct tune cannot pass on its own. It uses DTW, which the singing score forbids, because here DTW only removes tempo so content can be compared; timing is scored separately.
 - **Noise robustness by stability, not thresholds alone.** Requiring ~80 ms of steady pitch before counting a note start is what stops random tracker output from earning timing points (noise-only timing: 0).
 
 ## What failed or surprised us
 
 - Whisper's language prior silently fixed most single-sound mistakes, which made it unsuitable for pinpointing errors despite near-perfect transcription.
+- Our first sung-lyric rule (closer to the right line than to most similar-length lines) passed a wordless "aah" on 76% of lines; only the hum control fixed it.
 - Normalizing B's word scores against a second TTS rendition did not clearly help (AUC 0.643 → 0.662, top-1 0.54 → 0.46: within noise).
 - The browser-style tracker costs a real singer 20+ points at the default 0.8-0.9 clarity thresholds, and our first recommendation (0.8, from clean synthetic voices) was wrong for real voices.
 - Tempo drift is penalized harshly (5% slower costs ~30 points) and non-monotonically at extremes, a direct consequence of not time-warping.
