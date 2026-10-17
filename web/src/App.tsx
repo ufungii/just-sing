@@ -49,7 +49,7 @@ function devStartRoute(): Route {
         name: 'results',
         result: {
           setup,
-          phrases: [{ phrase_id: 'p1', rating: 'great', pitch: 82, timing: 74, coverage: 0.9 }],
+          phrases: [{ phrase_id: 'p1', rating: 'great', pitch: 82, timing: 74, score: 80.4, coverage: 0.9 }],
           local: { total: 80.4, pitch: 82, timing: 74 },
           saved: null,
           saveError: 'Saving is off in this dev preview.',

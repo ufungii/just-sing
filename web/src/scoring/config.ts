@@ -1,13 +1,12 @@
 /**
  * Every threshold the live scorer uses, in one place (CLAUDE.md: "thresholds live in config, not code").
  *
- * PROVISIONAL: these are the starting defaults written in CLAUDE.md, not calibrated values. The Python
- * reference engine (ml/scoring) and the shared fixtures (contracts/fixtures) do not exist yet; when they
- * land, copy their config here and make this port pass the same fixtures. Never change the math or these
- * numbers in only one language.
+ * The scoring values below mirror ml/scoring/config.py (SCORING_VERSION 0.1.0) and ml/scoring/SPEC.md.
+ * `npm test` runs this port against contracts/fixtures; never change the math or these numbers in only
+ * one language.
  */
 
-/** Must match api/play.py SCORING_VERSION, which the server stores with every result. */
+/** Must match ml/scoring/config.py SCORING_VERSION, which the server stores with every result. */
 export const SCORING_VERSION = '0.1.0';
 
 export const SCORING_CONFIG = {
@@ -28,35 +27,35 @@ export const SCORING_CONFIG = {
   /** Full credit within this many cents of the target. */
   pitchFullCents: 50,
   /** Credit falls linearly to zero at this many cents. */
-  pitchZeroCents: 175,
+  pitchZeroCents: 200,
+  /** Pitch may match the target this many seconds early/late (0 = strict). Implemented, off by default. */
+  timeToleranceS: 0,
 
   // ---------- timing ----------
-  /** A target onset is a phrase entrance or a note change. Matched user onsets within this get full credit (s). */
+  /** Entrance within this many seconds of a reference note start earns full credit. */
   timingFullSeconds: 0.1,
-  /** ...falling linearly to zero credit at this error (s). */
-  timingZeroSeconds: 0.35,
-  /** Only user onsets within this distance of a target onset can match it (s). */
-  onsetSearchSeconds: 0.5,
-  /** A pitch jump bigger than this between frames starts a new user onset (cents). */
-  onsetJumpCents: 80,
-  /** A user onset only counts if the voice then holds for this many frames (filters blips). */
-  onsetMinFrames: 3,
-  /** When notes are derived from the hz contour, a change bigger than this starts a new note (cents). */
-  noteChangeCents: 80,
+  /** ...falling linearly to zero credit at this offset (s). */
+  timingZeroSeconds: 0.4,
+  /** A reference onset can only match a user onset within this window (s). */
+  matchWindowSeconds: 0.5,
+  /** A user onset needs this many consecutive voiced frames within `stableCents` of their median. */
+  stableFrames: 4,
+  stableCents: 60,
+  /** Onsets closer than this are merged (keeps the first). */
+  minOnsetGapSeconds: 0.12,
 
-  // ---------- phrase rating ----------
-  /** Below this coverage (share of scoreable frames the user voiced) a phrase is a MISS. */
-  missCoverage: 0.25,
-  /** Rating bands on the phrase score (0-100), checked top down; anything lower is BAD. */
-  bands: [
-    { rating: 'perfect', min: 90 },
-    { rating: 'great', min: 75 },
-    { rating: 'okay', min: 50 },
-  ] as const,
-
-  // ---------- totals ----------
-  /** 80% pitch / 20% timing: the CLAUDE.md default (not a validated weighting), same as api/play.py. */
+  // ---------- phrase score and rating ----------
   pitchWeight: 0.8,
+  timingWeight: 0.2,
+  perfect: 90,
+  great: 75,
+  okay: 50,
+  /** Below this share of scoreable frames sung, a phrase is a miss (never for a mic failure). */
+  minCoverage: 0.25,
+
+  // ---------- display only ----------
+  /** Notes are derived from the contour (when the manifest has none) as runs within this many cents. */
+  noteChangeCents: 80,
 } as const;
 
 export type ScoringConfig = typeof SCORING_CONFIG;
