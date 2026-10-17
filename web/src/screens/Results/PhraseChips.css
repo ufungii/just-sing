@@ -1,0 +1,170 @@
+/*
+ * Score pieces shared by Results and History: layered total, segmented bars, phrase rows.
+ * Rating colours: PERFECT! butter, GREAT mint, OKAY sky, BAD pink, MISS lavender.
+ */
+
+/* ---------- big layered total ---------- */
+
+.results-big {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.results-big__label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.1em;
+  color: var(--ink-rose);
+}
+.results-big__num {
+  position: relative;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 128px;
+  line-height: 1;
+  color: transparent;
+  padding-bottom: 14px;
+}
+.results-big__num span { position: absolute; left: 0; top: 0; }
+.results-big__num .l3 { top: 14px; color: var(--ink); }
+.results-big__num .l2 { top: 9px; color: #8c2f63; }
+.results-big__num .l1 { top: 4px; color: #c93a7e; }
+.results-big__num .l0 { color: var(--hot); }
+
+/* ---------- segmented bars ---------- */
+
+.results-summary {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+.results-summary__bars {
+  flex: 1 1 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.results-bar {
+  --on: var(--sky);
+  --on-side: var(--sky-dark);
+  display: grid;
+  grid-template-columns: 92px 1fr 52px;
+  align-items: center;
+  gap: 14px;
+}
+.results-bar--mint { --on: var(--mint); --on-side: var(--mint-dark); }
+.results-bar__label,
+.results-bar__num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+}
+.results-bar__num { text-align: right; font-size: 24px; }
+.results-bar__track {
+  display: grid;
+  grid-template-columns: repeat(20, 1fr);
+  gap: 3px;
+  padding: 4px;
+  border: var(--border-thin) solid var(--ink);
+  background: var(--ink);
+  box-shadow: 5px 6px 0 var(--ink);
+}
+.results-bar__px {
+  height: 22px;
+  background: #5a3a60;
+}
+.results-bar__px.is-lit {
+  background: var(--on);
+  box-shadow: inset 0 -5px 0 var(--on-side), inset 0 3px 0 rgba(255, 255, 255, 0.55);
+}
+
+/* ---------- phrase rows ---------- */
+
+.results-empty { margin: 0; font-size: 17px; }
+
+.results-phrases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.results-phrase {
+  --tint: var(--paper);
+  display: grid;
+  grid-template-columns: 44px 1fr auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 14px;
+  border: var(--border-thin) solid var(--ink);
+  background: var(--tint);
+  box-shadow: inset 3px 3px 0 #ffffff, 5px 6px 0 var(--ink);
+}
+.results-phrase--perfect { --tint: #fff4c2; }
+.results-phrase--great { --tint: var(--mint-light); }
+.results-phrase--okay { --tint: var(--sky-light); }
+.results-phrase--bad { --tint: var(--pink-light); }
+.results-phrase--miss { --tint: var(--lav-light); }
+
+.results-phrase__n {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ink-rose);
+}
+.results-phrase__lyric {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.results-phrase__ko {
+  font-family: var(--font-ko);
+  font-size: 22px;
+  line-height: 1.2;
+}
+.results-phrase__rom {
+  font-size: 15px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.results-phrase__stats {
+  display: flex;
+  gap: 14px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.results-rating {
+  --face: var(--paper);
+  --side: #f3d5e6;
+  min-width: 112px;
+  padding: 6px 10px;
+  text-align: center;
+  border: var(--border-thin) solid var(--ink);
+  background: var(--face);
+  box-shadow: inset -3px -4px 0 var(--side), 3px 4px 0 var(--ink);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+}
+.results-rating--perfect { --face: var(--butter); --side: #c9a400; color: var(--hot-dark); }
+.results-rating--great { --face: var(--mint); --side: var(--mint-dark); }
+.results-rating--okay { --face: var(--sky); --side: var(--sky-dark); }
+.results-rating--bad { --face: var(--pink); --side: var(--pink-dark); }
+.results-rating--miss { --face: var(--lav); --side: var(--lav-dark); color: #5a3a60; }
+
+@media (max-width: 1100px) {
+  .results-big__num { font-size: 104px; }
+  .results-phrase { grid-template-columns: 36px 1fr auto; }
+  .results-phrase__stats { grid-column: 2 / 3; grid-row: 2; }
+  .results-rating { grid-column: 3; grid-row: 1 / 3; }
+}
