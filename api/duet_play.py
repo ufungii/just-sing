@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import play
-from .duets import metadata
 from .errors import ApiError
 from .models import TimeRange
 from .tables import Match, RoomMember, TurnAttempt

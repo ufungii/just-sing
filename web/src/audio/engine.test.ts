@@ -10,7 +10,7 @@ import { scheduleCountIn } from './sources';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
-it.each([null, { start: 15, end: 21 }])('schedules matching audio offsets and preserves the clip clock for range %j', async (range) => {
+it.each([{ range: null, scheduledAt: undefined }, { range: { start: 15, end: 21 }, scheduledAt: undefined }, { range: { start: 15, end: 21 }, scheduledAt: 30 }])('schedules matching audio offsets and preserves the clip clock for %j', async ({ range, scheduledAt }) => {
   const sources: { start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> }[] = [];
   const ctx = {
     currentTime: 10, sampleRate: 48000, destination: {}, resume: vi.fn(), close: vi.fn(),
@@ -25,13 +25,14 @@ it.each([null, { start: 15, end: 21 }])('schedules matching audio offsets and pr
   const end = range?.end ?? 30;
   const engine = await SingEngine.create('test', 30, 0.07, range);
   const trackerStart = vi.spyOn(engine.tracker, 'start');
-  await engine.start();
-  expect(scheduleCountIn).toHaveBeenCalledWith(ctx, [10.15, 11.15, 12.15]);
+  const at = scheduledAt ?? 13.15;
+  await engine.start(scheduledAt);
+  expect(scheduleCountIn).toHaveBeenCalledWith(ctx, [at - 3, at - 2, at - 1]);
   expect(sources).toHaveLength(2);
-  for (const source of sources) expect(source.start).toHaveBeenCalledWith(13.15, from, end - from);
-  expect(trackerStart.mock.calls[0][0]).toBeCloseTo(13.15 - from);
-  expect(engine.clipTime()).toBeCloseTo(from - 3.15);
-  ctx.currentTime = 13.15;
+  for (const source of sources) expect(source.start).toHaveBeenCalledWith(at, from, end - from);
+  expect(trackerStart.mock.calls[0][0]).toBeCloseTo(at - from);
+  expect(engine.clipTime()).toBeCloseTo(10 - at + from);
+  ctx.currentTime = at;
   expect(engine.clipTime()).toBeCloseTo(from);
   await engine.start();
   for (const source of sources) expect(source.start).toHaveBeenCalledTimes(1);

@@ -211,15 +211,17 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
       {error && <Notice tone="error">{error}</Notice>}
       <Panel tone={activeSlot === 0 ? 'pink' : 'sky'} label="SINGER">
         <p data-testid="duet-current" data-slot={activeSlot} style={{ fontSize: 30, margin: 0 }} aria-live="polite">
-          {names(activeSlot)} {mySlot === undefined || mySlot === activeSlot ? '· SING' : '· LISTEN — YOUR PART IS NEXT'}
+          {names(activeSlot)} {mySlot === undefined || mySlot === activeSlot ? '· SING' : '· LISTEN'}
         </p>
         <p data-testid="duet-next">{next ? `Next: ${names(next.slot)} at ${next.start.toFixed(1)} s` : 'Final section'}</p>
         <p className="solo-hint">One song. Follow the singer cue; the music keeps playing through each switch.</p>
+        <div className="sing-hud" style={{ flexWrap: 'wrap', marginTop: 16 }}>
         {[0, 1].map((slot) => {
           const phrases = owned.filter((p) => owner.get(p.id) === slot);
           const scores = phrases.flatMap((p) => ratings.has(p.id) ? [ratings.get(p.id)!] : []);
           return <span key={slot} className="sing-chip" data-testid={`duet-score-${slot}`}>{names(slot)} · {scores.length ? aggregate(scores, phraseWeights(phrases, targets[slot])).total.toFixed(1) : '—'} · {scores.length}/{sections.filter((s) => s.slot === slot).flatMap((s) => s.phrase_ids).length} phrases </span>;
         })}
+        </div>
       </Panel>
       <div className="sing-stage">
         {song && displayTarget ? <PitchLane song={song} notes={notes} target={displayTarget} getTime={getTime} userHz={engine.current?.tracker.hz ?? EMPTY} ratings={ratings} /> : <div className="sing-lane sing-lane--empty" />}
