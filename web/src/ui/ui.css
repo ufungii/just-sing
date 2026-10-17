@@ -1,0 +1,198 @@
+/*
+ * Shared building blocks for every screen after the title menu, in the same pastel pixel-arcade
+ * style as the home screen: plum outlines, light bevel top-left, darker side bottom-right, and a
+ * solid plum "extrude" shadow that grows on hover and collapses when pressed.
+ */
+
+/* ---------- screen shell ---------- */
+
+.ui-screen {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  padding: 40px 48px 48px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+.ui-frame {
+  position: absolute;
+  inset: 16px;
+  border: 6px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: inset 0 0 0 4px var(--paper);
+  pointer-events: none;
+}
+
+.ui-inner {
+  position: relative;
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.ui-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.ui-header__right {
+  margin-left: auto;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* Layered 3D title, like the logo but smaller. */
+.ui-title {
+  position: relative;
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 44px;
+  line-height: 1;
+  white-space: nowrap;
+  color: transparent;
+}
+.ui-title span {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.ui-title .l3 { top: 8px; color: var(--ink); }
+.ui-title .l2 { top: 5px; color: #8c2f63; }
+.ui-title .l1 { top: 2px; color: #c93a7e; }
+.ui-title .l0 { color: var(--hot); }
+
+.ui-kao {
+  font-family: var(--font-kao);
+  white-space: nowrap;
+}
+
+/* ---------- 3D keycap button ---------- */
+
+.ui-key {
+  --face: var(--pink);
+  --bevel: var(--pink-light);
+  --side: var(--pink-dark);
+  --fg: var(--ink);
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 20px;
+  border: var(--border-thin) solid var(--ink);
+  background: var(--face);
+  color: var(--fg);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  white-space: nowrap;
+  text-decoration: none;
+  box-shadow:
+    inset 4px 4px 0 var(--bevel),
+    inset -4px -6px 0 var(--side),
+    6px 8px 0 var(--ink);
+  transition: transform 0.08s steps(2), box-shadow 0.08s steps(2);
+}
+.ui-key:hover:not(:disabled) {
+  transform: translate(-2px, -3px);
+  box-shadow:
+    inset 4px 4px 0 var(--bevel),
+    inset -4px -6px 0 var(--side),
+    8px 11px 0 var(--ink);
+}
+.ui-key:active:not(:disabled) {
+  transform: translate(5px, 7px);
+  box-shadow:
+    inset 4px 4px 0 var(--bevel),
+    inset -4px -6px 0 var(--side),
+    1px 1px 0 var(--ink);
+}
+.ui-key:disabled {
+  cursor: not-allowed;
+  transform: translate(5px, 7px);
+  box-shadow: 1px 1px 0 var(--ink);
+  border-style: dashed;
+  opacity: 0.65;
+}
+
+.ui-key--lg { min-height: 64px; padding: 0 30px; font-size: 22px; border-width: var(--border); }
+.ui-key--sm { min-height: 44px; padding: 0 14px; font-size: 14px; }
+
+.ui-key--hot { --face: var(--hot); --bevel: var(--hot-light); --side: var(--hot-dark); --fg: var(--paper); }
+.ui-key--sky { --face: var(--sky); --bevel: var(--sky-light); --side: var(--sky-dark); }
+.ui-key--mint { --face: var(--mint); --bevel: var(--mint-light); --side: var(--mint-dark); }
+.ui-key--lav { --face: var(--lav); --bevel: var(--lav-light); --side: var(--lav-dark); }
+.ui-key--butter { --face: var(--butter); --bevel: #fff0a8; --side: #c9a400; }
+.ui-key--paper { --face: var(--paper); --bevel: #ffffff; --side: #f3d5e6; }
+
+/* ---------- panel ---------- */
+
+.ui-panel {
+  --face: var(--paper);
+  --bevel: #ffffff;
+  --side: #f3d5e6;
+  position: relative;
+  padding: 22px 24px;
+  border: var(--border) solid var(--ink);
+  background: var(--face);
+  box-shadow:
+    inset 5px 5px 0 var(--bevel),
+    inset -5px -7px 0 var(--side),
+    var(--extrude) 0 var(--ink);
+}
+.ui-panel--pink { --face: var(--pink); --bevel: var(--pink-light); --side: var(--pink-dark); }
+.ui-panel--sky { --face: var(--sky); --bevel: var(--sky-light); --side: var(--sky-dark); }
+.ui-panel--mint { --face: var(--mint); --bevel: var(--mint-light); --side: var(--mint-dark); }
+.ui-panel--lav { --face: var(--lav); --bevel: var(--lav-light); --side: var(--lav-dark); }
+
+.ui-panel__label {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+/* ---------- segmented choice ---------- */
+
+.ui-seg { display: flex; flex-wrap: wrap; gap: 14px; }
+.ui-seg .ui-key[aria-pressed='true'] {
+  --face: var(--butter);
+  --bevel: #fff0a8;
+  --side: #c9a400;
+  transform: translate(-2px, -3px);
+  outline: 3px solid var(--paper);
+  outline-offset: -9px;
+}
+
+/* ---------- notice (loading / unavailable / error) ---------- */
+
+.ui-notice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  border: var(--border-thin) dashed var(--ink);
+  background: var(--paper);
+  font-size: 17px;
+}
+.ui-notice--warn { background: #fff4c2; }
+.ui-notice--error { background: var(--pink-light); }
+.ui-notice--ok { background: var(--mint-light); }
+.ui-notice .ui-kao { font-size: 20px; }
+.ui-notice__body { flex: 1 1 260px; }
+
+@media (max-width: 1180px) {
+  .ui-screen { padding: 36px 40px 40px; }
+  .ui-title { font-size: 36px; }
+}
