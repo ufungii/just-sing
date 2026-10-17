@@ -106,3 +106,21 @@ def test_concurrent_submit_and_retry_never_crash_or_lose_a_result(guests):
         states = {x["id"]: x["state"] for x in c.get(f"/api/matches/{m['match_id']}").json()["attempts"]}
         if rs.status_code == 200:
             assert states[a] == "accepted"  # an accepted result is never invalidated afterwards
+
+
+def test_history_has_one_row_per_match(guests):
+    """Regression: history returned every accepted attempt, so one local battle showed up as two rows
+    with both players' totals and nothing saying whose was whose."""
+    c = new_guest(guests)
+    m = c.post("/api/matches", json={"clip_id": "synthetic-demo", "players": ["Ann", "Bo"]}).json()
+    view = play_turn(c, m["match_id"], m["attempt_id"], 70)
+    play_turn(c, m["match_id"], next(a["id"] for a in view["attempts"] if a["slot"] == 1), 90)
+    solo = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+    c.post(f"/api/turns/{solo['attempt_id']}/begin", json={})
+    c.post(f"/api/turns/{solo['attempt_id']}/result", json=GOOD, headers={"Idempotency-Key": "s"})
+
+    rows = c.get("/api/history").json()
+    assert [r["match_id"] for r in rows].count(m["match_id"]) == 1
+    battle = next(r for r in rows if r["match_id"] == m["match_id"])
+    assert battle["total"] is None and [(p["display_name"], p["total"]) for p in battle["players"]] == [("Ann", 70), ("Bo", 90)]
+    assert next(r for r in rows if r["match_id"] == solo["match_id"])["total"] == 76.0

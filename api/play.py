@@ -303,15 +303,26 @@ def retry_turn(match_id: uuid.UUID, guest=Depends(current_guest), s: Session = D
 
 @router.get("/history")
 def history(guest=Depends(current_guest), s: Session = Depends(get_db)):
-    # Own matches, plus the guest's own seat in online rooms.
-    seat = select(RoomMember.slot).where(RoomMember.room_id == Match.room_id,
-                                         RoomMember.guest_id == guest.id).scalar_subquery()
-    rows = s.execute(select(Match, TurnAttempt.total).join(TurnAttempt, TurnAttempt.match_id == Match.id)
-                     .where(TurnAttempt.state == "accepted",
-                            or_(and_(Match.room_id.is_(None), Match.guest_id == guest.id), TurnAttempt.slot == seat))
-                     .order_by(Match.created_at.desc())).all()
-    return [{"match_id": m.id, "clip_id": m.clip_id, "created_at": m.created_at, "total": t}
-            for m, t in rows]
+    """One row per match with at least one saved result, newest first. `total` is the caller's own
+    score: slot 0 in solo, their seat online, and null in a local battle (two singers, one laptop),
+    where `players` carries both totals."""
+    in_room = select(RoomMember.room_id).where(RoomMember.guest_id == guest.id)
+    matches = s.scalars(
+        select(Match).where(or_(and_(Match.room_id.is_(None), Match.guest_id == guest.id), Match.room_id.in_(in_room)),
+                            Match.id.in_(select(TurnAttempt.match_id).where(TurnAttempt.state == "accepted")))
+        .order_by(Match.created_at.desc()).limit(50)).all()  # ponytail: a few queries per row; fine for 50 rows
+    rows = []
+    for m in matches:
+        names = dict(s.execute(select(MatchPlayer.slot, MatchPlayer.display_name).where(MatchPlayer.match_id == m.id)).all())
+        totals = dict(s.execute(select(TurnAttempt.slot, TurnAttempt.total).where(
+            TurnAttempt.match_id == m.id, TurnAttempt.state == "accepted")).all())
+        own_slot = 0 if m.mode == "solo" else None
+        if m.room_id:
+            own_slot = s.scalar(select(RoomMember.slot).where(RoomMember.room_id == m.room_id, RoomMember.guest_id == guest.id))
+        rows.append({"match_id": m.id, "clip_id": m.clip_id, "mode": m.mode, "created_at": m.created_at,
+                     "total": totals.get(own_slot),
+                     "players": [{"slot": k, "display_name": names[k], "total": totals.get(k)} for k in sorted(names)]})
+    return rows
 
 
 @router.post("/auth/claim")

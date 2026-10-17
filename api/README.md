@@ -120,7 +120,7 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | GET | `/api/matches/{id}` | Match, players, attempts, scores, `winner_slot` |
 | POST | `/api/matches/{id}/retry` | Replace a lost or abandoned turn with a fresh attempt |
 | POST | `/api/matches/{id}/rematch` | New local/solo match with the same players (online: use the room) |
-| GET | `/api/history`, `/api/leaderboard?clip_id=` | Your saved results; best totals of logged-in players |
+| GET | `/api/history`, `/api/leaderboard?clip_id=` | One row per match: `total` is your own score (null in a local battle; see `players`). Leaderboard: best solo totals of logged-in players on the current clip version |
 | POST | `/api/turns/{attempt_id}/coach` | Coaching blurb for a finished turn: `{status: ok\|unavailable, coach_blurb}`. Generated once, then cached. |
 | POST | `/api/practice` | Multipart: `clip_id`, `phrase_id`, `audio` (WAV/MP3/WebM/Ogg, max 5 MB and 15 s) |
 | POST | `/api/rooms`, `/api/rooms/join` | Create `{clip_id}`; join `{code}` |
