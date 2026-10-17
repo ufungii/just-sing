@@ -19,7 +19,7 @@ import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
 import { GuideControl } from '../../ui/GuideControl';
 import { Countdown, Judgement } from './Judgement';
 import { Lyrics } from './Lyrics';
-import { PitchLane } from './PitchLane';
+import { PitchLane, useLaneHeight } from './PitchLane';
 import './Sing.css';
 
 type Phase =
@@ -59,6 +59,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
   const [showRoman, setShowRoman] = useState(true);
   const [showTrans, setShowTrans] = useState(true);
+  const laneHeight = useLaneHeight();
   const [guide, setGuide] = useState(loadGuide);
   const [hasGuide, setHasGuide] = useState(false);
 
@@ -297,7 +298,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
 
       <div className="sing-stage">
         {song && target ? (
-          <PitchLane song={song} notes={notes} target={target} getTime={getTime} userHz={engineRef.current?.tracker.hz ?? NO_FRAMES} ratings={ratings} />
+          <PitchLane height={laneHeight} song={song} notes={notes} target={target} getTime={getTime} userHz={engineRef.current?.tracker.hz ?? NO_FRAMES} ratings={ratings} />
         ) : (
           <div className="sing-lane sing-lane--empty" />
         )}

@@ -6,7 +6,7 @@
  * Drawn on a canvas in its own requestAnimationFrame loop that reads the master clock through
  * `getTime`, so React never re-renders per frame for it.
  */
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Note, PhraseScore, Song } from '../../lib/types';
 import { centsBetween, SCORING_CONFIG, type TargetTrack } from '../../scoring';
 
@@ -20,6 +20,8 @@ interface Props {
   /** Duet ownership timeline (sorted by start); tints notes and colours the now line and trace head. */
   sections?: { start: number; slot: number }[];
   target: TargetTrack;
+  /** Lane height in px; smaller screens pass less so the whole game fits (default 380). */
+  height?: number;
   /** Clip time in seconds on the master clock. */
   getTime: () => number;
   /** Live user pitch per clip frame (null = unvoiced). */
@@ -66,13 +68,13 @@ const HEART = ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...']
 const midiOf = (hz: number) => 69 + 12 * Math.log2(hz / 440);
 
 /** Note bar height for a lane with `rows` semitone rows: 30% taller than the original sizing. */
-const pillFor = (rows: number) => Math.min(34, 1.3 * Math.max(14, Math.min(26, 0.9 * (HEIGHT / rows))));
+const pillFor = (rows: number, height: number) => Math.min(34, 1.3 * Math.max(14, Math.min(26, 0.9 * (height / rows))));
 
 /**
  * Semitone range that fits every target with some headroom. If the taller note bars would touch
  * their neighbouring semitone rows, the window is trimmed (never below the notes plus one row each side).
  */
-function laneRange(notes: Note[], target: TargetTrack): [number, number] {
+function laneRange(notes: Note[], target: TargetTrack, height: number): [number, number] {
   const hz = [...notes.map((n) => n.hz), ...(target.source === 'hz' ? (target.hz.filter((h) => h !== null) as number[]) : [])];
   if (!hz.length) return [52, 72];
   const min = Math.floor(Math.min(...hz.map(midiOf)));
@@ -84,7 +86,7 @@ function laneRange(notes: Note[], target: TargetTrack): [number, number] {
     lo -= Math.floor(missing / 2);
     hi += Math.ceil(missing / 2);
   }
-  const rows = Math.max(Math.floor(HEIGHT / pillFor(hi - lo)), max - min + 2);
+  const rows = Math.max(Math.floor(height / pillFor(hi - lo, height)), max - min + 2);
   const extra = hi - lo - rows;
   if (extra > 0) {
     // trim equally from both sides but never cut into the notes
@@ -141,13 +143,25 @@ function drawSparkle(g: CanvasRenderingContext2D, x: number, y: number, px: numb
   g.fillRect(x - 2.5 * px, y - px / 2, 5 * px, px);
 }
 
-export function PitchLane({ song, notes, sections, target, getTime, userHz, ratings }: Props) {
+/** Lane height that leaves room for the rest of the singing screen on 16:9 and 16:10 displays. */
+export function useLaneHeight(): number {
+  const pick = () => Math.max(220, Math.min(HEIGHT, Math.round(window.innerHeight * (window.innerHeight < 880 ? 0.36 : 0.38))));
+  const [h, setH] = useState(pick);
+  useEffect(() => {
+    const onResize = () => setH(pick());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return h;
+}
+
+export function PitchLane({ song, notes, sections, target, getTime, userHz, ratings, height = HEIGHT }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Latest props for the draw loop without restarting it.
-  const range = useMemo(() => laneRange(notes, target), [notes, target]);
-  const live = useRef({ song, notes, sections, target, getTime, userHz, ratings, range });
+  const range = useMemo(() => laneRange(notes, target, height), [notes, target, height]);
+  const live = useRef({ song, notes, sections, target, getTime, userHz, ratings, range, height });
   useEffect(() => {
-    live.current = { song, notes, sections, target, getTime, userHz, ratings, range };
+    live.current = { song, notes, sections, target, getTime, userHz, ratings, range, height };
   });
 
   useEffect(() => {
@@ -162,7 +176,7 @@ export function PitchLane({ song, notes, sections, target, getTime, userHz, rati
       const dpr = window.devicePixelRatio || 1;
       width = canvas.clientWidth;
       canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(HEIGHT * dpr);
+      canvas.height = Math.round(live.current.height * dpr);
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
       g.imageSmoothingEnabled = false;
     };
@@ -172,10 +186,9 @@ export function PitchLane({ song, notes, sections, target, getTime, userHz, rati
 
     const draw = () => {
       frame = requestAnimationFrame(draw);
-      const { song, notes, sections, target, getTime, userHz, ratings, range } = live.current;
+      const { song, notes, sections, target, getTime, userHz, ratings, range, height: H } = live.current;
       const t = getTime();
       const W = width;
-      const H = HEIGHT;
       const nowX = Math.round(W * NOW_AT);
       const pps = (W - nowX) / AHEAD;
       const xOf = (time: number) => nowX + (time - t) * pps;
@@ -251,7 +264,7 @@ export function PitchLane({ song, notes, sections, target, getTime, userHz, rati
 
       // target notes: pixel pills with dot eyes
       // wide-range clips cannot trim further: keep bars at least 18 px (30% over the old 14 px floor) even if neighbours near-touch
-      const pillH = Math.max(18, Math.min(pillFor(hi - lo), rowH * 0.95));
+      const pillH = Math.max(18, Math.min(pillFor(hi - lo, H), rowH * 0.95));
       for (const n of notes) {
         const x1 = xOf(n.start);
         const x2 = xOf(n.end);
@@ -309,15 +322,20 @@ export function PitchLane({ song, notes, sections, target, getTime, userHz, rati
       // through the midpoints. The scored/tracked pitch is untouched.
       const runs: { x: number; y: number; k: number }[][] = [];
       let run: { x: number; y: number; k: number }[] | null = null;
+      // A pitch well outside the lane (room rumble or a breath between phrases) is not drawn at all: it would
+      // otherwise be pinned to the lane edge and look like the trace dropping to zero.
+      const offLane = (hz: number) => { const y = yOf(midiOf(hz)); return y < -rowH * 1.5 || y > H + rowH * 1.5; };
       for (let k = kStart; k < kEnd; k++) {
         const h = userHz[k];
-        if (h === null || h === undefined) {
+        if (h === null || h === undefined || offLane(h)) {
           run = null;
           continue;
         }
         if (!run) runs.push((run = []));
         run.push({ x: xOf(k * hop), y: clampY(h), k });
       }
+      // Blips shorter than 3 frames (60 ms) are noise, not singing: leave them undrawn.
+      for (let i = runs.length - 1; i >= 0; i--) if (runs[i].length < 3) runs.splice(i, 1);
       for (const r of runs) {
         const ys = r.map((p) => p.y);
         r.forEach((p, i) => {
@@ -383,5 +401,5 @@ export function PitchLane({ song, notes, sections, target, getTime, userHz, rati
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="sing-lane" style={{ height: HEIGHT }} aria-label="Pitch lane: target notes and your live pitch" role="img" />;
+  return <canvas ref={canvasRef} className="sing-lane" style={{ height }} aria-label="Pitch lane: target notes and your live pitch" role="img" />;
 }

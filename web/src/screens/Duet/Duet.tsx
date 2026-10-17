@@ -11,7 +11,7 @@ import { PixelIcon } from '../../ui/PixelIcon';
 import { rangeLabel } from '../../components/timeline/range';
 import { MatchBoard } from '../Battle/BattleTurn';
 import { Lyrics } from '../Sing/Lyrics';
-import { PitchLane } from '../Sing/PitchLane';
+import { PitchLane, useLaneHeight } from '../Sing/PitchLane';
 import { Countdown, Judgement } from '../Sing/Judgement';
 import { bestClock, sectionAt, serverNow, type ClockSample } from './timeline';
 import '../Sing/Sing.css';
@@ -32,6 +32,7 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
   const [now, setNow] = useState(0);
   const [ratings, setRatings] = useState(new Map<string, PhraseScore>());
   const [judge, setJudge] = useState<PhraseScore | null>(null);
+  const laneHeight = useLaneHeight();
   const [guide, setGuide] = useState(false);
   const [guideVolume, setGuideVolume] = useState(0.6);
   const engine = useRef<SingEngine | null>(null);
@@ -216,22 +217,23 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
       {song && <p className="sing-title">{song.title} <span>· {song.artist}</span></p>}
       {plan?.range && <p className="solo-hint">Practice section · {rangeLabel(plan.range)}</p>}
       {error && <Notice tone="error">{error}</Notice>}
-      <Panel tone={activeSlot === 0 ? 'pink' : 'sky'} label="SINGER">
-        <p data-testid="duet-current" data-slot={activeSlot} style={{ fontSize: 30, margin: 0 }} aria-live="polite">
-          {names(activeSlot)} {mySlot === undefined || mySlot === activeSlot ? '· SING' : '· LISTEN'}
-        </p>
-        <p data-testid="duet-next">{next ? `Next: ${names(next.slot)} at ${next.start.toFixed(1)} s` : 'Final section'}</p>
-        <p className="solo-hint">One song. Follow the singer cue; the music keeps playing through each switch.</p>
-        <div className="sing-hud" style={{ flexWrap: 'wrap', marginTop: 16 }}>
+      <div className={`duet-bar duet-bar--p${activeSlot + 1}`} title="One song. Follow the singer cue; the music keeps playing through each switch.">
+        <div className="duet-bar__who">
+          <p data-testid="duet-current" data-slot={activeSlot} aria-live="polite">
+            {names(activeSlot)} {mySlot === undefined || mySlot === activeSlot ? '· SING' : '· LISTEN'}
+          </p>
+          <p data-testid="duet-next">{next ? `Next: ${names(next.slot)} at ${next.start.toFixed(1)} s` : 'Final section'}</p>
+        </div>
+        <div className="sing-hud">
         {[0, 1].map((slot) => {
           const phrases = owned.filter((p) => owner.get(p.id) === slot);
           const scores = phrases.flatMap((p) => ratings.has(p.id) ? [ratings.get(p.id)!] : []);
           return <span key={slot} className="sing-chip" data-testid={`duet-score-${slot}`}>{names(slot)} · {scores.length ? aggregate(scores, phraseWeights(phrases, targets[slot])).total.toFixed(1) : '—'} · {scores.length}/{sections.filter((s) => s.slot === slot).flatMap((s) => s.phrase_ids).length} phrases </span>;
         })}
         </div>
-      </Panel>
+      </div>
       <div className="sing-stage">
-        {song && displayTarget ? <PitchLane song={song} notes={notes} sections={sections} target={displayTarget} getTime={getTime} userHz={engine.current?.tracker.hz ?? EMPTY} ratings={ratings} /> : <div className="sing-lane sing-lane--empty" />}
+        {song && displayTarget ? <PitchLane height={laneHeight} song={song} notes={notes} sections={sections} target={displayTarget} getTime={getTime} userHz={engine.current?.tracker.hz ?? EMPTY} ratings={ratings} /> : <div className="sing-lane sing-lane--empty" />}
         {phase === 'playing' && handoff && handoffIn > 0 && handoffIn <= HANDOFF_CUE && (
           <div className={`duet-cue duet-cue--p${handoff.slot + 1}`} data-testid="duet-handoff" aria-hidden="true">
             <PixelIcon name="speaker" size={22} />
