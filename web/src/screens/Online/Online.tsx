@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ApiError, asGuest, savedName } from '../../lib/api';
+import { ApiError, asGuest, retryTurn, savedName } from '../../lib/api';
 import {
   abortRoom, connectRoom, createRoom, getRoom, joinRoom, leaveRoom, pushSnapshot, rematchRoom, setReady, setRoomClip, startRoom,
   useRoomLive,
@@ -269,7 +269,16 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
   return (
     <ScreenShell title={`ROOM ${snap.code}`} kao="♪(^▽^)♪" onBack={leave} backLabel="LEAVE">
       {notices}
-      {myTurn ? (
+      {match.state === 'retry_required' ? (
+        match.active_slot === room.slot ? (
+          <Panel tone="pink" label="TURN LOST">
+            <p style={{ fontSize: 22, margin: '0 0 16px' }}>Your last turn was not saved (it was left or ran out of time). Nothing was scored.</p>
+            <PixelButton tone="hot" size="lg" disabled={busy} onClick={() => act(() => retryTurn(match.id))}>TRY THAT TURN AGAIN</PixelButton>
+          </Panel>
+        ) : (
+          <Notice tone="warn">Waiting for {singer?.display_name ?? 'the other player'} to retry their turn.</Notice>
+        )
+      ) : myTurn ? (
         <Panel tone="pink" label="YOUR TURN">
           <p style={{ fontSize: 24, margin: '0 0 16px' }}>{me?.display_name}, headphones on. Same song and rules for both of you.</p>
           <PixelButton tone="hot" size="lg" disabled={busy} onClick={sing}>SING ▶</PixelButton>

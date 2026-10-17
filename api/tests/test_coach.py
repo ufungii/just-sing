@@ -96,3 +96,9 @@ def test_coach_does_not_hold_a_database_connection_during_the_gemini_call(guests
 def test_prompt_handles_phrase_without_timing():
     p = coach.build_prompt({**SCORE, "phrases": [{"rating": "okay", "pitch": 60, "timing": None, "coverage": 1.0}]}, 1)
     assert "no timing score" in p
+
+
+def test_template_blurb_reads_old_rows_without_score():
+    old = {**SCORE, "phrases": [{"rating": "great", "pitch": 90, "timing": 80, "coverage": 1.0},
+                                {"rating": "bad", "pitch": 40, "timing": 30, "coverage": 0.5}]}  # no "score" key
+    assert "Phrase 1 was your strongest and phrase 2 your weakest" in coach.template_blurb(old)

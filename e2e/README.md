@@ -12,7 +12,7 @@ contour (`make_takes.py`), written to the gitignored `e2e/takes/`.
 cd e2e && npm install && npx playwright install chromium
 ../.venv/bin/python make_takes.py            # or: E2E_CLIP=russian-roulette ../.venv/bin/python make_takes.py
 npx playwright test                          # starts uvicorn on :8765 itself; ~2.5 min
-cd .. && PYTHONPATH=. .venv/bin/python e2e/cleanup_db.py   # deletes the "E2E Bot" guest rows, prints counts
+cd .. && PYTHONPATH=. .venv/bin/python e2e/cleanup_db.py   # deletes the "E2E-Bot-*" and "E2E-Rival-*" guest rows, prints counts
 ```
 
 `E2E_CLIP` (default `synthetic-demo`) selects the clip for both scripts; `E2E_GOOD_FLOOR` (default 60) the minimum

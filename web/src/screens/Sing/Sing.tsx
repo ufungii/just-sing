@@ -66,6 +66,10 @@ export function Sing({ setup }: { setup: SingSetup }) {
   const saveErrorRef = useRef<string | null>(setup.match ? null : 'Playing offline, so this score was not saved.');
   const finishedRef = useRef(false);
   const lastLive = useRef(0); // clip time of the last live progress message to the room
+  const startedRef = useRef(false); // set synchronously so a double click cannot start twice
+  const guideRef = useRef(guide);
+  guideRef.current = guide;
+  const guideUsedRef = useRef(false); // guide vocals were audible at some point after the count-in
 
   const target = useMemo(() => (song ? buildTargetTrack(song, setup.register) : null), [song, setup.register]);
   const notes = useMemo(() => (song ? displayNotes(song).map((n) => ({ ...n, hz: n.hz * registerRatio(setup.register) })) : []), [song, setup.register]);
@@ -76,6 +80,9 @@ export function Sing({ setup }: { setup: SingSetup }) {
     let engine: SingEngine | null = null;
     ratedRef.current = new Map();
     finishedRef.current = false;
+    startedRef.current = false;
+    guideUsedRef.current = false;
+    lastLive.current = 0;
     setRatings(new Map());
     setJudge(null);
     setNow(-COUNT_IN);
@@ -148,8 +155,8 @@ export function Sing({ setup }: { setup: SingSetup }) {
       if (!saveErrorRef.current) {
         const key = crypto.randomUUID(); // the same key on retry, so the server counts it once
         try {
-          saved = await submitResult(setup.match.attemptId, phrases, key).catch((e) => {
-            if (e instanceof ApiError && e.code === 'network') return submitResult(setup.match!.attemptId, phrases, key);
+          saved = await submitResult(setup.match.attemptId, phrases, key, guideUsedRef.current).catch((e) => {
+            if (e instanceof ApiError && e.code === 'network') return submitResult(setup.match!.attemptId, phrases, key, guideUsedRef.current);
             throw e;
           });
         } catch (e) {
@@ -182,6 +189,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
       }
       // A phrase is final once its user frames are analysed, or a beat later if capture has stalled.
       const analysed = engine.tracker.analysed * hop;
+      if (t >= 0 && guideRef.current.on && guideRef.current.vol > 0 && engine.vocals) guideUsedRef.current = true;
       if (setup.online && t - lastLive.current >= 0.5) {
         lastLive.current = t;
         const rated = [...ratedRef.current.values()];
@@ -200,7 +208,8 @@ export function Sing({ setup }: { setup: SingSetup }) {
 
   const start = async () => {
     const engine = engineRef.current;
-    if (!engine || phase.k !== 'ready') return;
+    if (!engine || phase.k !== 'ready' || startedRef.current) return;
+    startedRef.current = true;
     if (setup.match && !beginRef.current) {
       beginRef.current = beginTurn(setup.match.attemptId, setup.register, setup.calibrationOffset).then(
         () => undefined,
@@ -218,7 +227,12 @@ export function Sing({ setup }: { setup: SingSetup }) {
     finishedRef.current = true;
     engineRef.current?.close();
     engineRef.current = null;
-    if (setup.online) nav.go({ name: 'online', room: { id: setup.online.roomId, slot: setup.online.slot, prefs: { register: setup.register, offset: setup.calibrationOffset } } });
+    if (setup.online)
+      nav.go({
+        name: 'online',
+        room: { id: setup.online.roomId, slot: setup.online.slot, prefs: { register: setup.register, offset: setup.calibrationOffset } },
+        notice: 'You left the turn. If it does not reopen, the turn can be retried from the room once the time runs out.',
+      });
     else nav.go({ name: setup.battle ? 'battle' : 'solo' });
   };
 

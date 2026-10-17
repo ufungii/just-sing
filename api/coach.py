@@ -40,8 +40,8 @@ def build_prompt(score: dict, phrase_count: int) -> str:
 def template_blurb(score: dict) -> str:
     """Deterministic fallback from the measured numbers only: no Gemini key or the call failed."""
     ph = score["phrases"]
-    best = max(range(len(ph)), key=lambda i: ph[i]["score"]) + 1
-    worst = min(range(len(ph)), key=lambda i: ph[i]["score"]) + 1
+    best = max(range(len(ph)), key=lambda i: ph[i].get("score", ph[i]["pitch"])) + 1
+    worst = min(range(len(ph)), key=lambda i: ph[i].get("score", ph[i]["pitch"])) + 1
     tip = ("your timing is the place to gain points: start each phrase right on the beat"
            if score["timing"] < score["pitch"] else
            "your pitch is the place to gain points: aim for the middle of each note and hold it steady")

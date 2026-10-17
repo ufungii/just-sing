@@ -1,6 +1,6 @@
 /**
  * Online room end to end: two separate browser contexts (two guests, two cookie jars) on one server.
- * Host "E2E Bot" creates a room, "E2E Rival" joins by code, both pass the mic check and ready up, the host
+ * Host "E2E-Bot-<run>" creates a room, "E2E-Rival-<run>" joins by code, both pass the mic check and ready up, the host
  * starts, the host sings the good take, the rival the wrong-notes take. Fake mics work as in battle.spec.ts
  * (getUserMedia swapped per page, START clicked LEAD - COUNT_IN s after the stream opened).
  * Asserts both pages show the same winner (the host) and that the saved totals match the server.
@@ -12,8 +12,9 @@ import path from 'node:path';
 const CLIP = process.env.E2E_CLIP ?? 'synthetic-demo';
 const LEAD = Number(process.env.E2E_LEAD ?? 6);
 const COUNT_IN = 3.15;
-const HOST = 'E2E Bot';
-const GUEST = 'E2E Rival';
+const RUN = Date.now().toString(36).slice(-4); // cleanup_db.py only deletes names starting "E2E-"
+const HOST = `E2E-Bot-${RUN}`;
+const GUEST = `E2E-Rival-${RUN}`;
 
 async function newPlayer(browser: Awaited<ReturnType<typeof chromium.launch>>, baseURL: string, take: 'good' | 'wrong', errors: string[]) {
   const page = await (await browser.newContext({ baseURL })).newPage();
@@ -91,7 +92,7 @@ test('online room: good take beats wrong notes, both browsers agree', async ({ b
 
   // Host sings; the rival sees live progress and badges, then gets the turn.
   await singTurn(a);
-  await expect(b.getByText(/WAITING FOR E2E BOT/)).toBeVisible();
+  await expect(b.getByText(new RegExp(`WAITING FOR ${HOST.toUpperCase()}`))).toBeVisible();
   await expect(b.getByTestId('live-badges')).toContainText(/PERFECT|GREAT|OKAY|BAD|MISS/, { timeout: 60_000 });
   await singTurn(b);
 

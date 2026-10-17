@@ -284,3 +284,26 @@ def test_old_rows_read_range_null(guests):
     c.post(f"/api/turns/{m['attempt_id']}/begin", json={})
     c.post(f"/api/turns/{m['attempt_id']}/result", json=GOOD, headers={"Idempotency-Key": "o"})
     assert c.get(f"/api/matches/{m['match_id']}").json()["attempts"][0]["score"]["range"] is None
+
+
+def test_guided_runs_are_flagged_and_stay_off_the_leaderboard(guests):
+    c = new_guest(guests)
+    with get_engine().begin() as conn:  # leaderboard only ranks logged-in accounts
+        conn.execute(text("update guest_session set auth0_sub=:s where id=:g"),
+                     {"s": f"test|{guests[-1]}", "g": guests[-1]})
+    lb = lambda: [r for r in c.get("/api/leaderboard", params={"clip_id": "synthetic-demo"}).json() if r["display_name"] == "tester"]
+
+    def run(key, guided):
+        m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
+        c.post(f"/api/turns/{m['attempt_id']}/begin", json={})
+        body = {**GOOD, **({"guide_used": True} if guided else {})}
+        r = c.post(f"/api/turns/{m['attempt_id']}/result", json=body, headers={"Idempotency-Key": key})
+        return m, r.json()
+
+    m, score = run("g", True)
+    assert score["guided"] is True and lb() == []
+    assert c.get(f"/api/matches/{m['match_id']}").json()["attempts"][0]["score"]["guided"] is True
+    assert c.get("/api/history").json()[0]["guided"] is True
+    _, score = run("u", False)  # guide_used omitted = false
+    assert score["guided"] is False and len(lb()) == 1
+    assert c.get("/api/history").json()[0]["guided"] is False
