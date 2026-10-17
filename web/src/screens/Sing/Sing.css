@@ -303,3 +303,42 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* ---------- compact singing layout: the whole game fits 16:9 and 16:10 screens ---------- */
+
+.ui-inner:has(.sing-stage) { gap: 12px; }
+
+/* Duet singer bar: one strip with who is singing, who is next and both scores. */
+.duet-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding: 8px 16px;
+  border: var(--border) solid var(--ink);
+  box-shadow: 6px 8px 0 var(--ink);
+}
+.duet-bar--p1 { background: var(--pink); }
+.duet-bar--p2 { background: var(--sky); }
+.duet-bar__who p { margin: 0; }
+.duet-bar__who [data-testid='duet-current'] { font-size: 22px; }
+.duet-bar__who [data-testid='duet-next'] { font-size: 14px; }
+.duet-bar .sing-hud { flex-wrap: wrap; margin: 0; }
+
+/* Short screens (16:9 at 720-800 px tall, 16:10 laptops): tighten the lyrics and panels so the lane,
+   the singer bar and the lyrics are all on screen at once. */
+@media (max-height: 880px) {
+  .ui-inner:has(.sing-stage) { gap: 8px; }
+  .ui-inner:has(.sing-stage) .ui-panel { padding: 10px 16px; }
+  .ui-inner:has(.sing-stage) .ui-header { gap: 12px; }
+  .sing-lyrics { min-height: 70px; }
+  .sing-lyrics__ko { font-size: 30px; line-height: 1.15; }
+  .sing-lyrics__roman { margin-top: 2px !important; font-size: 17px; }
+  .sing-lyrics__trans { margin-top: 2px !important; font-size: 14px; }
+  .sing-lyrics__next { margin-top: 6px !important; font-size: 16px; }
+  .sing-lyrics__next-roman { font-size: 13px; }
+  .sing-lyrics__rest { font-size: 24px; padding: 2px 0; }
+  .duet-bar { padding: 6px 14px; }
+  .duet-bar__who [data-testid='duet-current'] { font-size: 19px; }
+}
