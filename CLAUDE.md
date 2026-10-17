@@ -11,6 +11,7 @@ Three modes, in priority order:
 1. **Solo karaoke (core MVP).** Pick clip -> pick register -> sing -> live pitch lane + phrase ratings (Perfect! / Great / Okay / Bad / Miss) -> final score -> coaching blurb.
 2. **Spoken Korean pronunciation practice (core, separate mode).** The player reads a short lyric phrase aloud at normal speaking pace and gets word-level feedback. It never affects the singing score.
 3. **Battle (deferred, stretch).** Two players take turns on the same clip under identical scoring rules; higher total wins, equal totals tie. **Do not start battle work (UI, schema, rooms) until solo karaoke and spoken practice work end to end.** Keep the scoring engine mode-agnostic so battle is just two turns of it. Local shared-laptop first; online two-computer rooms are a further stretch and cut first.
+   **Status note:** the backend (`api/`) already implements local battle, online rooms and their WebSocket events; they were built early and are tested. That does not change the priority: solo karaoke and spoken practice stay the demo focus, and Frontend does not start battle UI until both work end to end.
 
 Platform: a **desktop app built with Electron**, a thin client that opens the shared server's own URL (React + Vite frontend served alongside FastAPI). The **browser version keeps working** next to it as the dev path and for judges; Electron-only code is feature-checked (`if (window.electronAPI)`) so the web path never breaks. No game engine, and no Python is bundled in the app. **Current focus: solo only.**
 

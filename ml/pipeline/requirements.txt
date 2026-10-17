@@ -1,0 +1,5 @@
+# Main offline environment. Install a matching CPU/GPU PyTorch build first.
+# Demucs belongs in its separate environment; see docs/SETUP.md.
+-r requirements-pitch.txt
+-r requirements-alignment.txt
+-r requirements-download.txt

@@ -1,0 +1,6 @@
+{
+  "description": "Shared scoring configuration. The Python reference engine (ml/scoring), the TypeScript port (web/) and the API all read this one file; never copy these numbers into code. Values are the CLAUDE.md starting defaults, not yet calibrated. Change scoring_version whenever any value changes.",
+  "scoring_version": "0.1.0",
+  "total_weights": { "pitch": 0.8, "timing": 0.2 },
+  "battle": { "tie_decimals": 1 }
+}

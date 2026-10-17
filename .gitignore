@@ -15,3 +15,8 @@ __pycache__/
 
 # Local ML data: audio, stems, model outputs
 ml/data/
+
+# Local team handoff copies (contain song lyrics)
+/blood-sweat-tears.song.json
+/blood-sweat-tears.song.review.json
+/karaoke-demo-handoff.zip
