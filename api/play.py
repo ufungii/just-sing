@@ -196,10 +196,19 @@ def begin_turn(attempt_id: uuid.UUID, body: BeginIn, guest=Depends(current_guest
     attempt.state, attempt.register = "started", body.register
     attempt.calibration_offset = body.calibration_offset
     # Past this deadline the attempt is treated as lost (tab closed, connection gone): see retention.
-    attempt.started_at, attempt.deadline_at = now, now + timedelta(seconds=CATALOG[match.clip_id].duration) + RECONNECT_GRACE
+    attempt.started_at, attempt.deadline_at = now, now + timedelta(seconds=_frozen_song(match).duration) + RECONNECT_GRACE
     s.commit()
     notify(s, match, "turn_started", attempt)
     return {"attempt_id": attempt.id, "state": attempt.state}
+
+
+def _frozen_song(match: Match):
+    """The manifest this match was created with. Only the current version is loaded, so a changed
+    version is refused rather than graded against the wrong phrases."""
+    song = CATALOG.get(match.clip_id)
+    if not song or song.version != match.clip_version:
+        raise ApiError(409, "clip_version_changed", "This clip was updated since the match began; start a new match.")
+    return song
 
 
 def _check_turn(s: Session, guest: GuestSession, match: Match, attempt: TurnAttempt):
@@ -239,7 +248,7 @@ def submit_result(attempt_id: uuid.UUID, body: ResultIn, idempotency_key: str = 
         notify(s, match, "retry_required")
         raise ApiError(409, "attempt_invalidated", "This turn ran out of time; start a new one.")
 
-    durations = {p.id: p.end - p.start for p in CATALOG[match.clip_id].phrases}
+    durations = {p.id: p.end - p.start for p in _frozen_song(match).phrases}
     if sorted(p.phrase_id for p in body.phrases) != sorted(durations):
         raise ApiError(422, "phrase_mismatch", "Results must cover each phrase of the clip exactly once.")
 
