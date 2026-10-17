@@ -10,10 +10,15 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { Note, PhraseScore, Song } from '../../lib/types';
 import { centsBetween, SCORING_CONFIG, type TargetTrack } from '../../scoring';
 
+/** A display note; `slot` (duet only) is the owning player, 0 = P1, 1 = P2. */
+export type LaneNote = Note & { slot?: number };
+
 interface Props {
   song: Song;
   /** Display notes in Hz, already register-shifted. */
-  notes: Note[];
+  notes: LaneNote[];
+  /** Duet ownership timeline (sorted by start); tints notes and colours the now line and trace head. */
+  sections?: { start: number; slot: number }[];
   target: TargetTrack;
   /** Clip time in seconds on the master clock. */
   getTime: () => number;
@@ -39,6 +44,8 @@ const C = {
   pink: '#ff8cc0',
   sky: '#8fd3ff',
   skyLight: '#d4eeff',
+  skyDark: '#4fa3da',
+  pinkLight: '#ffc8e1',
   lav: '#c9b6ff',
   lavLight: '#ece4ff',
   butter: '#ffd84d',
@@ -46,22 +53,44 @@ const C = {
   white: '#ffffff',
 };
 
+/** Per-player colours (P1 pink / P2 sky, as in the player pickers). `trace` is the line, `glow` its halo, `head` the heart. */
+const SLOT_COLORS = [
+  { note: C.pink, noteBevel: C.pinkLight, line: C.hot, glow: C.hotLight, head: C.pink, headOn: C.hot },
+  { note: C.sky, noteBevel: C.skyLight, line: C.skyDark, glow: C.sky, head: C.sky, headOn: C.skyDark },
+];
+
 const RATING_COLOR: Record<string, string> = { perfect: C.butter, great: C.mint, okay: C.sky, bad: C.lav, miss: C.lavLight };
 
 const HEART = ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'];
 
 const midiOf = (hz: number) => 69 + 12 * Math.log2(hz / 440);
 
-/** Semitone range that fits every target with some headroom (at least 16 semitones tall). */
+/** Note bar height for a lane with `rows` semitone rows: 30% taller than the original sizing. */
+const pillFor = (rows: number) => Math.min(34, 1.3 * Math.max(14, Math.min(26, 0.9 * (HEIGHT / rows))));
+
+/**
+ * Semitone range that fits every target with some headroom. If the taller note bars would touch
+ * their neighbouring semitone rows, the window is trimmed (never below the notes plus one row each side).
+ */
 function laneRange(notes: Note[], target: TargetTrack): [number, number] {
   const hz = [...notes.map((n) => n.hz), ...(target.source === 'hz' ? (target.hz.filter((h) => h !== null) as number[]) : [])];
   if (!hz.length) return [52, 72];
-  let lo = Math.floor(Math.min(...hz.map(midiOf))) - 4;
-  let hi = Math.ceil(Math.max(...hz.map(midiOf))) + 4;
+  const min = Math.floor(Math.min(...hz.map(midiOf)));
+  const max = Math.ceil(Math.max(...hz.map(midiOf)));
+  let lo = min - 4;
+  let hi = max + 4;
   const missing = 16 - (hi - lo);
   if (missing > 0) {
     lo -= Math.floor(missing / 2);
     hi += Math.ceil(missing / 2);
+  }
+  const rows = Math.max(Math.floor(HEIGHT / pillFor(hi - lo)), max - min + 2);
+  const extra = hi - lo - rows;
+  if (extra > 0) {
+    // trim equally from both sides but never cut into the notes
+    const trimLo = Math.min(Math.floor(extra / 2), min - 1 - lo);
+    lo += Math.max(0, trimLo);
+    hi -= Math.max(0, Math.min(extra - Math.max(0, trimLo), hi - (max + 1)));
   }
   return [lo, hi];
 }
@@ -112,13 +141,13 @@ function drawSparkle(g: CanvasRenderingContext2D, x: number, y: number, px: numb
   g.fillRect(x - 2.5 * px, y - px / 2, 5 * px, px);
 }
 
-export function PitchLane({ song, notes, target, getTime, userHz, ratings }: Props) {
+export function PitchLane({ song, notes, sections, target, getTime, userHz, ratings }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Latest props for the draw loop without restarting it.
   const range = useMemo(() => laneRange(notes, target), [notes, target]);
-  const live = useRef({ song, notes, target, getTime, userHz, ratings, range });
+  const live = useRef({ song, notes, sections, target, getTime, userHz, ratings, range });
   useEffect(() => {
-    live.current = { song, notes, target, getTime, userHz, ratings, range };
+    live.current = { song, notes, sections, target, getTime, userHz, ratings, range };
   });
 
   useEffect(() => {
@@ -143,7 +172,7 @@ export function PitchLane({ song, notes, target, getTime, userHz, ratings }: Pro
 
     const draw = () => {
       frame = requestAnimationFrame(draw);
-      const { song, notes, target, getTime, userHz, ratings, range } = live.current;
+      const { song, notes, sections, target, getTime, userHz, ratings, range } = live.current;
       const t = getTime();
       const W = width;
       const H = HEIGHT;
@@ -154,6 +183,10 @@ export function PitchLane({ song, notes, target, getTime, userHz, ratings }: Pro
       const rowH = H / (hi - lo);
       const yOf = (midi: number) => H - (midi - lo) * rowH;
       const hop = target.hop;
+      // duet: the singer who owns the current section colours the now line and the trace
+      let activeSlot = 0;
+      for (const sec of sections ?? []) if (sec.start <= t) activeSlot = sec.slot;
+      const sc = SLOT_COLORS[activeSlot] ?? SLOT_COLORS[0];
 
       // ground: semitone rows, a stronger line at every C with its name
       g.fillStyle = C.paper;
@@ -217,7 +250,7 @@ export function PitchLane({ song, notes, target, getTime, userHz, ratings }: Pro
       }
 
       // target notes: pixel pills with dot eyes
-      const pillH = Math.max(14, Math.min(26, rowH * 0.9));
+      const pillH = Math.min(pillFor(hi - lo), rowH * 0.95);
       for (const n of notes) {
         const x1 = xOf(n.start);
         const x2 = xOf(n.end);
@@ -226,8 +259,9 @@ export function PitchLane({ song, notes, target, getTime, userHz, ratings }: Pro
         const w = Math.max(10, x2 - x1);
         const active = t >= n.start && t < n.end;
         const past = t >= n.end;
-        const face = active ? C.butter : past ? C.lav : C.sky;
-        const bevel = active ? C.white : past ? C.lavLight : C.skyLight;
+        const own = n.slot === undefined ? undefined : SLOT_COLORS[n.slot];
+        const face = active ? C.butter : past ? C.lav : own ? own.note : C.sky;
+        const bevel = active ? C.white : past ? C.lavLight : own ? own.noteBevel : C.skyLight;
         g.fillStyle = C.ink;
         pixelPill(g, x1 + 3, y + 4, w, pillH, 3);
         g.fill(); // hard shadow
@@ -252,7 +286,7 @@ export function PitchLane({ song, notes, target, getTime, userHz, ratings }: Pro
       // now line
       g.fillStyle = C.ink;
       g.fillRect(nowX - 3, 0, 6, H);
-      g.fillStyle = C.hot;
+      g.fillStyle = sc.line;
       g.fillRect(nowX - 1, 0, 2, H);
       g.fillStyle = C.ink;
       g.beginPath();
@@ -270,59 +304,70 @@ export function PitchLane({ song, notes, target, getTime, userHz, ratings }: Pro
       const kEnd = Math.min(userHz.length, Math.floor(t / hop) + 1);
       const kStart = Math.max(0, Math.floor((t - (nowX / pps)) / hop));
       const clampY = (hz: number) => Math.max(4, Math.min(H - 4, yOf(midiOf(hz))));
+      // Collect voiced runs and ease them for drawing only: a 5-point moving average on y, then a curve
+      // through the midpoints. The scored/tracked pitch is untouched.
+      const runs: { x: number; y: number; k: number }[][] = [];
+      let run: { x: number; y: number; k: number }[] | null = null;
+      for (let k = kStart; k < kEnd; k++) {
+        const h = userHz[k];
+        if (h === null || h === undefined) {
+          run = null;
+          continue;
+        }
+        if (!run) runs.push((run = []));
+        run.push({ x: xOf(k * hop), y: clampY(h), k });
+      }
+      for (const r of runs) {
+        const ys = r.map((p) => p.y);
+        r.forEach((p, i) => {
+          const from = Math.max(0, i - 2);
+          const to = Math.min(r.length - 1, i + 2);
+          let sum = 0;
+          for (let j = from; j <= to; j++) sum += ys[j];
+          p.y = sum / (to - from + 1);
+        });
+      }
       const strokeTrace = () => {
         g.beginPath();
-        let open = false;
-        for (let k = kStart; k < kEnd; k++) {
-          const h = userHz[k];
-          if (h === null || h === undefined) {
-            open = false;
-            continue;
-          }
-          const x = xOf(k * hop);
-          const y = clampY(h);
-          if (open) g.lineTo(x, y);
-          else g.moveTo(x, y);
-          open = true;
+        for (const r of runs) {
+          if (!r.length) continue;
+          g.moveTo(r[0].x, r[0].y);
+          for (let i = 1; i < r.length - 1; i++) g.quadraticCurveTo(r[i].x, r[i].y, (r[i].x + r[i + 1].x) / 2, (r[i].y + r[i + 1].y) / 2);
+          if (r.length > 1) g.lineTo(r[r.length - 1].x, r[r.length - 1].y);
         }
         g.stroke();
       };
       g.lineJoin = 'round';
       g.lineCap = 'round';
       g.save();
-      g.shadowColor = C.hot;
-      g.shadowBlur = 14;
-      g.strokeStyle = C.hotLight;
-      g.lineWidth = 9;
+      g.shadowColor = sc.line;
+      g.shadowBlur = 16;
+      g.strokeStyle = sc.glow;
+      g.lineWidth = 12;
       strokeTrace();
       g.restore();
-      g.strokeStyle = C.hot;
-      g.lineWidth = 4;
+      g.strokeStyle = sc.line;
+      g.lineWidth = 5.5;
       strokeTrace();
       g.strokeStyle = C.white;
-      g.lineWidth = 1.5;
+      g.lineWidth = 2;
       strokeTrace();
 
       // trace head: a heart at the newest voiced frame; sparkles when it is on pitch
-      let head = -1;
-      for (let k = kEnd - 1; k >= Math.max(kStart, kEnd - 8); k--)
-        if (userHz[k] !== null && userHz[k] !== undefined) {
-          head = k;
-          break;
-        }
-      if (head >= 0) {
+      const last = runs.length ? runs[runs.length - 1] : null;
+      const headPt = last && last[last.length - 1].k >= kEnd - 8 ? last[last.length - 1] : null;
+      if (headPt) {
+        const { x, y, k: head } = headPt;
         const hz = userHz[head] as number;
-        const x = xOf(head * hop);
-        const y = clampY(hz);
         const want = target.hz[head];
         const onPitch = want !== null && want !== undefined && !target.excluded[head] && Math.abs(centsBetween(hz, want)) <= SCORING_CONFIG.pitchFullCents;
         if (onPitch) {
           const phase = Math.floor(performance.now() / 120) % 2;
-          drawSparkle(g, x - 18 - phase * 3, y - 16, 2);
-          drawSparkle(g, x + 16 + phase * 2, y - 12 + phase * 3, 2);
-          drawSparkle(g, x + 4, y + 20 - phase * 2, 2);
+          drawSparkle(g, x - 22 - phase * 3, y - 20, 2);
+          drawSparkle(g, x + 20 + phase * 2, y - 16 + phase * 3, 2);
+          drawSparkle(g, x + 4, y + 26 - phase * 2, 2);
         }
-        drawHeart(g, x, y, 3, onPitch ? C.hot : C.pink);
+        drawHeart(g, x, y, 4, onPitch ? sc.headOn : sc.head);
       }
 
       // lane border
