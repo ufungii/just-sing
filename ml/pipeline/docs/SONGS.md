@@ -1,5 +1,20 @@
 # Prepared songs and review notes
 
+## Draft demo lyric fingerprints
+
+The thirteen local 30-second `*-demo` preparations have
+`lyric_fingerprints.npz`, generated from their current draft manifests and
+selected vocal stems using ML B's lyric-match 0.1.0 implementation. Full-song
+versions were intentionally skipped. `lyric_fingerprints.provenance.json`
+records the input manifest/vocal hashes, line-timing hash and source commit.
+These files do not freeze timings or mark a preparation reviewed: regenerate
+after timing review or any lyric, timing or selected-vocal change.
+
+`ml/data/handoff/demo-lyric-fingerprints.zip` contains these derived files,
+provenance, and matching draft manifests for the team. Keep it outside Git,
+and check that its input hashes match the clip assets before using it. Prioritize
+listening review of the demo clips rather than the full-song versions.
+
 ## Additional local songs
 
 The following songs use the same original htdemucs vocal estimate and enhanced
@@ -15,6 +30,8 @@ the corresponding `-demo` folder contains a matching 30-second crop.
 | `last-christmas` | Last Christmas | Wham! | `KhqNTjbQ71A` |
 | `zombie` | Zombie | DAY6 | `TnRdJcrCt6c` |
 | `crazy` | CRAZY | LE SSERAFIM | `zRZHpWxCcYs` |
+| `what-is-love` | What is Love? | TWICE | `ipOih_lghwo` |
+| `surf` | Surf | NCT WISH | `rDHm-6UvUVE` |
 
 English songs use `--language en`; their singing phrases remain available while
 Korean pronunciation exercises are disabled. Soda Pop retains Korean-only
@@ -57,6 +74,21 @@ Local team handoffs are `ml/data/handoff/zombie-karaoke.zip` and
 Copy those folders into a teammate's `ml/data/` directory and restart their API
 to refresh song selection. Pulling Git alone does not install these local assets;
 share the archives separately and keep their contents out of the public repo.
+
+What is Love? retains all 64 supplied lines / 323 words; Surf retains all 54
+lines / 266 words. Both preserve the supplied section breaks, Korean-only
+practice lines, deterministic romanization and draft English translations.
+Acoustic alignment was checked against matching lyric timestamps and selected
+video frames. Audio/text-bound corrections adjust the intro and repeated
+chorus/outro windows; the initial drafts remain under `alignment/history/`.
+Agreement with a source used for corrections is a consistency check, not
+independent validation. Surf's third display-line entrance remains flagged for
+listening review, alongside word highlights, stems and pitch in both songs.
+
+Their 30-second demos start at 44.36 s (What is Love?) and 71.58 s (Surf).
+`ml/data/handoff/what-is-love-and-surf-karaoke.zip` contains the four matching
+full-song/demo folders, JSON, MP3s and draft demo lyric fingerprints. Keep the
+archive and its lyric-bearing contents outside Git.
 
 ## Selected audio
 
