@@ -127,6 +127,10 @@ from .rooms import router as rooms_router  # noqa: E402
 
 app.include_router(rooms_router)
 
+from .duet_play import router as duet_router  # noqa: E402
+
+app.include_router(duet_router)
+
 from .coach import router as coach_router  # noqa: E402
 
 app.include_router(coach_router)

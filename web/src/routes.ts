@@ -30,6 +30,14 @@ export interface RoomRef {
   prefs?: { register: Register; offset: number | null };
 }
 
+export interface DuetSetup {
+  matchId: string;
+  clipId: string;
+  registers: [Register, Register];
+  calibrationOffset: number | null;
+  online?: { roomId: string; slot: number };
+}
+
 /** Local 1P vs 2P: one clip, two singers on one laptop, each with their own register. */
 export interface BattleCtx {
   turn: 0 | 1;
@@ -59,6 +67,7 @@ export type Route =
   | { name: 'practice' }
   | { name: 'history' }
   | { name: 'battle' }
+  | { name: 'duet'; setup: DuetSetup }
   /** Online lobby: no `room` means the create/join form. `notice` carries a save failure back from singing. */
   | { name: 'online'; room?: RoomRef; notice?: string }
   /** After a battle turn: hand-off after player 1, final results after player 2. */

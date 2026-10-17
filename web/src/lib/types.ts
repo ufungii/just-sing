@@ -41,6 +41,10 @@ export interface Phrase {
   end: number;
 }
 
+export interface DuetSection { id: string; slot: 0 | 1; phrase_ids: string[] }
+export interface TimedDuetSection extends DuetSection { start: number; end: number }
+export interface DuetPlan { sections: TimedDuetSection[]; range: TimeRange | null; start_at: number | null }
+
 export interface Note {
   start: number;
   end: number;
@@ -65,6 +69,7 @@ export interface Song {
   lines: Line[];
   phrases: Phrase[];
   reference: { hop_seconds: number; hz: (number | null)[]; notes: Note[]; excluded: Excluded[] };
+  duet_sections?: DuetSection[] | null;
 }
 
 export interface PhraseScore {
@@ -77,6 +82,7 @@ export interface PhraseScore {
 }
 
 export interface Score {
+  duet?: boolean;
   range?: TimeRange | null;
   mode: 'solo' | 'battle';
   clip_id: string;
@@ -106,6 +112,7 @@ export interface Practice {
 }
 
 export interface HistoryItem {
+  duet?: boolean;
   range?: TimeRange | null;
   match_id: string;
   clip_id: string;
@@ -123,7 +130,9 @@ export interface MatchView {
   previous_match_id: string | null;
   players: { slot: number; display_name: string }[];
   winner_slot: number | null;
-  attempts: { id: string; slot: number; state: string; score: Score | null }[];
+  duet: DuetPlan | null;
+  server_time: number;
+  attempts: { id: string; slot: number; state: string; score: Score | null; register: Register; loaded: boolean }[];
 }
 
 export interface NewMatch {

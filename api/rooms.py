@@ -53,7 +53,7 @@ class Hub:
     def track_turn(self, room_id, snap: dict):
         """Remember whose turn it is, so progress from anyone else is refused without a DB read."""
         match = snap["match"]
-        self.active_slot[room_id] = match["active_slot"] if match and match["state"] == "active" else None
+        self.active_slot[room_id] = (-1 if match.get('duet') else match['active_slot']) if match and match['state'] == 'active' else None
 
     def present(self, room_id) -> set[int]:
         return {slot for _, slot in self.sockets[room_id].values()}
@@ -130,6 +130,7 @@ def _host_only(room: Room, guest: GuestSession):
 
 class RoomIn(BaseModel):
     clip_id: str
+    duet: bool = False
 
 
 class JoinIn(BaseModel):
@@ -171,6 +172,9 @@ def create_room(body: RoomIn, guest=Depends(current_guest), s: Session = Depends
     else:
         raise ApiError(503, "room_code_unavailable", "Could not allocate a room code. Try again.", True)
     s.add(RoomMember(room_id=room.id, slot=0, guest_id=guest.id, display_name=guest.display_name))
+    if body.duet:
+        out = play._new_match(s, guest, song.id, [guest.display_name], room_id=room.id, duet=True)
+        s.get(Match, out['match_id']).state = 'lobby'
     s.commit()
     return {**snapshot(s, room), "you": 0}  # "you": the caller's seat (the shared snapshot cannot say)
 
@@ -239,9 +243,10 @@ def change_clip(room_id: uuid.UUID, body: RoomIn, guest=Depends(current_guest), 
     room.clip_id, room.clip_version = song.id, song.version
     draft = _latest_match(s, room)
     if draft:
+        duet = play._match_duet(s, draft)
         draft.clip_id, draft.clip_version = song.id, song.version
         first = s.scalar(select(TurnAttempt).where(TurnAttempt.match_id == draft.id, TurnAttempt.slot == 0))
-        first.phrase_results = None
+        first.phrase_results = {'duet': play._duet_config(song, None), 'loaded': False} if duet else None
     for m in s.scalars(select(RoomMember).where(RoomMember.room_id == room.id)):
         m.ready = False  # a new clip needs a fresh yes from everyone
     _bump(room)
@@ -264,7 +269,7 @@ def change_range(room_id: uuid.UUID, body: RangeIn, guest=Depends(current_guest)
         raise ApiError(422, "invalid_range", "The section must contain scoreable reference notes.")
     draft = _draft(s, room, guest)
     first = s.scalar(select(TurnAttempt).where(TurnAttempt.match_id == draft.id, TurnAttempt.slot == 0))
-    first.phrase_results = {"range": rng.model_dump()} if rng else None
+    first.phrase_results = {'duet': play._duet_config(song, rng), 'loaded': False} if play._match_duet(s, draft) else ({"range": rng.model_dump()} if rng else None)
     for m in s.scalars(select(RoomMember).where(RoomMember.room_id == room.id)):
         m.ready = False
     _bump(room)
@@ -282,12 +287,19 @@ def _start_match(s: Session, room: Room, host: GuestSession, previous: uuid.UUID
         draft.state = "active"
         s.add(MatchPlayer(match_id=draft.id, slot=1, display_name=names[1]))
         first = s.scalar(select(TurnAttempt).where(TurnAttempt.match_id == draft.id, TurnAttempt.slot == 0))
+        duet = play._match_duet(s, draft)
+        if duet:
+            draft.state = 'preparing'
+            s.add(TurnAttempt(match_id=draft.id, slot=1, phrase_results={'duet': duet, 'loaded': False}))
         out = {"match_id": draft.id, "attempt_id": first.id, "scoring_version": draft.scoring_version}
     else:
         rng = play._match_range(s, draft) if draft else None
-        out = play._new_match(s, host, room.clip_id, list(names), previous=previous, room_id=room.id)
+        duet = bool(draft and play._match_duet(s, draft))
+        out = play._new_match(s, host, room.clip_id, list(names), previous=previous, room_id=room.id,
+                              duet=duet, practice_range=rng)
         first = s.get(TurnAttempt, out["attempt_id"])
-        first.phrase_results = {"range": rng.model_dump()} if rng else None
+        if not duet:
+            first.phrase_results = {"range": rng.model_dump()} if rng else None
     room.state = "playing"
     _bump(room)
     s.commit()
@@ -313,7 +325,8 @@ def rematch_room(room_id: uuid.UUID, guest=Depends(current_guest), s: Session = 
     room = _room(s, room_id, lock=True)
     _member(s, room, guest)
     _host_only(room, guest)
-    if room.state != "finished":
+    last = _latest_match(s, room)
+    if room.state != "finished" and not (last and play._match_duet(s, last) and last.state == 'retry_required'):
         raise ApiError(409, "not_finished", "The current match is not finished.")
     last = s.scalars(select(Match).where(Match.room_id == room.id).order_by(Match.created_at.desc()).limit(1)).one()
     return _start_match(s, room, guest, previous=last.id)
@@ -436,7 +449,7 @@ async def room_socket(ws: WebSocket, room_id: uuid.UUID):
             if kind == "heartbeat":
                 await ws.send_json(_event("heartbeat_ack"))
             elif kind in ("progress", "phrase_rating"):
-                if hub.active_slot.get(room_id) != slot:  # provisional data only from the singer
+                if hub.active_slot.get(room_id) not in (slot, -1):  # duet clients share one timeline
                     await ws.send_json(_event("error", code="not_your_turn", message="It is not your turn."))
                     continue
                 out = "turn_progress" if kind == "progress" else "phrase_rating"
