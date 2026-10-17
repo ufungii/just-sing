@@ -17,6 +17,7 @@ import { TimingCheck, loadCalibration } from '../Solo/TimingCheck';
 import { PracticeRangePicker } from '../../components/timeline/PracticeRangePicker';
 import { rangeLabel } from '../../components/timeline/range';
 import '../Solo/SoloSetup.css';
+import { Duet } from '../Duet/Duet';
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -268,6 +269,19 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
         </div>
       </ScreenShell>
     );
+
+  if (match.duet) {
+    if (match.state === 'retry_required') return (
+      <ScreenShell title="DUET STOPPED" kao="(；へ；)" onBack={leave} backLabel="LEAVE">
+        {notices}
+        <Notice tone="warn">The shared performance stopped or a player missed it. Restart the whole duet together; individual sections cannot be replayed.</Notice>
+        {isHost ? <PixelButton tone="hot" onClick={() => act(() => rematchRoom(room.id))}>RESTART TOGETHER</PixelButton>
+          : <p>The host can restart the duet for both players.</p>}
+      </ScreenShell>
+    );
+    return <Duet key={match.id} setup={{ matchId: match.id, clipId: snap.clip_id, registers: [register, register],
+      calibrationOffset: offset, online: { roomId: room.id, slot: room.slot } }} onLeave={leave} />;
+  }
 
   // ---- playing: my turn, or waiting for the other singer ----
   const myTurn = match.state === 'active' && match.active_slot === room.slot;

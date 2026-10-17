@@ -24,7 +24,7 @@ export interface RoomSnapshot {
 const call = <T>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST') =>
   request<T>(path, { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
 
-export const createRoom = (clipId: string) => call<RoomSnapshot>('/api/rooms', { clip_id: clipId });
+export const createRoom = (clipId: string) => call<RoomSnapshot>('/api/rooms', { clip_id: clipId, duet: true });
 export const joinRoom = (code: string) => call<RoomSnapshot>('/api/rooms/join', { code });
 export const getRoom = (id: string) => call<RoomSnapshot>(`/api/rooms/${id}`);
 export const setReady = (id: string, ready: boolean) => call<RoomSnapshot>(`/api/rooms/${id}/ready`, { ready });

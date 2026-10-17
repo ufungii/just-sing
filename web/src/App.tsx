@@ -10,6 +10,7 @@ import { History } from './screens/History/History';
 import { BattleSetup } from './screens/Battle/BattleSetup';
 import { Online } from './screens/Online/Online';
 import { BattleTurn } from './screens/Battle/BattleTurn';
+import { Duet } from './screens/Duet/Duet';
 
 /** Top-level navigation: one route at a time, shared through NavContext. */
 export function App() {
@@ -79,6 +80,8 @@ function renderRoute(route: Route, go: (r: Route) => void) {
       return <History />;
     case 'battle':
       return <BattleSetup />;
+    case 'duet':
+      return <Duet key={route.setup.matchId} setup={route.setup} onLeave={() => go({ name: 'home' })} />;
     case 'online':
       return <Online room={route.room} notice={route.notice} />;
     case 'battleturn':

@@ -33,18 +33,7 @@ export function BattleSetup() {
     setError(null);
     try {
       const m = await asGuest(n1, () => createMatch(clipId, [n1, n2]));
-      nav.go({
-        name: 'sing',
-        setup: {
-          runId: crypto.randomUUID(),
-          clipId,
-          register: registers[0],
-          calibrationOffset: offset,
-          playerName: n1,
-          match: { matchId: m.match_id, attemptId: m.attempt_id },
-          battle: { turn: 0, names: [n1, n2], registers, calibrationOffset: offset },
-        },
-      });
+      nav.go({ name: 'duet', setup: { matchId: m.match_id, clipId, registers, calibrationOffset: offset } });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -82,7 +71,7 @@ export function BattleSetup() {
           <Panel label="2 · PLAYERS" className="solo-you">
             {player(0)}
             {player(1)}
-            <p className="solo-hint">Same song and same scoring rules for both. Player 1 sings first, then you swap the headphones.</p>
+            <p className="solo-hint">One song, one shared mic. Follow the singer cue: your sections switch automatically without stopping the music.</p>
           </Panel>
           <Panel tone="sky" label="3 · MIC CHECK">
             <MicCheck onPassedChange={setMicOk} />
@@ -97,7 +86,7 @@ export function BattleSetup() {
             <Notice tone="error">Couldn’t start the battle: {error.replace(/\.$/, '')}. A battle needs the score server.</Notice>
           )}
           <p className="solo-go__status" aria-live="polite">
-            {busy ? 'Warming up the stage…' : missing.length ? `Still need ${missing.join(', ')}.` : 'All set! Player 1, headphones on.'}
+            {busy ? 'Warming up the stage…' : missing.length ? `Still need ${missing.join(', ')}.` : 'All set! Both players, get ready.'}
           </p>
           <PixelButton tone="hot" size="lg" className="solo-start" disabled={missing.length > 0 || busy} onClick={onStart}>
             {busy ? 'STARTING…' : 'FIGHT ♪'}

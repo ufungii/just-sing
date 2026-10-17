@@ -18,6 +18,7 @@ from . import auth
 from .auth import verify_bearer
 from .db import get_engine
 from .errors import ApiError
+from .duets import metadata as duet_metadata, timed_sections
 from .clip_catalog import CATALOG
 from .models import PhraseResultIn, PhraseScore, Score, TimeRange
 from ml.scoring.config import SCORING_VERSION  # the one source of truth for the scoring version
@@ -99,11 +100,30 @@ def _match_range(s: Session, match: Match) -> TimeRange | None:
                       .order_by(TurnAttempt.attempt_number).limit(1)).first()
     if first is None:
         return None
+    duet = duet_metadata(first.phrase_results)
+    if duet:
+        return TimeRange(**duet['range']) if duet.get('range') else None
     if isinstance(first.phrase_results, list):
         song = CATALOG.get(match.clip_id)
         return _range_of(song, [p["phrase_id"] for p in first.phrase_results]) \
             if song and song.version == match.clip_version else None
     return _started_range(first)
+
+
+def _match_duet(s: Session, match: Match) -> dict | None:
+    first = s.scalar(select(TurnAttempt).where(TurnAttempt.match_id == match.id, TurnAttempt.slot == 0)
+                     .order_by(TurnAttempt.attempt_number).limit(1))
+    return duet_metadata(first.phrase_results) if first else None
+
+
+def _duet_config(song, rng: TimeRange | None) -> dict:
+    included = {p.id for p in _included(song, rng)}
+    sections = timed_sections(song, included)
+    weights = dict(zip((p.id for p in song.phrases), _weights(song)))
+    for slot in (0, 1):
+        if not any(weights[pid] > 0 for section in sections if section['slot'] == slot for pid in section['phrase_ids']):
+            raise ApiError(422, 'invalid_duet_range', 'Choose a section with scoreable phrases for both Player 1 and Player 2.')
+    return {'sections': sections, 'range': rng.model_dump() if rng else None, 'start_at': None}
 
 
 def get_db():
@@ -158,6 +178,7 @@ class GuestIn(BaseModel):
 class MatchIn(BaseModel):
     clip_id: str
     players: list[str] | None = Field(None, min_length=2, max_length=2)  # two names = local battle
+    duet: bool = False  # legacy clients can retain sequential full-clip turns
 
 
 class BeginIn(BaseModel):
@@ -194,7 +215,8 @@ def require_clip(s: Session, clip_id: str):
 
 
 def _new_match(s: Session, guest: GuestSession, clip_id: str, names: list[str],
-               previous: uuid.UUID | None = None, room_id: uuid.UUID | None = None):
+               previous: uuid.UUID | None = None, room_id: uuid.UUID | None = None, duet: bool = False,
+               practice_range: TimeRange | None = None):
     """Create a match and its first attempt. The caller commits, so it can join other changes."""
     song = require_clip(s, clip_id)
     match = Match(guest_id=guest.id, mode="online" if room_id else "solo" if len(names) == 1 else "local",
@@ -206,6 +228,12 @@ def _new_match(s: Session, guest: GuestSession, clip_id: str, names: list[str],
         s.add(MatchPlayer(match_id=match.id, slot=slot, display_name=name))
     s.flush()
     attempt = TurnAttempt(match_id=match.id, slot=0)  # later slots get theirs when the turn before is saved
+    if duet:
+        config = _duet_config(song, practice_range)
+        match.state = 'preparing'
+        attempt.phrase_results = {'duet': config, 'loaded': False}
+        if len(names) == 2:
+            s.add(TurnAttempt(match_id=match.id, slot=1, phrase_results={'duet': config, 'loaded': False}))
     s.add(attempt)
     s.flush()
     return {"match_id": match.id, "attempt_id": attempt.id, "scoring_version": SCORING_VERSION}
@@ -213,7 +241,9 @@ def _new_match(s: Session, guest: GuestSession, clip_id: str, names: list[str],
 
 @router.post("/matches")
 def create_match(body: MatchIn, guest=Depends(current_guest), s: Session = Depends(get_db)):
-    out = _new_match(s, guest, body.clip_id, body.players or [guest.display_name])
+    if body.duet and not body.players:
+        raise ApiError(422, 'invalid_duet', 'A duet needs two players.')
+    out = _new_match(s, guest, body.clip_id, body.players or [guest.display_name], duet=body.duet)
     s.commit()
     return out
 
@@ -235,7 +265,7 @@ def rematch(match_id: uuid.UUID, guest=Depends(current_guest), s: Session = Depe
         raise ApiError(409, "use_room_rematch", "Online matches are replayed from the room.")
     names = s.scalars(select(MatchPlayer.display_name).where(MatchPlayer.match_id == old.id)
                       .order_by(MatchPlayer.slot)).all()
-    out = _new_match(s, guest, old.clip_id, list(names), previous=old.id)
+    out = _new_match(s, guest, old.clip_id, list(names), previous=old.id, duet=bool(_match_duet(s, old)))
     s.commit()
     return out
 
@@ -256,6 +286,8 @@ def begin_turn(attempt_id: uuid.UUID, body: BeginIn, guest=Depends(current_guest
                s: Session = Depends(get_db)):
     match, attempt = lock_turn(s, attempt_id)
     _owned_match(s, guest, match.id)
+    if duet_metadata(attempt.phrase_results):
+        raise ApiError(409, 'use_duet_ready', 'Load both microphones and use the shared duet ready barrier.')
     _check_turn(s, guest, match, attempt)
     if body.register not in (-12, 0, 12):
         raise ApiError(422, "invalid_register", "register must be -12, 0 or 12.")
@@ -302,7 +334,7 @@ def _frozen_song(match: Match):
 
 def _check_turn(s: Session, guest: GuestSession, match: Match, attempt: TurnAttempt):
     """Turns alternate: only the active slot's attempt may move. In a room, only that seat's guest."""
-    if match.state != "active" or attempt.slot != match.active_slot:
+    if match.state != "active" or (not duet_metadata(attempt.phrase_results) and attempt.slot != match.active_slot):
         raise ApiError(409, "not_your_turn", "It is not this player's turn.")
     if match.room_id and s.scalar(select(RoomMember.slot).where(
             RoomMember.room_id == match.room_id, RoomMember.guest_id == guest.id)) != attempt.slot:
@@ -318,7 +350,10 @@ def _score(match: Match, a: TurnAttempt) -> Score:
     song = CATALOG.get(match.clip_id)
     rng = _range_of(song, [p["phrase_id"] for p in a.phrase_results]) \
         if song and song.version == match.clip_version else None
-    return Score(range=rng, guided=_guided(a.phrase_results), mode="solo" if match.mode == "solo" else "battle", clip_id=match.clip_id, clip_version=match.clip_version,
+    duet = duet_metadata(a.phrase_results)
+    if duet:
+        rng = TimeRange(**duet['range']) if duet.get('range') else None
+    return Score(duet=bool(duet), range=rng, guided=_guided(a.phrase_results), mode="solo" if match.mode == "solo" else "battle", clip_id=match.clip_id, clip_version=match.clip_version,
                  scoring_version=match.scoring_version, register=a.register, total=a.total,
                  pitch=a.pitch, timing=a.timing, phrases=[PhraseScore(**{"score": p.get("score", p["pitch"]), **p}) for p in a.phrase_results],
                  coach_blurb=a.coach_blurb)
@@ -330,6 +365,9 @@ def submit_result(attempt_id: uuid.UUID, body: ResultIn, idempotency_key: str = 
     # Row locks: concurrent duplicate submissions (and retries) queue here and see the latest state.
     match, attempt = lock_turn(s, attempt_id)
     _owned_match(s, guest, match.id)
+    if match.room_id and s.scalar(select(RoomMember.slot).where(RoomMember.room_id == match.room_id,
+            RoomMember.guest_id == guest.id)) != attempt.slot:
+        raise ApiError(403, 'not_your_seat', 'Only the assigned player can submit this score.')
     if attempt.state == "accepted":
         if attempt.idempotency_key == idempotency_key:
             return _score(match, attempt)  # replay: same answer, nothing advances twice
@@ -348,6 +386,12 @@ def submit_result(attempt_id: uuid.UUID, body: ResultIn, idempotency_key: str = 
     song = _frozen_song(match)
     rng = _started_range(attempt)
     inc = _included(song, rng)
+    duet = duet_metadata(attempt.phrase_results)
+    if duet:
+        ids = {pid for section in duet['sections'] if section['slot'] == attempt.slot for pid in section['phrase_ids']}
+        inc = [p for p in song.phrases if p.id in ids]
+        if datetime.now(timezone.utc).timestamp() < duet['start_at']:
+            raise ApiError(409, 'duet_not_started', 'The shared playback has not started yet.')
     if sorted(p.phrase_id for p in body.phrases) != sorted(p.id for p in inc):
         raise ApiError(422, "phrase_mismatch", "Results must cover each phrase of the clip (or chosen range) exactly once.")
     keep = {p.id for p in inc}
@@ -361,11 +405,19 @@ def submit_result(attempt_id: uuid.UUID, body: ResultIn, idempotency_key: str = 
         raise ApiError(422, "invalid_result", str(e))
     attempt.pitch, attempt.timing, attempt.total = result["pitch"], result["timing"], result["total"]
     attempt.phrase_results = [{**p, "guided": body.guide_used} for p in result["phrases"]]
+    if duet:
+        attempt.phrase_results = [{**p, **({'_duet': duet} if i == 0 else {})} for i, p in enumerate(attempt.phrase_results)]
     attempt.idempotency_key, attempt.state = idempotency_key, "accepted"
     attempt.completed_at = datetime.now(timezone.utc)
     # Result and turn transition commit together: next player's attempt, or the match is finished.
     n_players = s.scalar(select(func.count()).select_from(MatchPlayer).where(MatchPlayer.match_id == match.id))
-    if attempt.slot + 1 < n_players:
+    if duet:
+        s.flush()
+        accepted = s.scalar(select(func.count()).select_from(TurnAttempt).where(
+            TurnAttempt.match_id == match.id, TurnAttempt.state == 'accepted'))
+        if accepted == n_players:
+            match.state = 'finished'
+    elif attempt.slot + 1 < n_players:
         match.active_slot = attempt.slot + 1
         s.add(TurnAttempt(match_id=match.id, slot=match.active_slot))
     else:
@@ -390,10 +442,12 @@ def match_view(s: Session, match: Match) -> dict:
     if match.state == "finished" and len(players) > 1 and len(set(totals.values())) > 1:
         winner = max(totals, key=totals.get)
     return {"id": match.id, "mode": match.mode, "clip_id": match.clip_id, "state": match.state,
+            "duet": _match_duet(s, match), 'server_time': datetime.now(timezone.utc).timestamp(),
             "active_slot": match.active_slot, "previous_match_id": match.previous_match_id,
             "players": [{"slot": p.slot, "display_name": p.display_name} for p in players],
             "winner_slot": winner,
-            "attempts": [{"id": a.id, "slot": a.slot, "state": a.state,
+            "attempts": [{"id": a.id, "slot": a.slot, "state": a.state, 'register': a.register,
+                          'loaded': bool(isinstance(a.phrase_results, dict) and a.phrase_results.get('loaded')),
                           "score": _score(match, a) if a.state == "accepted" else None} for a in attempts]}
 
 
@@ -404,6 +458,8 @@ def retry_turn(match_id: uuid.UUID, guest=Depends(current_guest), s: Session = D
     match = s.get(Match, match_id, with_for_update=True, populate_existing=True)  # match first, as lock_turn
     if match:
         _owned_match(s, guest, match_id)
+        if _match_duet(s, match):
+            raise ApiError(409, 'restart_duet', 'Restart the whole duet together; individual sections cannot be replayed.')
     if not match or match.state not in ("active", "retry_required"):
         raise ApiError(409, "cannot_retry", "This match has no turn to retry.")
     last = s.scalars(select(TurnAttempt).where(TurnAttempt.match_id == match.id, TurnAttempt.slot == match.active_slot)
@@ -443,8 +499,11 @@ def history(guest=Depends(current_guest), s: Session = Depends(get_db)):
         pr = s.scalar(select(TurnAttempt.phrase_results).where(
             TurnAttempt.match_id == m.id, TurnAttempt.slot == own_slot, TurnAttempt.state == "accepted"))
         rng = _range_of(song, [p["phrase_id"] for p in pr]) if pr and song and song.version == m.clip_version else None
+        duet = _match_duet(s, m)
+        if duet:
+            rng = TimeRange(**duet['range']) if duet.get('range') else None
         rows.append({"match_id": m.id, "clip_id": m.clip_id, "mode": m.mode, "created_at": m.created_at,
-                     "total": totals.get(own_slot), "range": rng, "guided": _guided(pr),
+                     "total": totals.get(own_slot), "range": rng, "guided": _guided(pr), 'duet': bool(duet),
                      "players": [{"slot": k, "display_name": names[k], "total": totals.get(k)} for k in sorted(names)]})
     return rows
 
