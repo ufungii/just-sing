@@ -258,3 +258,48 @@
   .sing-lyrics__ko { font-size: 32px; }
 }
 
+
+/* ---------- duet handoff cue: slides in from the lane's right edge ---------- */
+
+.duet-cue {
+  position: absolute;
+  top: 44px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: var(--border-thin) solid var(--ink);
+  box-shadow: 4px 5px 0 var(--ink);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink);
+  pointer-events: none;
+  animation: duet-cue-in 0.4s steps(5) both;
+}
+.duet-cue--p1 { background: var(--pink); }
+.duet-cue--p2 { background: var(--sky); }
+.duet-cue b {
+  min-width: 26px;
+  padding: 2px 6px;
+  text-align: center;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+}
+@keyframes duet-cue-in {
+  from { transform: translateX(120%); }
+  to { transform: translateX(0); }
+}
+@media (max-width: 520px) {
+  .duet-cue { font-size: 11px; gap: 5px; padding: 4px 6px; right: 6px; }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

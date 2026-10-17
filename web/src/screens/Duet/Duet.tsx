@@ -7,6 +7,7 @@ import { useNav, type DuetSetup } from '../../routes';
 import { aggregate, buildTargetTrack, displayNotes, phraseSettlesAt, phraseWeights, registerRatio, scorePhrase, SCORING_CONFIG } from '../../scoring';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
 import { GuideControl } from '../../ui/GuideControl';
+import { PixelIcon } from '../../ui/PixelIcon';
 import { rangeLabel } from '../../components/timeline/range';
 import { MatchBoard } from '../Battle/BattleTurn';
 import { Lyrics } from '../Sing/Lyrics';
@@ -17,6 +18,8 @@ import '../Sing/Sing.css';
 
 type Phase = 'loading' | 'ready' | 'waiting' | 'playing' | 'saving' | 'saved' | 'error';
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
+/** Seconds before a handoff that the NEXT-player chip slides in (matches the 4 s the lane shows ahead). */
+const HANDOFF_CUE = 4;
 const EMPTY: (number | null)[] = [];
 
 /** A single audio/capture session. Sections change ownership; audio never restarts at a handoff. */
@@ -53,9 +56,12 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
   const activeSlot = current?.slot ?? 0;
   const displaySlot = mySlot ?? activeSlot;
   const displayTarget = targets[displaySlot];
+  // The next section that hands the mic to the other singer, and how long until then.
+  const handoff = sections.slice(sectionIndex + 1).find((s) => s.slot !== activeSlot);
+  const handoffIn = handoff ? handoff.start - now : Infinity;
   const names = (slot: number) => `P${slot + 1} ${match?.players.find((p) => p.slot === slot)?.display_name ?? 'Player'}`;
   const notes = useMemo(() => song ? displayNotes(song).flatMap((note) => song.phrases.filter((p) => owner.has(p.id) && note.start < p.end && note.end > p.start)
-    .map((p) => ({ start: Math.max(note.start, p.start), end: Math.min(note.end, p.end), hz: note.hz * registerRatio(setup.registers[mySlot ?? owner.get(p.id)!]) }))) : [],
+    .map((p) => ({ start: Math.max(note.start, p.start), end: Math.min(note.end, p.end), hz: note.hz * registerRatio(setup.registers[mySlot ?? owner.get(p.id)!]), slot: owner.get(p.id) }))) : [],
   [song, owner, mySlot, setup.registers[0], setup.registers[1]]);
 
   useEffect(() => {
@@ -225,7 +231,18 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
         </div>
       </Panel>
       <div className="sing-stage">
-        {song && displayTarget ? <PitchLane song={song} notes={notes} target={displayTarget} getTime={getTime} userHz={engine.current?.tracker.hz ?? EMPTY} ratings={ratings} /> : <div className="sing-lane sing-lane--empty" />}
+        {song && displayTarget ? <PitchLane song={song} notes={notes} sections={sections} target={displayTarget} getTime={getTime} userHz={engine.current?.tracker.hz ?? EMPTY} ratings={ratings} /> : <div className="sing-lane sing-lane--empty" />}
+        {phase === 'playing' && handoff && handoffIn > 0 && handoffIn <= HANDOFF_CUE && (
+          <div className={`duet-cue duet-cue--p${handoff.slot + 1}`} data-testid="duet-handoff" aria-hidden="true">
+            <PixelIcon name="speaker" size={22} />
+            <span>NEXT: PLAYER {handoff.slot + 1}</span>
+            <b>{Math.ceil(handoffIn)}</b>
+          </div>
+        )}
+        {/* one polite announcement per handoff (the visible countdown is aria-hidden so it does not chatter) */}
+        <span className="sr-only" aria-live="polite">
+          {phase === 'playing' && handoff && handoffIn > 0 && handoffIn <= HANDOFF_CUE ? `Next: ${names(handoff.slot)} sings in a few seconds.` : ''}
+        </span>
         {phase === 'loading' && <div className="sing-overlay">LOADING AUDIO AND MIC…</div>}
         {phase === 'ready' && <div className="sing-overlay"><PixelButton tone="hot" size="lg" onClick={() => void prepare()}>READY TO SING</PixelButton></div>}
         {phase === 'waiting' && <div className="sing-overlay">Waiting for both microphones and audio…</div>}
