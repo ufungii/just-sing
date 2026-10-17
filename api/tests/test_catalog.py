@@ -43,11 +43,12 @@ def test_clip_edge_line_without_a_phrase_does_not_reject_the_song(tmp_path):
     assert "ml-song" in songs and folders["ml-song"] == tmp_path / "ml-song" and reviewed["ml-song"] is False
 
 
-def test_a_phrase_still_needs_its_practice_text():
+def test_singing_phrase_can_have_no_korean_practice_text():
     data = json.loads(FIXTURE.read_text(encoding="utf-8"))
     data["lines"][0]["practice_text"] = " "
-    with pytest.raises(ValueError, match="practice_text"):
-        Song.model_validate(data)
+    song = Song.model_validate(data)
+    assert song.phrases[0].line_index == 0
+    assert not song.lines[0].practice_text.strip()
 
 
 def test_reviewed_flag_comes_from_the_review_file(tmp_path):
