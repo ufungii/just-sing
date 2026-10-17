@@ -35,7 +35,7 @@ async function player(browser: Browser, baseURL: string) {
   return page;
 }
 
-async function chooseSection(page: Page, song: any, readOnly = false) {
+async function chooseSection(page: Page, song: any, readOnly = false, endPhrase = 1) {
   await page.bringToFront();
   const start = page.getByRole('slider', { name: 'Start of practice section' });
   const end = page.getByRole('slider', { name: 'End of practice section' });
@@ -58,8 +58,13 @@ async function chooseSection(page: Page, song: any, readOnly = false) {
   // Keyboard End/Home chooses a valid phrase boundary and keeps the handle within view.
   await expect(end).toBeEnabled();
   await end.focus();
-  await end.press('Home');
-  await expect(end).toHaveAttribute('aria-valuenow', String(song.phrases[1].end));
+  if (endPhrase === 1) await end.press('Home');
+  else for (let i = song.phrases.length - 2; i >= endPhrase; i--) {
+    await expect(end).toBeEnabled();
+    await end.press('ArrowLeft');
+    await expect(end).toHaveAttribute('aria-valuenow', String(song.phrases[i].end));
+  }
+  await expect(end).toHaveAttribute('aria-valuenow', String(song.phrases[endPhrase].end));
 }
 
 async function mic(page: Page) {
@@ -154,14 +159,14 @@ test('solo middle section: snapped handles, preview, offset audio, saved subset 
   } finally { await browser.close(); }
 });
 
-test('online host section: guest read-only, readiness reset, identical saved phrases for both players', async ({ baseURL }) => {
+test('online host section: guest read-only, readiness reset, shared range with disjoint assigned phrases', async ({ baseURL }) => {
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   try {
     const host = await player(browser, baseURL!);
     const guest = await player(browser, baseURL!);
     await host.goto('/');
     const song = await (await host.request.get(`/api/clips/${CLIP}/manifest`)).json();
-    const range = { start: song.phrases[1].start, end: song.phrases[1].end };
+    const range = { start: song.phrases[1].start, end: song.phrases[3].end };
     await host.getByText('ONLINE', { exact: true }).first().click();
     await host.getByPlaceholder('e.g. Mina').fill(`${NAME}-host`);
     await host.getByRole('button', { name: new RegExp(song.title, 'i') }).click();
@@ -182,7 +187,7 @@ test('online host section: guest read-only, readiness reset, identical saved phr
     await expect(hostStart).toHaveAttribute('aria-valuenow', '0');
     await host.unroute('**/api/rooms/*/range');
     for (const page of [host, guest]) { await mic(page); await page.getByRole('button', { name: 'READY ✓', exact: true }).click(); }
-    await chooseSection(host, song);
+    await chooseSection(host, song, false, 3);
     await expect(guest.getByRole('slider', { name: 'Start of practice section' })).toHaveAttribute('aria-valuenow', String(range.start));
     await expect(guest.getByRole('slider', { name: 'End of practice section' })).toHaveAttribute('aria-valuenow', String(range.end));
     await expect(host.getByRole('button', { name: 'START (BOTH MUST BE READY)' })).toBeDisabled();
@@ -195,12 +200,27 @@ test('online host section: guest read-only, readiness reset, identical saved phr
     await mic(guest);
     for (const page of [host, guest]) await page.getByRole('button', { name: 'READY ✓', exact: true }).click();
     await host.getByRole('button', { name: 'START ♪', exact: true }).click();
-    const scores = [];
+    for (const page of [host, guest]) await expect(page.getByRole('button', { name: 'READY TO SING' })).toBeVisible();
+    const frozenResponse = guest.waitForResponse((r) => r.url().endsWith('/duet/ready'));
+    await host.getByRole('button', { name: 'READY TO SING' }).click();
+    await guest.getByRole('button', { name: 'READY TO SING' }).click();
+    const frozen = await (await frozenResponse).json();
+    expect(frozen.duet.range).toEqual(range);
     for (const page of [host, guest]) {
-      await page.getByRole('button', { name: 'SING ▶', exact: true }).click();
-      scores.push(await sing(page, range));
+      await expect.poll(() => page.evaluate(() => (window as any).__starts.length)).toBe(2);
+      for (const src of await page.evaluate(() => (window as any).__starts)) {
+        expect(src.offset).toBe(range.start);
+        expect(src.duration).toBeCloseTo(range.end - range.start);
+      }
     }
-    for (const score of scores) expect(score.phrases.map((p: any) => p.phrase_id)).toEqual([song.phrases[1].id]);
+    for (const page of [host, guest]) await expect(page.locator('.battle-headline')).toBeVisible({ timeout: 30_000 });
+    const finished = await (await host.request.get(`/api/matches/${frozen.id}`)).json();
+    expect(finished.attempts).toHaveLength(2);
+    const expected = [[song.phrases[1].id, song.phrases[2].id], [song.phrases[3].id]];
+    for (const attempt of finished.attempts) {
+      expect(attempt.score.range).toEqual(range);
+      expect(attempt.score.phrases.map((p: any) => p.phrase_id)).toEqual(expected[attempt.slot]);
+    }
     for (const page of [host, guest]) {
       await expect(page.locator('.battle-headline')).toBeVisible();
       await expect(page.getByText(/Practice section/)).toHaveCount(2);

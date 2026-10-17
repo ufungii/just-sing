@@ -1,121 +1,73 @@
-/**
- * Online room end to end: two separate browser contexts (two guests, two cookie jars) on one server.
- * Host "E2E-Bot-<run>" creates a room, "E2E-Rival-<run>" joins by code, both pass the mic check and ready up, the host
- * starts, the host sings the good take, the rival the wrong-notes take. Fake mics work as in battle.spec.ts
- * (getUserMedia swapped per page, START clicked LEAD - COUNT_IN s after the stream opened).
- * Asserts both pages show the same winner (the host) and that the saved totals match the server.
- */
-import { chromium, expect, test, type Page } from '@playwright/test';
-import fs from 'node:fs';
-import path from 'node:path';
+import { chromium, expect, test } from '@playwright/test';
+import { duetPlayer, expectOnePlayback, expectOwnedScores, openOnlineDuet, schedules } from './duetHarness';
 
-const CLIP = process.env.E2E_CLIP ?? 'synthetic-demo';
-const LEAD = Number(process.env.E2E_LEAD ?? 6);
-const COUNT_IN = 3.15;
-const RUN = Date.now().toString(36).slice(-4); // cleanup_db.py only deletes names starting "E2E-"
-const HOST = `E2E-Bot-${RUN}`;
-const GUEST = `E2E-Rival-${RUN}`;
-
-async function newPlayer(browser: Awaited<ReturnType<typeof chromium.launch>>, baseURL: string, take: 'good' | 'wrong', errors: string[]) {
-  const page = await (await browser.newContext({ baseURL })).newPage();
-  page.on('pageerror', (e) => errors.push(String(e)));
-  page.on('console', (m) => m.type() === 'error' && !/status of (401|404)/.test(m.text()) && errors.push(m.text()));
-  await page.route('**/__take/*.wav', (route) => {
-    const file = path.basename(new URL(route.request().url()).pathname);
-    return route.fulfill({ body: fs.readFileSync(path.resolve(__dirname, 'takes', CLIP, file)), contentType: 'audio/wav' });
-  });
-  await page.addInitScript((t) => {
-    navigator.mediaDevices.getUserMedia = async () => {
-      const ctx = new AudioContext();
-      await ctx.resume();
-      const buf = await ctx.decodeAudioData(await (await fetch(`/__take/${t}.wav`)).arrayBuffer());
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      const dest = ctx.createMediaStreamDestination();
-      src.connect(dest);
-      src.start();
-      (window as any).__micOpen = performance.now();
-      return dest.stream;
-    };
-  }, take);
-  return page;
-}
-
-async function lobbyReady(page: Page) {
-  await page.getByRole('button', { name: 'TEST MIC' }).click();
-  await expect(page.getByText('Mic works!')).toBeVisible({ timeout: 15_000 });
-  await page.getByRole('button', { name: 'READY ✓' }).click();
-}
-
-async function singTurn(page: Page) {
-  await page.getByRole('button', { name: /SING ▶/ }).click();
-  const start = page.getByRole('button', { name: '▶ START', exact: true });
-  await expect(start).toBeVisible({ timeout: 20_000 });
-  await page.waitForFunction((ms) => performance.now() - (window as any).__micOpen >= ms, (LEAD - COUNT_IN) * 1000);
-  await start.click();
-}
-
-test('online room: good take beats wrong notes, both browsers agree', async ({ baseURL }) => {
-  test.setTimeout(300_000);
+/** Two contexts with deliberately different wall clocks, one server-scheduled continuous performance. */
+test('online duet: loaded barrier, synchronized handoffs and independent assigned scores', async ({ baseURL }) => {
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
-  const errors: string[] = [];
-  const a = await newPlayer(browser, baseURL!, 'good', errors);
-  const b = await newPlayer(browser, baseURL!, 'wrong', errors);
+  try {
+    const { page: host, errors: hostErrors } = await duetPlayer(browser, baseURL!);
+    const { page: guest, errors: guestErrors } = await duetPlayer(browser, baseURL!, 3_600_000);
+    const { song } = await openOnlineDuet(host, guest);
+    const hostPrepared = host.waitForResponse((r) => r.url().endsWith('/duet/ready'));
+    await host.getByRole('button', { name: 'READY TO SING' }).click();
+    const waiting = await (await hostPrepared).json();
+    expect(waiting.state).toBe('preparing'); expect(waiting.duet.start_at).toBeNull();
+    expect(await schedules(host)).toHaveLength(0);
+    const guestPrepared = guest.waitForResponse((r) => r.url().endsWith('/duet/ready'));
+    await guest.getByRole('button', { name: 'READY TO SING' }).click();
+    const frozen = await (await guestPrepared).json();
+    expect(frozen.state).toBe('active');
+    expect(frozen.attempts.every((a: any) => a.state === 'started')).toBe(true);
+    for (const page of [host, guest]) await expectOnePlayback(page, frozen.duet.start_at, 0, song.duration);
+    expect(Math.abs((await schedules(host))[0].scheduledEpoch - (await schedules(guest))[0].scheduledEpoch)).toBeLessThan(0.15);
+    // Both clients switch on the same clip timeline, without another click, mic open or audio start.
+    await Promise.all([host, guest].map((p) => expect(p.getByTestId('duet-current')).toHaveAttribute('data-slot', '1', { timeout: 25_000 })));
+    for (const page of [host, guest]) { expect(await schedules(page)).toHaveLength(2); await expect(page.getByTestId('duet-next')).toContainText('P1'); }
+    await host.screenshot({ path: 'e2e/artifacts/duet-online-handoff.png', mask: [host.locator('.sing-lyrics')] });
+    await Promise.all([host, guest].map((p) => expect(p.getByTestId('duet-current')).toHaveAttribute('data-slot', '0', { timeout: 20_000 })));
+    for (const page of [host, guest]) await expect(page.locator('.battle-headline')).toContainText(/WINS|TIE/, { timeout: 20_000 });
+    const final = await (await host.request.get(`/api/matches/${frozen.id}`)).json();
+    expectOwnedScores(final, song.phrases.map((p: any) => p.id));
+    expect(await host.locator('.battle-headline').innerText()).toBe(await guest.locator('.battle-headline').innerText());
+    for (const [slot, page] of [host, guest].entries()) {
+      const history = (await (await page.request.get('/api/history')).json())[0];
+      expect(history.total).toBe(final.attempts.find((a: any) => a.slot === slot).score.total);
+      expect(history.range).toBeNull(); expect(history.duet).toBe(true);
+      expect(await schedules(page)).toHaveLength(2);
+      expect(await page.evaluate(() => (window as any).__micOpens)).toBe(2);
+    }
+    expect([...hostErrors, ...guestErrors]).toEqual([]);
+  } finally { await browser.close(); }
+});
 
-  // Host creates the room.
-  await a.goto('/');
-  await a.getByText('ONLINE', { exact: true }).first().click();
-  const clips = await (await a.request.get('/api/clips')).json();
-  const title = clips.find((c: any) => c.id === CLIP).title;
-  await a.getByPlaceholder('e.g. Mina').fill(HOST);
-  await a.getByRole('button', { name: new RegExp(title.replace(/[()]/g, '.')) }).click();
-  await a.getByRole('button', { name: /CREATE ROOM/ }).click();
-  const code = (await a.getByTestId('room-code').innerText()).trim();
-  expect(code).toMatch(/^[A-Z0-9]{5}$/);
-
-  // A bad code gets a friendly error; the real one joins.
-  await b.goto('/');
-  await b.getByText('ONLINE', { exact: true }).first().click();
-  await b.getByPlaceholder('e.g. Mina').fill(GUEST);
-  await b.getByLabel('Room code').fill('ZZZZZ');
-  await b.getByRole('button', { name: 'JOIN', exact: true }).click();
-  await expect(b.getByText('No room with that code.')).toBeVisible();
-  await b.getByLabel('Room code').fill(code.toLowerCase());
-  await b.getByRole('button', { name: 'JOIN', exact: true }).click();
-  await expect(b.getByTestId('room-code')).toHaveText(code);
-  await expect(a.getByText(new RegExp(`${GUEST}.*not ready`))).toBeVisible(); // host sees the join live
-
-  await lobbyReady(a);
-  await lobbyReady(b);
-  await expect(a.getByText(new RegExp(`${GUEST}.*READY`))).toBeVisible();
-  await a.getByRole('button', { name: 'START ♪' }).click();
-
-  // Host sings; the rival sees live progress and badges, then gets the turn.
-  await singTurn(a);
-  await expect(b.getByText(new RegExp(`WAITING FOR ${HOST.toUpperCase()}`))).toBeVisible();
-  await expect(b.getByTestId('live-badges')).toContainText(/PERFECT|GREAT|OKAY|BAD|MISS/, { timeout: 60_000 });
-  await singTurn(b);
-
-  for (const p of [a, b]) await expect(p.locator('.battle-headline')).toContainText(/WINS|TIE/, { timeout: 120_000 });
-  const heads = [await a.locator('.battle-headline').innerText(), await b.locator('.battle-headline').innerText()];
-  await a.screenshot({ path: `artifacts/${CLIP}-online-results.png` });
-  expect(heads[0]).toBe(heads[1]);
-  expect(heads[0].toLowerCase()).toBe(`${HOST.toLowerCase()} wins!`);
-
-  // The server agrees: each browser's own history total is its seat's saved total, and the host won.
-  const [ha, hb] = [await (await a.request.get('/api/history')).json(), await (await b.request.get('/api/history')).json()];
-  expect(ha).toHaveLength(1);
-  expect(hb).toHaveLength(1);
-  const match = await (await a.request.get(`/api/matches/${ha[0].match_id}`)).json();
-  const total = (slot: number) => match.attempts.find((x: any) => x.slot === slot).score.total;
-  console.log('online totals', ha[0].total, hb[0].total, 'winner_slot', match.winner_slot);
-  expect(match.winner_slot).toBe(0);
-  expect(ha[0].total).toBe(total(0));
-  expect(hb[0].total).toBe(total(1));
-  expect(total(0)).toBeGreaterThan(total(1) + 10);
-  // Both pages display the server's saved totals (whole numbers), in seat order.
-  const shown = [Math.round(total(0)), Math.round(total(1))].map((n) => `Total score ${n} out of 100`);
-  for (const p of [a, b]) expect(await p.getByRole('img', { name: /^Total score/ }).evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))).toEqual(shown);
-  expect(errors, 'console/page errors').toEqual([]);
-  await browser.close();
+test('online duet: reload after shared start never replays one player, explicit restart resets both', async ({ baseURL }) => {
+  const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+  try {
+    const { page: host, errors: hostErrors } = await duetPlayer(browser, baseURL!);
+    const { page: guest, errors: guestErrors } = await duetPlayer(browser, baseURL!);
+    const { code } = await openOnlineDuet(host, guest);
+    await host.getByRole('button', { name: 'READY TO SING' }).click();
+    const prepared = guest.waitForResponse((r) => r.url().endsWith('/duet/ready'));
+    await guest.getByRole('button', { name: 'READY TO SING' }).click();
+    const frozen = await (await prepared).json();
+    await guest.waitForFunction((at) => (performance.timeOrigin + performance.now()) / 1000 > at + 0.2, frozen.duet.start_at);
+    await guest.reload();
+    await guest.getByText('ONLINE', { exact: true }).first().click();
+    await guest.getByLabel('Room code').fill(code);
+    await guest.getByRole('button', { name: 'JOIN', exact: true }).click();
+    await guest.getByRole('button', { name: 'READY TO SING' }).click();
+    await expect(guest.getByText('The shared start was missed. Restart the whole duet together.')).toBeVisible();
+    expect(await schedules(guest)).toHaveLength(0);
+    await guest.getByRole('button', { name: 'STOP DUET FOR RESTART', exact: true }).click();
+    await host.getByRole('button', { name: 'RESTART TOGETHER', exact: true }).click();
+    for (const page of [host, guest]) await expect(page.getByRole('button', { name: 'READY TO SING' })).toBeVisible();
+    // A fresh barrier exists, with no implicit playback after restarting.
+    const reloaded = host.waitForResponse((r) => r.url().endsWith('/duet/ready'));
+    await host.getByRole('button', { name: 'READY TO SING' }).click();
+    const fresh = await (await reloaded).json();
+    expect(fresh.id).not.toBe(frozen.id);
+    expect(fresh.state).toBe('preparing'); expect(fresh.duet.start_at).toBeNull();
+    expect(await schedules(guest)).toHaveLength(0);
+    expect([...hostErrors, ...guestErrors]).toEqual([]);
+  } finally { await browser.close(); }
 });
