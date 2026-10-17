@@ -1,13 +1,14 @@
-import { useRef, type KeyboardEvent, type PointerEvent } from 'react';
+import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import type { TimeRange } from '../../lib/types';
 import { boundaries, includedPhrases, snapBoundary } from './range';
 import './ClipTimeline.css';
 
 export interface TimelinePhrase { id: string; start: number; end: number }
-export interface TimelineLine { start: number; end: number; text: string }
+export interface TimelineLine { start: number; end: number; text: string; romanized?: string }
 
 /** Controlled, audio-independent timeline. All times stay relative to the original clip. */
-export function ClipTimeline({ duration, phrases, lines, range, onChange, onCommit, playhead, onSeek, disabled = false }: {
+export function ClipTimeline({ duration, phrases, lines, range, onChange, onCommit, playhead, onSeek, disabled = false,
+  overlay, onLineSelect, onLineMove, selectedLines, lineLabels }: {
   duration: number;
   phrases: TimelinePhrase[];
   lines: TimelineLine[];
@@ -18,8 +19,16 @@ export function ClipTimeline({ duration, phrases, lines, range, onChange, onComm
   playhead?: number | null;
   onSeek?: (time: number) => void;
   disabled?: boolean;
+  /** Author-only extensions. Existing player callers keep their behavior. */
+  overlay?: ReactNode;
+  onLineSelect?: (index: number, additive: boolean) => void;
+  onLineMove?: (index: number, start: number) => void;
+  selectedLines?: number[];
+  lineLabels?: string[];
 }) {
   const track = useRef<HTMLDivElement>(null);
+  const lineDrag = useRef<{ x: number; index: number; start: number } | null>(null);
+  const moved = useRef(false);
   const selection = range ?? { start: 0, end: duration };
   const selected = new Set(includedPhrases(phrases, range).map((p) => p.id));
   const pct = (t: number) => `${100 * t / duration}%`;
@@ -61,12 +70,32 @@ export function ClipTimeline({ duration, phrases, lines, range, onChange, onComm
     <div className="clip-timeline" aria-label="Clip timeline">
       <div className="clip-timeline__scroll">
         <div className="clip-timeline__canvas" style={{ minWidth: Math.max(640, duration * 28) }}>
-          <div className="clip-timeline__lyrics" style={{ height: Math.max(1, ends.length) * 52 }}>
+          {overlay}
+          <div className="clip-timeline__lyrics" style={{ height: Math.max(1, ends.length) * (onLineSelect ? 82 : 52) }}>
             {lines.map((line, i) => (
               <button key={i} type="button" className="clip-timeline__line" title={line.text}
-                style={{ left: pct(line.start), width: pct(line.end - line.start), top: rows[i] * 52 }}
-                onClick={() => onSeek?.(line.start)} disabled={!onSeek}>
-                <small>{line.start.toFixed(1)} s</small><span>{line.text}</span>
+                aria-pressed={onLineSelect ? selectedLines?.includes(i) : undefined}
+                data-owner={onLineSelect ? lineLabels?.[i]?.startsWith('Player 2') ? '2' : lineLabels?.[i]?.startsWith('Player 1') ? '1' : undefined : undefined}
+                style={{ left: pct(line.start), width: pct(line.end - line.start), top: rows[i] * (onLineSelect ? 82 : 52),
+                  height: onLineSelect ? 78 : undefined, touchAction: onLineMove ? 'none' : undefined }}
+                onPointerDown={(e) => { if (onLineMove) {
+                  lineDrag.current = { x: e.clientX, index: i, start: line.start }; moved.current = false;
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                } }}
+                onPointerUp={(e) => {
+                  const drag = lineDrag.current; lineDrag.current = null;
+                  if (drag && Math.abs(e.clientX - drag.x) > 3) {
+                    moved.current = true;
+                    const width = e.currentTarget.parentElement!.getBoundingClientRect().width;
+                    onLineMove?.(i, drag.start + (e.clientX - drag.x) / width * duration);
+                  }
+                }}
+                onPointerCancel={() => { lineDrag.current = null; }}
+                onClick={(e) => { if (moved.current) { moved.current = false; return; }
+                  onLineSelect?.(i, e.ctrlKey || e.metaKey || e.shiftKey); onSeek?.(line.start);
+                }} disabled={!onSeek && !onLineSelect}>
+                <small>{line.start.toFixed(1)} s {lineLabels?.[i]}</small><span>{line.text}</span>
+                {onLineSelect && <span>{line.romanized}</span>}
               </button>
             ))}
           </div>
@@ -93,7 +122,7 @@ export function ClipTimeline({ duration, phrases, lines, range, onChange, onComm
           <div className="clip-timeline__ruler"><span>0 s</span><span>{duration.toFixed(1)} s</span></div>
         </div>
       </div>
-      <p className="solo-hint">{editable ? 'Drag the ends, or focus an end and use the arrow keys. Ends snap to whole phrases. Scroll sideways to see more.' : 'The host chooses the section for both singers.'}</p>
+      <p className="solo-hint">{onLineMove ? 'Drag a lyric block to move the line. Scroll sideways to see more.' : editable ? 'Drag the ends, or focus an end and use the arrow keys. Ends snap to whole phrases. Scroll sideways to see more.' : 'The host chooses the section for both singers.'}</p>
     </div>
   );
 }
