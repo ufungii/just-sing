@@ -9,19 +9,8 @@ import { ApiError, asGuest, getClips, getManifest, savedName, submitPractice } f
 import type { ClipSummary, Practice as PracticeResult, Song } from '../../lib/types';
 import { Notice, Panel, PixelButton, ScreenShell, Segmented } from '../../ui';
 import { Recorder } from './Recorder';
+import { practicePhrases } from './eligibility';
 import './Practice.css';
-
-/**
- * Display-only bands for colouring word chips. These are NOT validated thresholds: the scorer's
- * 0-100 scale has not been calibrated against a fluent reviewer, so they only group the numbers.
- */
-const WORD_BANDS = [
-  { min: 80, label: 'Nice!', kao: '☆', tone: 'good' },
-  { min: 55, label: 'Almost', kao: '(^_^)', tone: 'mid' },
-  { min: 0, label: 'Try again', kao: '(・_・;)', tone: 'low' },
-] as const;
-
-const bandFor = (score: number) => WORD_BANDS.find((b) => score >= b.min) ?? WORD_BANDS[WORD_BANDS.length - 1];
 
 type Check =
   | { state: 'idle' }
@@ -43,6 +32,8 @@ function describeError(e: unknown): { message: string; retry: boolean } {
       return { message: "The server couldn't read that recording. Re-record and try again.", retry: false };
     case 'network':
       return { message: "Can't reach the server. Check the connection and try again.", retry: true };
+    case 'practice_not_supported':
+      return { message: 'Choose a Korean-only line for spoken practice.', retry: false };
     case 'phrase_not_found':
       return { message: 'The server does not know this line any more. Pick the line again.', retry: false };
     default:
@@ -102,7 +93,7 @@ export function Practice() {
       .then((s) => {
         if (!live) return;
         setSong(s);
-        setPhraseId(s.phrases[0]?.id ?? null);
+        setPhraseId(practicePhrases(s)[0]?.id ?? null);
       })
       .catch((e) => live && setSongError(e instanceof ApiError ? e.message : 'Could not load this clip.'));
     return () => {
@@ -113,7 +104,8 @@ export function Practice() {
   // A new line means a new take and fresh feedback.
   useEffect(() => replaceTake(null), [clipId, phraseId]);
 
-  const phrase = song?.phrases.find((p) => p.id === phraseId) ?? null;
+  const availablePhrases = song ? practicePhrases(song) : [];
+  const phrase = availablePhrases.find((p) => p.id === phraseId) ?? null;
   const line = phrase && song ? song.lines[phrase.line_index] : null;
 
   async function runCheck() {
@@ -172,7 +164,10 @@ export function Practice() {
             {!song && !songError && <Notice>Loading lines…</Notice>}
             {song && (
               <ol className="practice-lines">
-                {song.phrases.map((p, i) => {
+                {availablePhrases.length === 0 && (
+                  <li>No Korean-only spoken-practice lines are available for this clip. Choose another clip.</li>
+                )}
+                {availablePhrases.map((p, i) => {
                   const l = song.lines[p.line_index];
                   return (
                     <li key={p.id}>
@@ -273,20 +268,25 @@ function Feedback({ check, onRetry }: { check: Check; onRetry: () => void }) {
       </Notice>
     );
   }
+  const lowest = Math.min(...result.words.map(w => w.score));
+  const highest = Math.max(...result.words.map(w => w.score));
   return (
-    <ul className="practice-words" aria-label="Word feedback">
-      {result.words.map((w, i) => {
-        const band = bandFor(w.score);
-        return (
-          <li key={i} className={`practice-word practice-word--${band.tone}`}>
-            <span className="practice-word__ko" lang="ko">{w.text}</span>
-            <span className="practice-word__label">
-              <span className="practice-kao" aria-hidden="true">{band.kao}</span> {band.label}
-            </span>
-            <span className="practice-word__score">{Math.round(w.score)}</span>
-          </li>
-        );
-      })}
-    </ul>
+    <>
+      <p>Model confidence, not percent correct. Start by reviewing the lowest-confidence words.</p>
+      <ul className="practice-words" aria-label="Word feedback">
+        {result.words.map((w, i) => {
+          const review = lowest < highest && w.score === lowest;
+          return (
+            <li key={i} className={`practice-word practice-word--${review ? 'low' : 'mid'}`}>
+              <span className="practice-word__ko" lang="ko">{w.text}</span>
+              <span className="practice-word__label">
+                {review ? 'Review first' : 'Model confidence'}
+              </span>
+              <span className="practice-word__score" title="Raw model confidence; not pronunciation accuracy">{Math.round(w.score)}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
