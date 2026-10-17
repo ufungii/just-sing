@@ -10,6 +10,7 @@ import { asGuest, getCoach, rematch } from '../../lib/api';
 import { useNav, type SingResult } from '../../routes';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
 import { PhraseChips, ScoreSummary } from './PhraseChips';
+import { useLyricCheck, type LyricState } from './useLyricCheck';
 import { useManifest } from './useManifest';
 import './Results.css';
 
@@ -27,6 +28,7 @@ export function Results({ result }: { result: SingResult }) {
 
   const song = useManifest(setup.clipId);
   const coach = useCoach(saved ? setup.match?.attemptId ?? null : null);
+  const lyrics = useLyricCheck(setup.clipId, result.take);
   const [starting, setStarting] = useState(false);
 
   /** Rematch on the server when we can, so the next take saves too; otherwise sing unsaved. */
@@ -75,7 +77,8 @@ export function Results({ result }: { result: SingResult }) {
       </div>
 
       <Panel label="PHRASES">
-        <PhraseChips phrases={phrases} song={song} />
+        <LyricSummary lyrics={lyrics} />
+        <PhraseChips phrases={phrases} song={song} lyrics={lyrics.state === 'ok' ? lyrics.lines : undefined} />
       </Panel>
 
       <div className="results-actions">
@@ -94,6 +97,21 @@ export function Results({ result }: { result: SingResult }) {
         Ratings are provisional: the thresholds will be recalibrated once the reference scoring engine and its evals land.
       </p>
     </ScreenShell>
+  );
+}
+
+/** One line above the phrase rows: the lyric check's state, plus what it is and isn't. */
+function LyricSummary({ lyrics }: { lyrics: LyricState }) {
+  if (lyrics.state === 'none') return null;
+  if (lyrics.state === 'loading') return <p className="results-lyrics" aria-live="polite">checking your lyrics against the original singer… (・_・;)</p>;
+  if (lyrics.state === 'offline') return <p className="results-lyrics">lyric check is offline right now ♪ your scores are all here, though!</p>;
+  const graded = [...lyrics.lines.values()].filter((s) => s === 'match' || s === 'unclear');
+  const matched = graded.filter((s) => s === 'match').length;
+  return (
+    <p className="results-lyrics" aria-live="polite">
+      {graded.length ? <><strong>{matched} of {graded.length}</strong> sung lines sounded like the original lyrics ♡ </> : <>no lines long enough to check this time. </>}
+      <span className="results-lyrics__fine">Compared with the original singer by a speech model. Automated, not checked by a fluent speaker, and not part of your score.</span>
+    </p>
   );
 }
 

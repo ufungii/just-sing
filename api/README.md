@@ -25,14 +25,14 @@ pytest api                                # tests; the DB tests need DATABASE_UR
 
 Interactive docs: `http://localhost:8000/docs`. Without `DATABASE_URL`, the catalog endpoints still work and
 the database tests are skipped. Without Auth0 values, guests still work and bearer tokens get `auth_unavailable`.
-Without a pronunciation scorer (the default), `/api/practice` answers `status: "unavailable"`.
+Without a pronunciation scorer (the default), `/api/practice` and `/api/lyric-check` answer `status: "unavailable"`.
 
 ## Environment
 
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | `postgresql+psycopg://...` (SQLAlchemy needs that scheme, not `postgres://`). Server-side only. |
-| `PRONUNCIATION_SCORER` | `1` loads `ml.pronunciation.api_scorer.PronunciationScorer` at startup and warms it (about 30 s, needs the speech environment). Anything else: practice is `unavailable`. If loading fails, the error is logged and practice stays `unavailable`. |
+| `PRONUNCIATION_SCORER` | `1` loads `ml.pronunciation.api_scorer.PronunciationScorer` at startup and warms it (about 30 s, needs the speech environment). Anything else: practice is `unavailable`. If loading fails, the error is logged and practice stays `unavailable`. The same flag starts the lyric check (same model, loaded once); it also needs `ml/data/<clip>/lyric_fingerprints.npz` for each clip, made by ML A's pipeline step, and answers `unavailable` for clips without one. |
 | `AUTH0_DOMAIN` | Tenant domain, no `https://`. |
 | `AUTH0_AUDIENCE` | The Auth0 API identifier. Login requests must pass the same `audience`, or Auth0 issues an opaque token we cannot verify. |
 | `COOKIE_SECURE` | `1` on public HTTPS so the guest cookie is Secure. Leave `0` on `http://localhost`. |
@@ -129,6 +129,7 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | GET | `/api/history`, `/api/leaderboard?clip_id=` | One row per match: `total` is your own score (null in a local battle; see `players`). Leaderboard: best solo totals of logged-in players on the current clip version |
 | POST | `/api/turns/{attempt_id}/coach` | Coaching blurb for a finished turn: `{status: ok\|unavailable, coach_blurb}`. Generated once, then cached. |
 | POST | `/api/practice` | Multipart: `clip_id`, `phrase_id`, `audio` (WAV/MP3/WebM/Ogg, max 5 MB and 15 s) |
+| POST | `/api/lyric-check` | Multipart: `clip_id`, `offset_s` (time in the recording of clip time 0, latency already removed), `audio` (the solo take, max 12 MB and 330 s). Returns `contracts/lyric_check.example.json`: per lyric line `match` / `unclear` / `not_sung` / `not_covered`. Display only, never part of a score; nothing is stored. Shares the practice model and its busy lock (429 `pronunciation_busy`). Takes about 10 s per 35 s of audio on CPU. |
 | POST | `/api/rooms`, `/api/rooms/join` | Create `{clip_id, duet: true}`; join `{code}` |
 | GET | `/api/rooms/{id}` | Snapshot (members only) |
 | POST | `/api/rooms/{id}/ready`, `/clip`, `/range`, `/start`, `/rematch`, `/abort` | Lobby and lifecycle (`clip`, `range`, `start`, `rematch`, `abort` are host-only) |

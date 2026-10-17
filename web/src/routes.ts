@@ -57,6 +57,8 @@ export interface SingResult {
   saved: Score | null;
   /** Why saving failed, for a friendly notice. */
   saveError: string | null;
+  /** Solo only: the singer's voice for the lyric check (offsetS = time in the WAV of clip time 0). */
+  take?: { wav: Blob; offsetS: number } | null;
 }
 
 export type Route =

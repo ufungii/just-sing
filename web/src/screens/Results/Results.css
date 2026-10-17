@@ -78,3 +78,13 @@
 @media (max-width: 1100px) {
   .results-top { grid-template-columns: 1fr; }
 }
+
+.results-lyrics {
+  margin: 0 0 14px;
+  font-size: 17px;
+}
+.results-lyrics__fine {
+  display: block;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
