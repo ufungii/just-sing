@@ -7,6 +7,14 @@ import { ComingSoon } from './screens/ComingSoon';
 export function App() {
   const [screen, setScreen] = useState<Screen>('home');
 
-  if (screen === 'home') return <Home onNavigate={setScreen} />;
+  const navigate = (next: Screen) => {
+    if (next === 'solo') {
+      window.location.assign('/karaoke/live/');
+      return;
+    }
+    setScreen(next);
+  };
+
+  if (screen === 'home') return <Home onNavigate={navigate} />;
   return <ComingSoon screen={screen} onBack={() => setScreen('home')} />;
 }
