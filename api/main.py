@@ -1,4 +1,7 @@
 """FastAPI entry point. Run from the repo root: uvicorn api.main:app --reload"""
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
@@ -6,8 +9,16 @@ from fastapi.responses import FileResponse
 from .clip_catalog import CATALOG, CATALOG_DIR
 from .errors import ApiError, error_response
 from .models import ClipSummary, Song
+from .retention import cleanup_loop
 
-app = FastAPI(title="K-Pop Karaoke API")
+@asynccontextmanager
+async def lifespan(_):
+    task = asyncio.create_task(cleanup_loop())
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="K-Pop Karaoke API", lifespan=lifespan)
 
 
 @app.exception_handler(ApiError)
