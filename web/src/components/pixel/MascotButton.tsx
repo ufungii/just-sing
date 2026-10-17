@@ -5,15 +5,17 @@ type MascotButtonProps = {
   label: string;
   lines: readonly string[];
   className?: string;
-  /** Extra pixels below the button, matching each mascot's spot in the mockup. */
-  marginBottom?: number;
   /** Decorations positioned against the button (e.g. rising notes). */
   extras?: ReactNode;
   children: ReactNode;
 };
 
-/** Shared mascot shell: a real button with a speech bubble that cycles through `lines` on click. */
-export function MascotButton({ label, lines, className, marginBottom, extras, children }: MascotButtonProps) {
+/**
+ * Shared mascot shell: a real button with a speech bubble that cycles through `lines` on click.
+ * The bubble floats above the sprite (absolutely positioned), so a longer line never changes the
+ * button's size and never nudges the layout around it.
+ */
+export function MascotButton({ label, lines, className, extras, children }: MascotButtonProps) {
   const [n, setN] = useState(0);
   return (
     <button
@@ -21,7 +23,6 @@ export function MascotButton({ label, lines, className, marginBottom, extras, ch
       className={className ? `px-mascot ${className}` : 'px-mascot'}
       aria-label={label}
       onClick={() => setN((i) => i + 1)}
-      style={{ marginBottom }}
     >
       <span className="px-bubble" aria-live="polite">
         {lines[n % lines.length]}

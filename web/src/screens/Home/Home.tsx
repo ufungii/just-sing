@@ -143,11 +143,8 @@ export function Home({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
       <SettingsDialog open={dialog === 'settings'} onClose={() => setDialog(null)} />
 
       <div className="home-inner">
-        <header className="home-header">
-          <span className="home-kao home-kao--rose" aria-hidden="true">
-            ♬･˚｡♪ ˚☆˚♬˚.
-          </span>
-          {account.enabled && !account.loading && (
+        {account.enabled && !account.loading && (
+          <header className="home-header">
             <div className="home-account">
               {account.name ? (
                 <>
@@ -161,27 +158,33 @@ export function Home({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
                 </>
               )}
             </div>
-          )}
-        </header>
+          </header>
+        )}
 
         <section className="home-hero">
+          {/* Three columns: the mascots sit in their own cells, so poking one never moves the title. */}
           <div className="home-stage">
-            <MicChan className="home-mascot home-mascot--mic" />
+            <div className="home-stage__side home-stage__side--left">
+              <MicChan className="home-mascot" />
+            </div>
 
             <PixelLogo />
 
-            <BoomboxKun className="home-mascot home-mascot--box" />
+            <div className="home-stage__side home-stage__side--right">
+              <BoomboxKun className="home-mascot" />
+            </div>
           </div>
 
-          <div className="home-banner">
-            <span lang="ko" className="home-banner__ko">
+          {/* Plain text, not a box: nothing here is clickable. */}
+          <p className="home-pop">
+            <span lang="ko" className="home-pop__ko">
               노래해요!
             </span>
-            <span className="home-banner__en">K-POP KARAOKE</span>
+            <span className="home-pop__en">K-POP KARAOKE</span>
             <span className="home-kao home-kao--soft" aria-hidden="true">
               ヾ(≧▽≦*)o
             </span>
-          </div>
+          </p>
           <p className="home-tagline">
             <span className="home-kao home-kao--hot" aria-hidden="true">
               ☆˚･♡
@@ -214,12 +217,6 @@ export function Home({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
           ))}
         </nav>
 
-        <footer className="home-footer">
-          <span className="home-kao home-kao--soft" aria-hidden="true">
-            ☆｡˚･｡˚★｡˚･｡☆
-          </span>
-          <span className="home-footer__note">♡ FREE PLAY ♡ HEADPHONES ON ♡</span>
-        </footer>
       </div>
     </main>
   );

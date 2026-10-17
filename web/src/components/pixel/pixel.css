@@ -70,18 +70,56 @@
 .px-mascot-body { display: block; }
 .px-mascot:active .px-mascot-body { transform: scale(0.9); }
 
+/*
+ * Speech bubble: floats above the sprite (out of the layout flow) with a rounded body and a
+ * little pixel tail pointing down at the mascot. Plum outline, white fill, soft drop shadow.
+ */
 .px-bubble {
-  position: relative;
+  position: absolute;
+  bottom: calc(100% + 18px);
+  left: 50%;
+  z-index: 2;
   display: block;
-  margin-bottom: 8px;
-  padding: 6px 10px;
-  background: var(--paper);
+  padding: 7px 14px 8px;
   border: var(--border-thin) solid var(--ink);
-  box-shadow: 4px 4px 0 var(--ink);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 0 rgb(59 35 64 / 0.22);
   font-family: var(--font-kao);
   font-size: 16px;
   white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
+/* Tail: an outlined triangle (::before) with the white fill on top (::after). */
+.px-bubble::before,
+.px-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-style: solid;
+  border-color: transparent;
+}
+.px-bubble::before {
+  top: 100%;
+  border-width: 14px 11px 0;
+  border-top-color: var(--ink);
+}
+.px-bubble::after {
+  top: calc(100% - 1px);
+  border-width: 9px 7px 0;
+  border-top-color: #fff;
+}
+/* A new line pops in. */
+@keyframes px-bubble-pop {
+  0% { transform: translateX(-50%) scale(0.85); }
+  60% { transform: translateX(-50%) scale(1.06); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+.px-mascot:active .px-bubble { animation: px-bubble-pop 0.25s steps(3); }
 
 .px-ground-shadow {
   display: block;
@@ -103,3 +141,17 @@
   pointer-events: none;
 }
 .px-sky > * { position: absolute; }
+
+/* Floating text notes and stars: drift up a little, sway, and fade in and out. */
+@keyframes px-float {
+  0% { transform: translate(0, 12px) rotate(-8deg); opacity: 0; }
+  20% { opacity: 0.85; }
+  50% { transform: translate(6px, -10px) rotate(6deg); }
+  80% { opacity: 0.85; }
+  100% { transform: translate(-4px, -34px) rotate(-6deg); opacity: 0; }
+}
+.px-float {
+  font-family: var(--font-kao);
+  line-height: 1;
+  animation: px-float 7s steps(14) infinite;
+}
