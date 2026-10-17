@@ -37,7 +37,29 @@ Without a pronunciation scorer, `/api/practice` answers `status: "unavailable"`.
 | `COOKIE_SECURE` | `1` on public HTTPS so the guest cookie is Secure. Leave `0` on `http://localhost`. |
 | `GUEST_TTL_DAYS` | Guest session lifetime, default 7. Expired guests and their data are deleted hourly. |
 | `ALLOWED_ORIGINS` | Extra browser origins allowed to open WebSockets. The server's own host is always allowed. |
+| `WEB_DIST` | Folder with the built frontend. Default `web/dist`. |
 | `RECONNECT_GRACE_SECONDS` | Extra time after a clip ends before a started turn is treated as lost, default 60. |
+
+## Frontend: one origin
+
+The server also serves the built frontend, so the browser (and Electron, which loads the server's URL) talks to one
+origin: the guest cookie works and no CORS setup is needed.
+
+```bash
+cd web && npm run build        # produces web/dist
+uvicorn api.main:app           # now http://localhost:8000/ is the app, /api and /ws are the backend
+```
+
+Rules: a real file in `web/dist` is served as is; any other non-API path returns `index.html` so client-side routes
+survive a reload; unknown `/api/...` paths return the normal JSON error. If `web/dist` does not exist, `/` answers
+`frontend_not_built`.
+
+For hot-reload development, run `npm run dev` and proxy the backend so the page is still same-origin (otherwise the
+cookie will not be sent). In `web/vite.config.ts`:
+
+```ts
+server: { proxy: { "/api": "http://localhost:8000", "/ws": { target: "ws://localhost:8000", ws: true } } }
+```
 
 ## Conventions
 

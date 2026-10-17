@@ -53,3 +53,24 @@ def test_ready_reports_real_state():
     body = client.get("/api/ready").json()
     assert body["database"] == ("ok" if os.getenv("DATABASE_URL") else "not_configured")
     assert body["pronunciation"] == "unavailable"  # no scorer attached yet
+
+
+def test_frontend_is_served_same_origin(tmp_path, monkeypatch):
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "index.html").write_text("<html>app</html>")
+    (tmp_path / "assets" / "app.js").write_text("console.log(1)")
+    (tmp_path.parent / "secret.txt").write_text("nope")
+    monkeypatch.setenv("WEB_DIST", str(tmp_path))
+    assert client.get("/").text == "<html>app</html>"
+    assert client.get("/assets/app.js").text == "console.log(1)"
+    assert client.get("/lobby/ABCDE").text == "<html>app</html>"  # client-side route survives a reload
+    assert client.get("/%2e%2e/secret.txt").text == "<html>app</html>"  # no escaping the build folder
+    assert client.get("/api/health").json() == {"status": "ok"}  # API routes still win
+    r = client.get("/api/nope")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
+
+
+def test_missing_frontend_build_is_an_actionable_error(tmp_path, monkeypatch):
+    monkeypatch.setenv("WEB_DIST", str(tmp_path / "nothing"))
+    r = client.get("/")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "frontend_not_built"
