@@ -207,8 +207,10 @@ saved and also appears as `coach_blurb` on the attempt's score in `GET /api/matc
 - **ML A (pronunciation):** set `api.practice.scorer` to an object with a `provider` string and
   `assess(wav_path, expected_text) -> [{"text": ..., "score": 0-100}]`. It receives 16 kHz mono WAV. Raise on failure;
   the API reports `status: "error"` (never a score). Only one assessment runs at a time.
-- **ML B (scoring):** `play.py` recomputes totals with a **stand-in** (duration-weighted mean of phrase pitch and timing,
-  80/20). Replace it with a call into `ml/scoring` once that exists, and keep `scoring_version` in step.
+- **ML B (scoring):** `play.py` recomputes totals with a **stand-in** (duration-weighted mean of phrase pitch and timing).
+  The weights, tie precision and `scoring_version` are read from [`contracts/scoring.config.json`](../contracts/scoring.config.json),
+  the one file the Python engine and the TypeScript port should read too. Replace the stand-in with a call into
+  `ml/scoring` once that exists; change values only in that file, and bump `scoring_version` when you do.
 - **Real clips:** put `manifest.json` and the instrumental in `api/catalog/<id>/`, then run `python -m api.seed`.
   Audio is gitignored; never commit copyrighted audio.
 

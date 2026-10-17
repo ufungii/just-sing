@@ -1,11 +1,13 @@
 """Guest sessions and solo matches. A solo run is a match with one player slot; the browser
 rates phrases locally and submits the final phrase results once, with an idempotency key."""
 import hashlib
+import json
 import logging
 import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, Request, Response
 from pydantic import BaseModel, Field
@@ -35,11 +37,14 @@ def notify(s: Session, match: Match, event: str, attempt: TurnAttempt | None = N
         except Exception:
             log.exception("match hook failed")
 
-SCORING_VERSION = "0.1.0"
+# Scoring numbers come from the shared contracts file, never from code (CLAUDE.md), so the API, the
+# Python reference engine and the TypeScript port cannot drift apart.
+SCORING = json.loads((Path(__file__).parents[1] / "contracts" / "scoring.config.json").read_text(encoding="utf-8"))
+assert abs(sum(SCORING["total_weights"].values()) - 1) < 1e-9, "total_weights must sum to 1"
+SCORING_VERSION = SCORING["scoring_version"]
 GUEST_TTL = timedelta(days=int(os.getenv("GUEST_TTL_DAYS", "7")))
-TIE_DECIMALS = 1  # totals equal at this display precision are a tie
+TIE_DECIMALS = SCORING["battle"]["tie_decimals"]  # totals equal at this display precision are a tie
 RECONNECT_GRACE = timedelta(seconds=int(os.getenv("RECONNECT_GRACE_SECONDS", "60")))
-PITCH_WEIGHT = 0.8  # CLAUDE.md default, 80% pitch / 20% timing
 
 
 def get_db():
@@ -257,7 +262,8 @@ def submit_result(attempt_id: uuid.UUID, body: ResultIn, idempotency_key: str = 
     total_time = sum(durations.values())
     mean = lambda f: sum(f(p) * durations[p.phrase_id] for p in body.phrases) / total_time
     attempt.pitch, attempt.timing = round(mean(lambda p: p.pitch), 2), round(mean(lambda p: p.timing), 2)
-    attempt.total = round(PITCH_WEIGHT * attempt.pitch + (1 - PITCH_WEIGHT) * attempt.timing, 2)  # no float noise
+    w = SCORING["total_weights"]
+    attempt.total = round(w["pitch"] * attempt.pitch + w["timing"] * attempt.timing, 2)  # no float noise
     attempt.phrase_results = [p.model_dump() for p in body.phrases]
     attempt.idempotency_key, attempt.state = idempotency_key, "accepted"
     attempt.completed_at = datetime.now(timezone.utc)
