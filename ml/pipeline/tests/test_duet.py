@@ -1,7 +1,7 @@
 import hashlib
 import unittest
 
-from ..duet import section_plan, assign_sections, rebase_plan
+from ..duet import section_plan, assign_sections, rebase_plan, balanced_sections
 
 
 class DuetSectionsTest(unittest.TestCase):
@@ -51,3 +51,32 @@ class DuetSectionsTest(unittest.TestCase):
         sections, fallback = assign_sections(self.phrases[:1], plan, short_clip=True)
         self.assertEqual(sections[0]['slot'], 1)
         self.assertFalse(fallback)
+
+    def test_each_verse_and_chorus_gets_two_equal_halves(self):
+        weights = {p['id']: 2 for p in self.phrases}
+        sections, report = balanced_sections(self.phrases, section_plan(self.track), weights)
+        self.assertEqual(len(sections), 6)
+        for index in range(3):
+            pair = sections[2 * index:2 * index + 2]
+            self.assertEqual({s['slot'] for s in pair}, {0, 1})
+            self.assertEqual(report[index]['scoreable_seconds'], [4, 4])
+
+    def test_balance_uses_voiced_time_and_keeps_split_line_phrases_together(self):
+        phrases = self.phrases[:4] + [{**self.phrases[3], 'id': 'p3b', 'start': 11, 'end': 11.5}]
+        weights = dict(p0=6, p1=2, p2=2, p3=1, p3b=1)
+        sections, _ = balanced_sections(phrases, section_plan(self.track), weights)
+        self.assertEqual(sections[0]['phrase_ids'], ['p0'])
+        self.assertEqual(sections[1]['phrase_ids'], ['p1', 'p2', 'p3', 'p3b'])
+
+    def test_unequal_line_lengths_balance_across_sections_deterministically(self):
+        weights = {p['id']: (3 if p['line_index'] % 4 == 0 else 2) for p in self.phrases}
+        sections, report = balanced_sections(self.phrases, section_plan(self.track), weights)
+        self.assertEqual([r['difference_seconds'] for r in report], [1, 1, 1])
+        totals = [sum(weights[pid] for s in sections if s['slot'] == slot for pid in s['phrase_ids']) for slot in (0, 1)]
+        self.assertEqual(abs(totals[0] - totals[1]), 1)
+        self.assertEqual((sections, report), balanced_sections(self.phrases, section_plan(self.track), weights))
+
+    def test_single_line_section_is_reported_without_splitting_the_line(self):
+        sections, report = balanced_sections(self.phrases[:1], section_plan(self.track), {'p0': 2})
+        self.assertEqual(len(sections), 1)
+        self.assertFalse(report[0]['both_players'])
