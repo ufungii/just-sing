@@ -41,7 +41,7 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 const GUIDE_KEY = 'just-sing.guide';
 
-/** Guide vocals default to off at 60%; the last choice is remembered. */
+/** Guide vocals default to on at 50%; the last choice is remembered. */
 function loadGuide(): { on: boolean; vol: number } {
   try {
     const g = JSON.parse(localStorage.getItem(GUIDE_KEY) ?? 'null');
@@ -49,7 +49,7 @@ function loadGuide(): { on: boolean; vol: number } {
   } catch {
     // no storage or bad JSON
   }
-  return { on: false, vol: 0.6 };
+  return { on: true, vol: 0.5 };
 }
 
 export function Sing({ setup }: { setup: SingSetup }) {
