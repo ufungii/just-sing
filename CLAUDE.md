@@ -119,7 +119,7 @@ contracts/         example files, schemas/Pydantic models, shared test fixtures
 
 ## Hard rules
 
-- **The repo is public.** Never commit copyrighted audio or video (no mp3/wav/flac/mp4/webm), model weights, or secrets. `ml/data/` is gitignored. Demo songs stay local; the public repo ships the processing scripts and royalty-free/CC test audio. The **deployed public instance must not serve copyrighted audio**; copyrighted demo clips run only from a team machine, and the public deployment ships a CC/royalty-free clip. A tunnel from a team laptop is a public URL: keep it out of the README and Devpost, and make the royalty-free clip the always-on default.
+- **The repo is public.** Never commit audio or video (no mp3/wav/flac/mp4/webm), model weights, or secrets. `ml/data/` is gitignored; audio reaches the server by copying it into `ml/data/<song_id>/` (see `api/scripts/fetch_drive_audio.sh`).
 - Never commit API keys. Use `.env` (gitignored) and keep `.env.example` with fake values. Keep `DATABASE_URL` and API keys server-side only.
 - Judges read the code and the git history. Write clear, commented, well-named code. Make small, frequent commits with meaningful messages. Never create filler commits.
 - Do the heavy ML offline. Runtime scoring must be fast enough for a live demo.
@@ -162,4 +162,4 @@ State as of 2026-10-17, from the merged work; most of it is not yet proven end t
 - Briefly state your plan before large changes, then do the work.
 - Keep changes scoped to the task. Prefer simple, readable solutions over clever ones.
 - Run code and tests when you can instead of assuming they pass. Tell me plainly what you verified and what you did not; separate measured facts, chosen defaults, and unverified assumptions.
-- If a request conflicts with the rules above (especially copyrighted audio or secrets in the repo), say so and suggest the safe alternative.
+- If a request conflicts with the rules above (especially secrets in the repo), say so and suggest the safe alternative.
