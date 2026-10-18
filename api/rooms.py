@@ -417,8 +417,11 @@ def _ws_slot(token: str | None, bearer: str | None, room_id: uuid.UUID) -> int |
     with Session(get_engine()) as s:
         guest = None
         if bearer:
-            guest = s.scalar(select(GuestSession).where(GuestSession.auth0_sub == verify_bearer(bearer)))
-        elif token:
+            try:
+                guest = s.scalar(select(GuestSession).where(GuestSession.auth0_sub == verify_bearer(bearer)))
+            except ApiError:
+                guest = None  # Auth0 off or a bad token: fall back to the guest cookie; still closed if that is bad too
+        if guest is None and token:
             guest = s.scalar(select(GuestSession).where(GuestSession.token_hash == play._hash(token),
                                                         GuestSession.expires_at > datetime.now(timezone.utc)))
         return guest and s.scalar(select(RoomMember.slot).where(RoomMember.room_id == room_id,
@@ -443,10 +446,7 @@ async def room_socket(ws: WebSocket, room_id: uuid.UUID):
     # query string would end up in server access logs.
     protos = [p.strip() for p in ws.headers.get("sec-websocket-protocol", "").split(",")]
     bearer = protos[1] if len(protos) == 2 and protos[0] == "bearer" else None
-    try:
-        slot = await asyncio.to_thread(_ws_slot, ws.cookies.get("guest_token"), bearer, room_id)
-    except ApiError:
-        slot = None
+    slot = await asyncio.to_thread(_ws_slot, ws.cookies.get("guest_token"), bearer, room_id)
     if slot is None:
         return await ws.close(code=4403)  # not logged in, or not in this room
 
