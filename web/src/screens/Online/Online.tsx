@@ -105,6 +105,7 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gone, setGone] = useState<string | null>(null);
+  const [voiceMuted, setVoiceMuted] = useState(false);
 
   // Connect once, and seed with a plain GET so the screen never waits on the socket.
   useEffect(() => {
@@ -220,6 +221,11 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
               <Segmented label="Voice range" options={REGISTERS} value={register} onChange={setRegister} />
             </Panel>
             <Panel tone="sky" label="MIC CHECK">
+              <p className="solo-hint">Headphones required. During the duet, your voice is shared live with the other player in your sections. It is not recorded. Muting sharing keeps your local scoring active.</p>
+              <PixelButton size="sm" aria-label="Mute my mic to opponent" aria-pressed={voiceMuted}
+                tone={voiceMuted ? 'paper' : 'hot'} onClick={() => setVoiceMuted((v) => !v)}>
+                {voiceMuted ? 'MY VOICE MUTED' : 'SHARING MY VOICE'}
+              </PixelButton>
               <MicCheck onPassedChange={setMicOk} />
             </Panel>
             <Panel tone="lav" label="TIMING CHECK (OPTIONAL)">
@@ -278,7 +284,8 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
       </ScreenShell>
     );
     return <Duet key={match.id} setup={{ matchId: match.id, clipId: snap.clip_id, registers: [register, register],
-      calibrationOffset: offset, online: { roomId: room.id, slot: room.slot } }} onLeave={leave} />;
+      calibrationOffset: offset, online: { roomId: room.id, slot: room.slot } }} onLeave={leave}
+      voiceMuted={voiceMuted} onVoiceMuted={setVoiceMuted} />;
   }
 
   // ---- playing: my turn, or waiting for the other singer ----
