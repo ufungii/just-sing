@@ -17,7 +17,7 @@ type CardDef = Pick<KeyCardProps, 'title' | 'sub' | 'kao' | 'icon' | 'color'> & 
 
 // Kaomoji here use only characters the bundled DotGothic16 subset contains (no ω, ◕, ✧, ⋆, ₊),
 // otherwise the browser falls back to another font for single glyphs and they look broken.
-// Local karaoke (one singer, or 1P vs 2P on one laptop) and pronunciation practice come first, per CLAUDE.md.
+// Menu order: local karaoke (one singer, or 1P vs 2P on one laptop), online, then pronunciation practice.
 const CARDS: CardDef[] = [
   {
     to: 'solo',
@@ -28,20 +28,20 @@ const CARDS: CardDef[] = [
     color: 'pink',
   },
   {
-    to: 'practice',
-    title: 'SAY IT RIGHT',
-    sub: '발음 연습 · speak a lyric, get word-by-word feedback',
-    kao: '＼(^o^)／ ˚｡♪',
-    icon: 'say',
-    color: 'mint',
-  },
-  {
     to: 'online',
     title: 'ONLINE',
     sub: 'make a room, send the code, sing against a friend',
     kao: '(＾▽＾)ﾉ ⇄ ヽ(＾▽＾)',
     icon: 'versus',
     color: 'sky',
+  },
+  {
+    to: 'practice',
+    title: 'SAY IT RIGHT',
+    sub: '발음 연습 · speak a lyric, get word-by-word feedback',
+    kao: '＼(^o^)／ ˚｡♪',
+    icon: 'say',
+    color: 'mint',
   },
 ];
 
@@ -167,23 +167,10 @@ export function Home({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
             </div>
           </div>
 
-          {/* Plain text, not a box: nothing here is clickable. */}
-          <p className="home-pop">
-            <span lang="ko" className="home-pop__ko">
-              노래해요!
-            </span>
-            <span className="home-pop__en">K-POP KARAOKE</span>
-            <span className="home-kao home-kao--soft" aria-hidden="true">
-              ヾ(≧▽≦*)o
-            </span>
-          </p>
           <p className="home-tagline">
+            improve your singing and battle with friends!!{' '}
             <span className="home-kao home-kao--hot" aria-hidden="true">
-              ☆˚･♡
-            </span>{' '}
-            pick a clip · sing along · pitch + timing make your score{' '}
-            <span className="home-kao home-kao--hot" aria-hidden="true">
-              ♡･˚☆
+              ヾ(≧▽≦*)o
             </span>
           </p>
         </section>
