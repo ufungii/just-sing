@@ -94,3 +94,26 @@ def test_config_threshold_is_respected():
     fp = reference_fingerprints(y, SR, m, featurizer=spectra)
     r = lyric_match(y, SR, fp, featurizer=spectra, cfg=LyricMatchConfig(match_share=1.01))
     assert r["summary"]["match"] == 0 and r["summary"]["graded"] == 10
+
+
+def test_one_line_from_a_short_slice_matches_the_full_take():
+    # The live path: a ~3 s slice around one line, with the offset placing it on the clip clock.
+    y, m = song()
+    fp = reference_fingerprints(y, SR, m, featurizer=spectra)
+    full = {r["line_index"]: r["status"] for r in lyric_match(y, SR, fp, featurizer=spectra)["lines"]}
+    for ln in fp["lines"]:
+        a, b = ln["start"] - 0.3, ln["end"] + 0.5
+        sl = y[max(0, int(a * SR)):int(b * SR)]
+        r = lyric_match(sl, SR, fp, offset_s=-max(0.0, a), featurizer=spectra, only={ln["index"]})
+        assert [x["line_index"] for x in r["lines"]] == [ln["index"]]
+        assert r["lines"][0]["status"] == full[ln["index"]] == "match"
+
+
+def test_a_slice_that_is_all_singing_still_counts_as_sung():
+    # Regression: the noise floor came from the slice's quietest frames, which were singing.
+    y, m = song()
+    fp = reference_fingerprints(y, SR, m, featurizer=spectra)
+    ln = fp["lines"][3]
+    sl = y[int(ln["start"] * SR) + 800:int(ln["end"] * SR) - 800]       # no silence at all
+    r = lyric_match(sl, SR, fp, offset_s=-(ln["start"] + 0.05), featurizer=spectra, only={ln["index"]})
+    assert r["lines"][0]["status"] != "not_sung"

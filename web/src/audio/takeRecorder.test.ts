@@ -46,3 +46,15 @@ it('writes a 16 kHz mono WAV and the offset the server needs', async () => {
   expect(view.getUint32(40, true)).toBe(1.5 * TAKE_RATE * 2);
   expect(view.getInt16(44 + Math.floor(0.7 * TAKE_RATE) * 2, true)).toBe(32767);
 });
+
+it('slices one line out of the take with the offset the server needs', async () => {
+  const rec = new TakeRecorder(SR, 0, 2, 12); // keeps clip times 2-12 s
+  rec.start(0);
+  batches(rec, 5, 6, 0.25); // singing at clip 5-6 s
+  const { wav, offsetS } = rec.slice(4.7, 6.5);
+  expect(offsetS).toBeCloseTo(-4.7); // clip time 0 lies 4.7 s before the slice starts
+  const view = new DataView(await wav.arrayBuffer());
+  expect(view.getUint32(40, true) / 2 / TAKE_RATE).toBeCloseTo(1.8, 2);
+  expect(view.getInt16(44 + Math.floor(0.5 * TAKE_RATE) * 2, true)).toBe(Math.round(0.25 * 32767));
+  expect(rec.slice(0, 2.5).offsetS).toBeCloseTo(-2); // clamped to what the recorder keeps
+});

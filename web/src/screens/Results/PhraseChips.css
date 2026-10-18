@@ -200,3 +200,22 @@
 .results-lyric-tag--match { background: var(--mint); }
 .results-lyric-tag--unclear { background: var(--hot-light); }
 .results-lyric-tag--not_sung { background: var(--lav-light); color: #5a3a60; }
+
+.results-bar--lav { --on: var(--lav); --on-side: var(--lav-dark); }
+.results-bar__note {
+  margin: -8px 0 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+/* Jump from a line with unclear words to spoken practice of that line. */
+.results-say {
+  font-family: var(--font-display);
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 2px solid var(--ink);
+  background: var(--butter);
+  box-shadow: 2px 2px 0 var(--ink);
+  cursor: pointer;
+}
+.results-say:hover { background: var(--hot-light); }
+.results-say:active { transform: translate(2px, 2px); box-shadow: none; }
