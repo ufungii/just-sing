@@ -118,14 +118,15 @@
 
 .sing-judge {
   position: absolute;
-  top: 26%;
-  left: 50%;
+  top: var(--jy, 26%);
+  left: var(--jx, 50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   pointer-events: none;
   animation: sing-judge 1.4s steps(10) forwards;
 }
+.sing-judge .sing-pop { font-size: 60px; }
 .sing-judge__score {
   margin-top: 18px;
   padding: 4px 12px;
@@ -136,11 +137,11 @@
   font-size: 22px;
 }
 @keyframes sing-judge {
-  0% { transform: translate(-50%, 0) scale(0.4); opacity: 0; }
-  12% { transform: translate(-50%, -8px) scale(1.15); opacity: 1; }
-  22% { transform: translate(-50%, 0) scale(1); }
-  80% { transform: translate(-50%, -12px) scale(1); opacity: 1; }
-  100% { transform: translate(-50%, -30px) scale(1); opacity: 0; }
+  0% { transform: translate(-50%, 0) rotate(var(--jr, 0deg)) scale(0.4); opacity: 0; }
+  12% { transform: translate(-50%, -8px) rotate(var(--jr, 0deg)) scale(1.15); opacity: 1; }
+  22% { transform: translate(-50%, 0) rotate(var(--jr, 0deg)) scale(1); }
+  80% { transform: translate(-50%, -12px) rotate(var(--jr, 0deg)) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -30px) rotate(var(--jr, 0deg)) scale(1); opacity: 0; }
 }
 
 .sing-count {
