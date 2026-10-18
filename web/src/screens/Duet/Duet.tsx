@@ -329,7 +329,7 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
         </div>
       </div>
       <div className={`sing-stage${cueOn ? ` sing-stage--cue-p${handoff!.slot + 1}` : ''}`}>
-        {song && displayTarget ? <PitchLane height={laneHeight} song={song} notes={notes} sections={sections} target={displayTarget} getTime={getTime} userHz={mySlot === undefined ? engine.current?.tracker.hz ?? EMPTY : onlinePitch} ratings={ratings} /> : <div className="sing-lane sing-lane--empty" />}
+        {song && displayTarget ? <PitchLane fill height={laneHeight} song={song} notes={notes} sections={sections} target={displayTarget} getTime={getTime} userHz={mySlot === undefined ? engine.current?.tracker.hz ?? EMPTY : onlinePitch} ratings={ratings} /> : <div className="sing-lane sing-lane--fill sing-lane--empty" />}
         {/* one polite announcement per handoff (the visible countdown is aria-hidden so it does not chatter) */}
         <span className="sr-only" aria-live="polite">
           {cueOn ? `Next: ${names(handoff!.slot)} sings in a few seconds.` : ''}

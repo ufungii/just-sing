@@ -336,9 +336,9 @@ export function Sing({ setup }: { setup: SingSetup }) {
 
       <div className="sing-stage">
         {song && target ? (
-          <PitchLane height={laneHeight} song={song} notes={notes} target={target} getTime={getTime} userHz={engineRef.current?.tracker.hz ?? NO_FRAMES} ratings={ratings} />
+          <PitchLane fill height={laneHeight} song={song} notes={notes} target={target} getTime={getTime} userHz={engineRef.current?.tracker.hz ?? NO_FRAMES} ratings={ratings} />
         ) : (
-          <div className="sing-lane sing-lane--empty" />
+          <div className="sing-lane sing-lane--fill sing-lane--empty" />
         )}
 
         {phase.k === 'loading' && <div className="sing-overlay"><p className="sing-overlay__text">LOADING...</p></div>}

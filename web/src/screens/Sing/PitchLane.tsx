@@ -20,8 +20,10 @@ interface Props {
   /** Duet ownership timeline (sorted by start); tints notes and colours the now line and trace head. */
   sections?: { start: number; slot: number }[];
   target: TargetTrack;
-  /** Lane height in px; smaller screens pass less so the whole game fits (default 380). */
+  /** Lane height in px; smaller screens pass less so the whole game fits (default 380). With `fill` it only sizes the note range. */
   height?: number;
+  /** Fill the parent (the singing screens give the lane whatever room the lyrics and controls leave), drawing at its measured height. */
+  fill?: boolean;
   /** Clip time in seconds on the master clock. */
   getTime: () => number;
   /** Live user pitch per clip frame (null = unvoiced). */
@@ -155,7 +157,7 @@ export function useLaneHeight(): number {
   return h;
 }
 
-export function PitchLane({ song, notes, sections, target, getTime, userHz, ratings, height = HEIGHT }: Props) {
+export function PitchLane({ song, notes, sections, target, getTime, userHz, ratings, height = HEIGHT, fill = false }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Latest props for the draw loop without restarting it.
   const range = useMemo(() => laneRange(notes, target, height), [notes, target, height]);
@@ -171,12 +173,14 @@ export function PitchLane({ song, notes, sections, target, getTime, userHz, rati
     if (!g) return;
     let frame = 0;
     let width = 0;
+    let drawH = live.current.height;
 
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
       width = canvas.clientWidth;
+      drawH = fill ? Math.max(1, canvas.clientHeight) : live.current.height;
       canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(live.current.height * dpr);
+      canvas.height = Math.round(drawH * dpr);
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
       g.imageSmoothingEnabled = false;
     };
@@ -186,7 +190,8 @@ export function PitchLane({ song, notes, sections, target, getTime, userHz, rati
 
     const draw = () => {
       frame = requestAnimationFrame(draw);
-      const { song, notes, sections, target, getTime, userHz, ratings, range, height: H } = live.current;
+      const { song, notes, sections, target, getTime, userHz, ratings, range } = live.current;
+      const H = drawH;
       const t = getTime();
       const W = width;
       const nowX = Math.round(W * NOW_AT);
@@ -401,5 +406,5 @@ export function PitchLane({ song, notes, sections, target, getTime, userHz, rati
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="sing-lane" style={{ height }} aria-label="Pitch lane: target notes and your live pitch" role="img" />;
+  return <canvas ref={canvasRef} className={fill ? 'sing-lane sing-lane--fill' : 'sing-lane'} style={fill ? undefined : { height }} aria-label="Pitch lane: target notes and your live pitch" role="img" />;
 }

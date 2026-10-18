@@ -154,7 +154,7 @@
   align-items: flex-start;
   gap: 16px;
   flex-wrap: wrap;
-  margin-top: -14px; /* sit right under the lyrics box: cancels most of the shell's row gap */
+  margin-top: -6px; /* sit just under the lyrics box: cancels part of the shell's row gap */
 }
 
 .sing-lyrics-head__left { flex: 1 1 0; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
@@ -411,13 +411,6 @@
   .ui-inner:has(.sing-stage) { gap: 8px; }
   .ui-inner:has(.sing-stage) .ui-panel { padding: 10px 16px; }
   .ui-inner:has(.sing-stage) .ui-header { gap: 12px; }
-  .sing-lyrics { min-height: 100px; padding-top: 6px; }
-  .sing-lyrics__ko { font-size: 46px; line-height: 1.25; }
-  .sing-lyrics__roman { margin-top: 2px !important; font-size: 23px; }
-  .sing-lyrics__trans { margin-top: 2px !important; font-size: 16px; }
-  .sing-lyrics__next { margin-top: 6px !important; font-size: 20px; }
-  .sing-lyrics__next-roman { font-size: 15px; }
-  .sing-lyrics__rest { font-size: 24px; padding: 2px 0; }
   .duet-bar { padding: 6px 14px; }
   .duet-bar__who [data-testid='duet-current'] { font-size: 19px; }
 }
@@ -488,4 +481,25 @@
 @media (max-width: 1100px) {
   .score-bars { width: 380px; grid-template-columns: max-content minmax(140px, 1fr); }
   .score-bar__name { font-size: 18px; }
+}
+
+/* ---------- fixed-size singing screens ----------
+   The singing screens are exactly one window tall and nothing resizes while a song plays: the lane
+   takes whatever the lyrics and controls leave, the lyrics box has a fixed height (its text scales
+   with the window height and is clipped, never grown), and the verdict line has its own slot.
+   Below 700 px tall there is no room for all three, so the page scrolls as it used to. */
+.sing-lane--fill { position: absolute; inset: 0; width: 100%; height: 100%; }
+@media (min-height: 700px) {
+  .ui-screen:has(.sing-stage) { height: 100dvh; min-height: 0; padding-block: clamp(12px, 2.2vh, 40px); }
+  .ui-screen:has(.sing-stage) .ui-inner { height: 100%; min-height: 0; gap: clamp(6px, 1.1vh, 12px); }
+  .sing-stage { flex: 1 1 0; min-height: 150px; }
+  .sing-lyrics-panel { flex: none; }
+  .sing-lyrics { height: clamp(100px, 19vh, 190px); min-height: 0; overflow: hidden; padding-top: clamp(18px, 2.6vh, 26px); }
+  .sing-lyrics__last { position: absolute; inset: 0 0 auto; margin: 0 !important; font-size: clamp(12px, 1.9vh, 18px); }
+  .sing-lyrics__ko { font-size: clamp(28px, 6vh, 62px); }
+  .sing-lyrics__roman { margin-top: 2px !important; font-size: clamp(15px, 2.9vh, 30px); }
+  .sing-lyrics__trans { margin-top: 2px !important; font-size: clamp(12px, 2vh, 20px); }
+  .sing-lyrics__next { margin-top: clamp(4px, 1vh, 16px) !important; font-size: clamp(14px, 2.4vh, 26px); }
+  .sing-lyrics__next-roman { font-size: clamp(11px, 1.7vh, 18px); }
+  .sing-lyrics__rest { font-size: clamp(18px, 3.2vh, 34px); padding: 2px 0; }
 }
