@@ -23,7 +23,7 @@ from .errors import ApiError
 from .name_policy import validate_player_name
 from .duets import metadata as duet_metadata, timed_sections
 from .clip_catalog import CATALOG
-from .models import PhraseResultIn, PhraseScore, Score, TimeRange
+from .models import PhraseResultIn, PhraseScore, Score, TimeRange, TurnLyrics
 from ml.scoring.config import SCORING_VERSION  # the one source of truth for the scoring version
 from ml.scoring.pitch import to_track
 from ml.scoring.score import finalize_turn, phrase_weights
@@ -204,6 +204,7 @@ class BeginIn(BaseModel):
 class ResultIn(BaseModel):
     phrases: list[PhraseResultIn]
     guide_used: bool = False  # client-reported (not cheat-proof): guide vocals were audible during the turn
+    check_lyrics: bool = False  # a recording will follow; feedback is separate from the score
 
 
 GUESTS_PER_MINUTE_PER_IP = 20  # a shared network (school, venue) still fits a room full of players
@@ -412,7 +413,19 @@ def _score(match: Match, a: TurnAttempt) -> Score:
     return Score(duet=bool(duet), range=rng, guided=_guided(a.phrase_results), mode="solo" if match.mode == "solo" else "battle", clip_id=match.clip_id, clip_version=match.clip_version,
                  scoring_version=match.scoring_version, register=a.register, total=a.total,
                  pitch=a.pitch, timing=a.timing, phrases=[PhraseScore(**{"score": p.get("score", p["pitch"]), **p}) for p in a.phrase_results],
-                 coach_blurb=a.coach_blurb)
+                 coach_blurb=a.coach_blurb, lyrics=_lyrics(a))
+
+
+def _lyrics(attempt: TurnAttempt) -> TurnLyrics | None:
+    raw = attempt.phrase_results
+    saved = raw[0].get('_lyrics') if isinstance(raw, list) and raw else None
+    if not saved:
+        return None
+    # A closed browser or a lost upload must not leave the results checking forever.
+    if saved['status'] == 'pending' and attempt.completed_at and \
+            datetime.now(timezone.utc) - attempt.completed_at > timedelta(minutes=3):
+        return TurnLyrics(status='unavailable')
+    return TurnLyrics(**saved)
 
 
 @router.post("/turns/{attempt_id}/result", response_model=Score)
@@ -463,6 +476,8 @@ def submit_result(attempt_id: uuid.UUID, body: ResultIn, idempotency_key: str = 
     attempt.phrase_results = [{**p, "guided": body.guide_used} for p in result["phrases"]]
     if duet:
         attempt.phrase_results = [{**p, **({'_duet': duet} if i == 0 else {})} for i, p in enumerate(attempt.phrase_results)]
+    if body.check_lyrics and attempt.phrase_results:
+        attempt.phrase_results[0]['_lyrics'] = {'status': 'pending', 'lines': []}
     attempt.idempotency_key, attempt.state = idempotency_key, "accepted"
     attempt.completed_at = datetime.now(timezone.utc)
     # Result and turn transition commit together: next player's attempt, or the match is finished.

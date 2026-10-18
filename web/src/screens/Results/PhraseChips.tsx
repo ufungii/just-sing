@@ -77,7 +77,8 @@ export function pronunciationVerdict(score: number): 'CLEAR' | 'MIXED' | 'UNCLEA
  * the lyric check) with a plain-words verdict and the matched line count, or "—" when the check could not
  * run. The total shown is whatever the caller passes in; it is never derived here.
  */
-export function ScoreSummary({ total, pitch, timing, guided, range, lyrics }: { total: number; pitch: number; timing: number; guided?: boolean; range?: TimeRange | null; lyrics?: LyricTally | 'unavailable' | null }) {
+export function ScoreSummary({ total, pitch, timing, guided, range, lyrics }: { total: number; pitch: number; timing: number; guided?: boolean; range?: TimeRange | null; lyrics?: LyricTally | 'unavailable' | 'checking' | null }) {
+  const lyricScore = lyrics && typeof lyrics === 'object' ? lyrics.score ?? (lyrics.graded ? (100 * lyrics.matched) / lyrics.graded : null) : null;
   return (
     <div className="results-summary">
       {range && <p className="solo-hint">Practice section · {rangeLabel(range)} · kept off the leaderboard.</p>}
@@ -92,12 +93,16 @@ export function ScoreSummary({ total, pitch, timing, guided, range, lyrics }: { 
             <p className="results-bar__note">Lyrics not checked this time.</p>
           </>
         )}
-        {lyrics && lyrics !== 'unavailable' && lyrics.graded > 0 && (
+        {lyrics === 'checking' && <>
+          <ScoreBar label="LYRICS" value={0} tone="lav" shown="…" />
+          <p className="results-bar__note" role="status">Checking this singer’s lyrics…</p>
+        </>}
+        {lyrics && typeof lyrics === 'object' && (
           <>
-            <ScoreBar label="LYRICS" value={lyrics.score ?? (100 * lyrics.matched) / lyrics.graded} tone="lav" shown={String(whole(lyrics.score ?? (100 * lyrics.matched) / lyrics.graded))} />
+            <ScoreBar label="LYRICS" value={lyricScore ?? 0} tone="lav" shown={lyricScore === null ? '—' : String(whole(lyricScore))} />
             <p className="results-bar__note">
-              <strong>Pronunciation: {pronunciationVerdict(lyrics.score ?? (100 * lyrics.matched) / lyrics.graded)}</strong>
-              {' · '}{lyrics.matched} of {lyrics.graded} sung lines sounded like the original. Automated, not validated by a fluent speaker.
+              {lyricScore !== null && <><strong>Pronunciation: {pronunciationVerdict(lyricScore)}</strong>{' · '}</>}
+              {lyrics.matched} of {lyrics.graded} sung lines sounded like the original. Automated, not validated by a fluent speaker.
             </p>
           </>
         )}
