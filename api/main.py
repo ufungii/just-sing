@@ -97,6 +97,18 @@ def instrumental(clip_id: str):
     return _audio_file(clip_id, "instrumental")
 
 
+@app.get("/api/clips/{clip_id}/preview")
+def preview(clip_id: str):
+    """The original recording (original.mp3 in the song's folder) for the song-select preview. Optional:
+    a song without one answers 404 and the client falls back to mixing the two stems."""
+    song = manifest(clip_id)
+    folder = SONG_DIR[song.id].resolve()
+    path = (folder / "original.mp3").resolve()
+    if not path.is_file():
+        raise ApiError(404, "audio_missing", f"There is no original recording for '{clip_id}' on this server.")
+    return FileResponse(path)
+
+
 @app.get("/api/clips/{clip_id}/vocals")
 def vocals(clip_id: str):
     """Guide vocals the singer can mix in while practising. Same files and rules as the instrumental."""
