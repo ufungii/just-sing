@@ -16,6 +16,8 @@ const CAPTURE_SLACK_S = 0.4;
 
 export class LiveLyricChecker {
   readonly results = new Map<number, LyricStatus>();
+  /** Lines whose audio has been sent (their answer may still be on the way). */
+  readonly sent = new Set<number>();
   private readonly pending: { index: number; line: Line }[];
   private chain: Promise<void> = Promise.resolve();
   private stopped = false; // the server said "unavailable", or a request failed outright
@@ -25,8 +27,10 @@ export class LiveLyricChecker {
     private readonly clipId: string,
     lines: { index: number; line: Line }[],
     private readonly recorder: TakeRecorder,
-    /** Called whenever a line's status arrives (for the live chip). */
+    /** Called whenever a line's status arrives (for the live chip and lyric highlights). */
     private readonly onResult: () => void = () => {},
+    /** Called when a line's audio is sent, so the lyrics can show "checking…". */
+    private readonly onSent: (index: number) => void = () => {},
   ) {
     this.pending = [...lines].sort((a, b) => a.line.end - b.line.end);
   }
@@ -36,6 +40,8 @@ export class LiveLyricChecker {
     while (!this.stopped && this.pending.length && t >= this.pending[0].line.end + LINE_POST_S + CAPTURE_SLACK_S) {
       const { index, line } = this.pending.shift()!;
       const { wav, offsetS } = this.recorder.slice(line.start - LINE_PRE_S, line.end + LINE_POST_S);
+      this.sent.add(index);
+      this.onSent(index);
       this.chain = this.chain.then(() => this.send(index, wav, offsetS));
     }
   }
