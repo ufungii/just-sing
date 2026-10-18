@@ -40,6 +40,7 @@
   --font-body: 'Pixelify Sans', system-ui, sans-serif; /* sentences */
   --font-kao: 'DotGothic16', 'Pixelify Sans', sans-serif; /* kaomoji and ♪ sparkles */
   --font-ko: 'Jua', 'Pixelify Sans', sans-serif; /* Hangul */
+  --font-score: 'Bungee', 'Pixelify Sans', sans-serif; /* big score numbers: retro arcade sign, clear digits */
 
   /* Pixel geometry */
   --border: 5px;

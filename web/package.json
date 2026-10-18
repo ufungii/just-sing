@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@auth0/auth0-react": "^2.28.2",
+    "@fontsource/bungee": "^5.3.0",
     "@fontsource/dotgothic16": "^5.3.1",
     "@fontsource/jua": "^5.3.0",
     "@fontsource/pixelify-sans": "^5.3.0",

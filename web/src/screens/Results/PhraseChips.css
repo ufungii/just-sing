@@ -18,19 +18,22 @@
   letter-spacing: 0.1em;
   color: var(--ink-rose);
 }
+/* The total uses Bungee, a retro arcade-sign face with clear digits, instead of the blocky
+   Silkscreen display font, with a shallow 3D stack, so it reads at a glance. */
 .results-big__num {
   position: relative;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 128px;
+  font-family: var(--font-score);
+  font-weight: 400;
+  font-size: 108px;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
   color: transparent;
-  padding-bottom: 14px;
+  padding-bottom: 7px;
 }
 .results-big__num span { position: absolute; left: 0; top: 0; }
-.results-big__num .l3 { top: 14px; color: var(--ink); }
-.results-big__num .l2 { top: 9px; color: #8c2f63; }
-.results-big__num .l1 { top: 4px; color: #c93a7e; }
+.results-big__num .l3 { top: 7px; color: var(--ink); }
+.results-big__num .l2 { top: 4px; color: #8c2f63; }
+.results-big__num .l1 { top: 2px; color: #c93a7e; }
 .results-big__num .l0 { color: var(--hot); }
 
 /* ---------- segmented bars ---------- */
@@ -63,7 +66,7 @@
   font-weight: 700;
   font-size: 18px;
 }
-.results-bar__num { text-align: right; font-size: 24px; }
+.results-bar__num { text-align: right; font-family: var(--font-score); font-weight: 400; font-size: 24px; } /* same digits as the total */
 .results-bar__track {
   display: grid;
   grid-template-columns: repeat(20, 1fr);
@@ -163,7 +166,7 @@
 .results-rating--miss { --face: var(--lav); --side: var(--lav-dark); color: #5a3a60; }
 
 @media (max-width: 1100px) {
-  .results-big__num { font-size: 104px; }
+  .results-big__num { font-size: 90px; }
   .results-phrase { grid-template-columns: 36px 1fr auto; }
   .results-phrase__stats { grid-column: 2 / 3; grid-row: 2; }
   .results-rating { grid-column: 3; grid-row: 1 / 3; }
