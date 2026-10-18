@@ -162,7 +162,8 @@ export function checkLyricLine(clipId: string, lineIndex: number, wav: Blob, off
   form.set('line_index', String(lineIndex));
   form.set('offset_s', offsetS.toFixed(3));
   form.set('audio', wav, 'line.wav');
-  return request<LyricCheck>('/api/lyric-check/line', { method: 'POST', body: form });
+  // Bound each request; the results screen can then wait for the existing queue to drain.
+  return request<LyricCheck>('/api/lyric-check/line', { method: 'POST', body: form, signal: AbortSignal.timeout(45_000) });
 }
 
 /** Upload a solo take for the line-level lyric check. offsetS: time in the WAV at which clip time 0 falls. */

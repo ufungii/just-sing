@@ -12,7 +12,10 @@ import { TakeRecorder } from '../../audio/takeRecorder';
 import { LiveLyricChecker } from './liveLyrics';
 
 const send = vi.mocked(checkLyricLine);
-afterEach(() => send.mockReset());
+afterEach(() => {
+  send.mockReset();
+  vi.useRealTimers();
+});
 
 const line = (start: number, end: number) => ({ start, end, text: 'x' }) as Line;
 const lines = [{ index: 0, line: line(1, 3) }, { index: 1, line: line(4, 6) }];
@@ -54,4 +57,20 @@ it('falls back to the whole take when a line is lost', async () => {
   send.mockImplementationOnce(async () => ok(0, 'match')).mockRejectedValueOnce(new Error('network'));
   const live = new LiveLyricChecker('c', lines, recorder());
   expect(await live.finish()).toBeNull();
+});
+
+it('keeps a slow live queue instead of discarding it after 15 seconds', async () => {
+  vi.useFakeTimers();
+  send.mockImplementation(async (_c, i) => {
+    await new Promise((resolve) => setTimeout(resolve, 10_000));
+    return ok(i, 'match');
+  });
+  const live = new LiveLyricChecker('c', lines, recorder());
+  const finished = vi.fn();
+  const result = live.finish().then((r) => { finished(r); return r; });
+  await vi.advanceTimersByTimeAsync(15_001);
+  expect(live.results).toEqual(new Map([[0, 'match']]));
+  expect(finished).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(await result).toEqual(new Map([[0, 'match'], [1, 'match']]));
 });

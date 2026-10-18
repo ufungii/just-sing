@@ -9,7 +9,6 @@ const render = (t: number, verdicts?: LineVerdicts) =>
   renderToStaticMarkup(<Lyrics lines={lines} t={t} showRoman={false} showTrans={false} verdicts={verdicts} />);
 
 it('highlights the line just sung as soon as its lyric check arrives', () => {
-  expect(render(3.5, new Map([[lines[0], 'checking']]))).toContain('sing-lyrics__last is-checking');
   const matched = render(3.5, new Map([[lines[0], 'match']]));
   expect(matched).toContain('sing-lyrics__last is-match');
   expect(matched).toContain('LYRICS ✓');
@@ -22,4 +21,6 @@ it('highlights the line just sung as soon as its lyric check arrives', () => {
 it('shows nothing extra before any line is sung or without a lyric check', () => {
   expect(render(1)).not.toContain('sing-lyrics__last');
   expect(render(3.5)).not.toContain('sing-lyrics__last');
+  expect(render(3.5, new Map())).not.toContain('sing-lyrics__last');
+  expect(render(3.5, new Map())).not.toMatch(/checking/i);
 });
