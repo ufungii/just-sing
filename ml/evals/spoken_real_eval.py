@@ -54,7 +54,9 @@ def main() -> None:
         f"| One word swapped: median rank of the swapped word | {np.median(ranks):.0f} of {len(words)} |",
         f"| One word swapped: median score drop of that word | {np.median(drops):.0f} points |", "",
         "Word scores against the right text: " + ", ".join(f"{s:.0f}" for s in base) + ".",
-        f"Correct words scoring under 20 (would be highlighted falsely): {sum(s < 20 for s in base)}/{len(base)}.", "",
+        f"Words scoring under 20: {sum(s < 20 for s in base)}/{len(base)} (on a correct reading these are false highlights; "
+        "on a deliberately mispronounced one they are the point, and the swap test above says little because most "
+        "words are already low).", "",
         "One speaker; a swapped word is easier to catch than a subtle mispronunciation. Not validated by a fluent speaker.",
     ]
     RESULTS.mkdir(exist_ok=True)
