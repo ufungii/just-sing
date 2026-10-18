@@ -179,7 +179,8 @@
 /* ---------- segmented choice ---------- */
 
 .ui-seg { display: flex; flex-wrap: wrap; gap: 14px; }
-.ui-seg .ui-key[aria-pressed='true'] {
+.ui-seg .ui-key[aria-pressed='true'],
+.ui-guide .sing-toggle[aria-pressed='true'] {
   --face: var(--butter);
   --bevel: #fff0a8;
   --side: #c9a400;
