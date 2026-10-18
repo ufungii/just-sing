@@ -157,6 +157,7 @@
 }
 
 .sing-lyrics-head__left { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+.duet-voice { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .sing-mic-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 
 .sing-meter {

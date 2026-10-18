@@ -357,16 +357,18 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
           </div>
           {engine.current?.vocals && <GuideControl on={guide} volume={guideVolume} onToggle={() => setGuide((v) => !v)} onVolume={setGuideVolume} />}
           {setup.online &&
-            <div className="ui-guide" title="Hear the other singer live during their sections. Headphones required.">
-              <span className="ui-guide__label">OTHER SINGER</span>
-              <input type="range" className="ui-slider" min={0} max={100} value={Math.round(voiceVolume * 100)}
-                aria-label="Other singer volume" style={{ '--fill': `${voiceVolume * 100}%` } as React.CSSProperties}
-                onChange={(e) => setVoiceVolume(Number(e.target.value) / 100)} />
+            <div className="duet-voice">
               <PixelButton size="sm" tone={voiceMuted ? 'paper' : 'hot'} aria-pressed={voiceMuted}
                 onClick={() => onVoiceMuted?.(!voiceMuted)} aria-label="Mute my mic to opponent">
                 <PixelIcon name={voiceMuted ? 'speakerOff' : 'speaker'} size={20} />
                 {voiceMuted ? 'MY VOICE MUTED' : 'SHARING MY VOICE'}
               </PixelButton>
+              <div className="ui-guide" title="Hear the other singer live during their sections. Headphones required.">
+                <span className="ui-guide__label">OTHER SINGER</span>
+                <input type="range" className="ui-slider" min={0} max={100} value={Math.round(voiceVolume * 100)}
+                  aria-label="Other singer volume" style={{ '--fill': `${voiceVolume * 100}%` } as React.CSSProperties}
+                  onChange={(e) => setVoiceVolume(Number(e.target.value) / 100)} />
+              </div>
             </div>
           }
         </div>
