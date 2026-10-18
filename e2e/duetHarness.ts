@@ -2,11 +2,11 @@ import { expect, type Browser, type Page } from '@playwright/test';
 
 export const DUET_CLIP = 'russian-roulette';
 /** Generated mic audio only; no recorded or copyrighted audio is added to the repository. */
-export async function duetPlayer(browser: Browser, baseURL: string, wallClockSkew = 0) {
+export async function duetPlayer(browser: Browser, baseURL: string, wallClockSkew = 0, micHz = 220) {
   const page = await (await browser.newContext({ baseURL })).newPage();
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.addInitScript((skew) => {
+  await page.addInitScript(({ skew, micHz }) => {
     localStorage.setItem('just-sing.showTestClips', '1');
     const realNow = Date.now;
     Date.now = () => realNow() + skew;
@@ -25,7 +25,7 @@ export async function duetPlayer(browser: Browser, baseURL: string, wallClockSke
       const ctx = new AudioContext();
       await ctx.resume();
       const osc = ctx.createOscillator();
-      osc.frequency.value = 220;
+      osc.frequency.value = micHz;
       const gain = ctx.createGain(); gain.gain.value = 0.15;
       const dest = ctx.createMediaStreamDestination();
       osc.connect(gain).connect(dest); osc.start();
@@ -36,7 +36,7 @@ export async function duetPlayer(browser: Browser, baseURL: string, wallClockSke
       (window as any).__micStreams.push(dest.stream);
       return dest.stream;
     };
-  }, wallClockSkew);
+  }, { skew: wallClockSkew, micHz });
   return { page, errors };
 }
 
