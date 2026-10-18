@@ -34,15 +34,27 @@ function run(clipId: string, wav: Blob, offsetS: number) {
   return p;
 }
 
-export function useLyricCheck(clipId: string, take: { wav: Blob; offsetS: number } | null | undefined): LyricState {
-  const [st, setSt] = useState<LyricState>(take ? { state: 'loading' } : { state: 'none' });
+/**
+ * `live` holds the lines already checked during the song; when it is missing or incomplete, the whole
+ * take is uploaded instead (the slower path).
+ */
+export function useLyricCheck(
+  clipId: string,
+  take: { wav: Blob; offsetS: number } | null | undefined,
+  live?: Promise<Map<number, LyricStatus> | null> | null,
+): LyricState {
+  const [st, setSt] = useState<LyricState>(take || live ? { state: 'loading' } : { state: 'none' });
   useEffect(() => {
-    if (!take) return;
-    let live = true;
-    run(clipId, take.wav, take.offsetS).then((lines) => live && setSt(lines ? { state: 'ok', lines } : { state: 'offline' }));
+    if (!take && !live) return;
+    let alive = true;
+    (async () => {
+      const fromLive = live ? await live : null;
+      const lines = fromLive ?? (take ? await run(clipId, take.wav, take.offsetS) : null);
+      if (alive) setSt(lines ? { state: 'ok', lines } : { state: 'offline' });
+    })();
     return () => {
-      live = false;
+      alive = false;
     };
-  }, [clipId, take]);
+  }, [clipId, take, live]);
   return st;
 }

@@ -155,6 +155,16 @@ export function submitPractice(clipId: string, phraseId: string, audio: Blob): P
 
 // ---------- lyric check after singing ----------
 
+/** The live path: one lyric line, sent while the song plays. offsetS: time in the WAV at which clip time 0 falls. */
+export function checkLyricLine(clipId: string, lineIndex: number, wav: Blob, offsetS: number): Promise<LyricCheck> {
+  const form = new FormData();
+  form.set('clip_id', clipId);
+  form.set('line_index', String(lineIndex));
+  form.set('offset_s', offsetS.toFixed(3));
+  form.set('audio', wav, 'line.wav');
+  return request<LyricCheck>('/api/lyric-check/line', { method: 'POST', body: form });
+}
+
 /** Upload a solo take for the line-level lyric check. offsetS: time in the WAV at which clip time 0 falls. */
 export function checkLyrics(clipId: string, wav: Blob, offsetS: number): Promise<LyricCheck> {
   const form = new FormData();

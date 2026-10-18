@@ -306,23 +306,22 @@
 
 /* ---------- running-score bars (top right) ---------- */
 
-.score-bars { display: flex; flex-direction: column; gap: 6px; min-width: 190px; }
-.score-bar { display: flex; align-items: center; gap: 8px; }
+.score-bars { display: flex; flex: none; flex-direction: column; gap: 8px; width: 300px; }
+/* Fixed columns keep both tracks the same size regardless of either player's name. */
+.score-bar { display: grid; grid-template-columns: 120px 170px; align-items: center; gap: 10px; }
 .score-bar__name {
   min-width: 0;
-  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 13px;
+  font-size: 17px;
 }
 .score-bar__track {
   position: relative;
-  flex: 1;
-  height: 16px;
-  min-width: 90px;
+  min-width: 0;
+  height: 21px;
   border: var(--border-thin) solid var(--ink);
   background: var(--paper);
   box-shadow: 3px 4px 0 var(--ink);
@@ -364,9 +363,13 @@
 @media (prefers-reduced-motion: reduce) {
   .duet-pill, .sing-stage--cue-p1, .sing-stage--cue-p2, .score-bar__track, .score-bar__spark { animation: none !important; }
   .sing-stage--cue-p1, .sing-stage--cue-p2 { box-shadow: 8px 10px 0 var(--ink), 0 0 0 5px var(--cue); }
+  .score-bar--mid .score-bar__track { box-shadow: 3px 4px 0 var(--ink), 0 0 8px 2px var(--glow); }
+  .score-bar--hi .score-bar__track { box-shadow: 3px 4px 0 var(--ink), 0 0 16px 4px var(--glow); }
 }
 @media (max-width: 720px) {
-  .score-bars { min-width: 150px; }
+  .score-bars { width: 230px; }
+  .score-bar { grid-template-columns: 84px 136px; }
+  .score-bar__name { font-size: 14px; }
   .duet-pill { font-size: 15px; padding: 5px 8px; }
 }
 
@@ -418,3 +421,37 @@
   .duet-bar { padding: 6px 14px; }
   .duet-bar__who [data-testid='duet-current'] { font-size: 19px; }
 }
+
+/* Live lyric tally: lines whose words matched, as the server checks them during the song. */
+.sing-chip--lyrics { background: var(--lav); }
+
+/* The line just sung, with its live lyric check (about 2 s after the line ends). */
+.sing-lyrics__last {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 0 6px !important;
+  font-size: 18px;
+  opacity: 0.9;
+}
+.sing-lyrics__last-text { font-family: var(--font-ko); }
+.sing-lyrics__last-tag {
+  font-family: var(--font-display);
+  font-size: 12px;
+  padding: 1px 6px;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+}
+.sing-lyrics__last.is-match .sing-lyrics__last-text {
+  background: linear-gradient(transparent 55%, var(--mint) 55%, var(--mint) 92%, transparent 92%);
+}
+.sing-lyrics__last.is-match .sing-lyrics__last-tag { background: var(--mint); }
+.sing-lyrics__last.is-unclear .sing-lyrics__last-text {
+  text-decoration: underline wavy var(--hot);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
+}
+.sing-lyrics__last.is-unclear .sing-lyrics__last-tag { background: var(--hot-light); }
+.sing-lyrics__last.is-not_sung { opacity: 0.5; }
+.sing-lyrics__last.is-checking { opacity: 0.55; }
