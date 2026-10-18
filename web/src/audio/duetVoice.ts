@@ -1,3 +1,4 @@
+import { createMicGain } from './micGain';
 import { roomLive, sendVoice, subscribeRoomLive, subscribeVoice, type VoiceSignal } from '../lib/rooms';
 import type { TimedDuetSection } from '../lib/types';
 
@@ -41,6 +42,7 @@ export class DuetVoice {
   private candidates: RTCIceCandidateInit[] = [];
   private remote: MediaStreamAudioSourceNode | null = null;
   private remotePlayback: HTMLAudioElement | null = null;
+  private readonly micGain: ReturnType<typeof createMicGain>;
   private readonly source: MediaStreamAudioSourceNode;
   readonly sendGate: GainNode;
   readonly receiveGate: GainNode;
@@ -62,7 +64,8 @@ export class DuetVoice {
     this.sendGate = ctx.createGain(); this.sendGate.gain.value = 0;
     this.muteGain = ctx.createGain(); this.muteGain.gain.value = muted ? 0 : 1;
     this.outgoing = ctx.createMediaStreamDestination();
-    this.source.connect(this.sendGate).connect(this.muteGain).connect(this.outgoing);
+    this.micGain = createMicGain(ctx);
+    this.source.connect(this.micGain.node).connect(this.sendGate).connect(this.muteGain).connect(this.outgoing);
     for (const track of this.outgoing.stream.getAudioTracks()) track.contentHint = 'music';
     this.receiveGate = ctx.createGain(); this.receiveGate.gain.value = 0;
     this.volumeGain = ctx.createGain(); this.volumeGain.gain.value = 0.6;
@@ -255,6 +258,7 @@ export class DuetVoice {
     this.closed = true; this.available = false;
     clearInterval(this.timer); this.unsubscribe.forEach((unsubscribe) => unsubscribe());
     this.pc?.close(); this.detachRemote();
+    this.micGain.close();
     for (const node of [this.source, this.sendGate, this.muteGain, this.receiveGate, this.volumeGain, this.outgoing]) node.disconnect();
     this.outgoing.stream.getTracks().forEach((track) => track.stop());
   }

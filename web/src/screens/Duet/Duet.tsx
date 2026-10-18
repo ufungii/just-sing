@@ -3,10 +3,13 @@ import { SingEngine } from '../../audio/engine';
 import { DuetVoice, type VoiceStatus } from '../../audio/duetVoice';
 import { openMic, stopStream } from '../../audio/sources';
 import { ApiError, duetReady, getManifest, getMatch, rematch, serverTime, stopDuet, submitResult } from '../../lib/api';
+import { sendLive, subscribeDuetProgress } from '../../lib/rooms';
+import { applyRemotePitch, duetDisplayTarget, duetFrameOwners, duetRegisters, MAX_PITCH_BATCH } from '../../lib/duetLive';
 import type { MatchView, PhraseScore, Song } from '../../lib/types';
 import { useNav, type DuetSetup } from '../../routes';
 import { aggregate, buildTargetTrack, displayNotes, phraseSettlesAt, phraseWeights, registerRatio, scorePhrase, SCORING_CONFIG } from '../../scoring';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
+import { MicInputControl } from '../../ui/MicInputControl';
 import { GuideControl } from '../../ui/GuideControl';
 import { PixelIcon } from '../../ui/PixelIcon';
 import { rangeLabel } from '../../components/timeline/range';
@@ -57,20 +60,27 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
   const guideUsed = useRef(false);
   const pendingSave = useRef<{ id: string; key: string; phrases: PhraseScore[] }[]>([]);
   const take = useRef<{ wav: Blob; offsetS: number } | null>(null);
+  const [remoteScore, setRemoteScore] = useState<number | null>(null);
+  const lastSent = useRef(-Infinity);
+  const sentFrame = useRef(0);
+  const copiedFrame = useRef(0);
+  const receivedAt = useRef(-Infinity);
   const mySlot = setup.online?.slot;
   const plan = match?.duet;
   const sections = plan?.sections ?? [];
   const rangeStart = plan?.range?.start ?? 0;
   const rangeEnd = plan?.range?.end ?? song?.duration ?? 0;
-  const targets = useMemo(() => song ? setup.registers.map((r) => buildTargetTrack(song, r)) : [], [song, setup.registers[0], setup.registers[1]]);
+  const registers = duetRegisters(setup.registers, match?.attempts ?? [], mySlot);
+  const targets = useMemo(() => song ? registers.map((r) => buildTargetTrack(song, r)) : [], [song, registers[0], registers[1]]);
+  const frameOwners = useMemo(() => targets.length ? duetFrameOwners(sections, targets[0].hz.length, targets[0].hop) : [], [plan, targets]);
+  const onlinePitch = useMemo<(number | null)[]>(() => new Array(song ? Math.ceil(song.duration / SCORING_CONFIG.hopSeconds) : 0).fill(null), [song]);
   const owner = useMemo(() => new Map(sections.flatMap((s) => s.phrase_ids.map((id) => [id, s.slot] as const))), [plan]);
   const owned = useMemo(() => song?.phrases.filter((p) => owner.has(p.id) && (mySlot === undefined || owner.get(p.id) === mySlot)) ?? [], [song, owner, mySlot]);
   const sectionIndex = sectionAt(sections, now);
   const current = sections[sectionIndex];
   const next = sections[sectionIndex + 1];
   const activeSlot = current?.slot ?? 0;
-  const displaySlot = mySlot ?? activeSlot;
-  const displayTarget = targets[displaySlot];
+  const displayTarget = useMemo(() => targets.length ? duetDisplayTarget(targets, frameOwners) : null, [targets, frameOwners]);
   // The next section that hands the mic to the other singer, and how long until then.
   const handoff = sections.slice(sectionIndex + 1).find((s) => s.slot !== activeSlot);
   const handoffIn = handoff ? handoff.start - now : Infinity;
@@ -78,13 +88,25 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
   const cueOn = phase === 'playing' && !!handoff && handoffIn > 0 && handoffIn <= HANDOFF_CUE;
   /** A singer's running score over the phrases rated so far, or null before the first one. */
   const slotScore = (slot: number) => {
+    if (mySlot !== undefined && slot !== mySlot)
+      return match?.attempts.find((a) => a.slot === slot)?.score?.total ?? remoteScore;
     const phrases = owned.filter((p) => owner.get(p.id) === slot);
     const scores = phrases.flatMap((p) => (ratings.has(p.id) ? [ratings.get(p.id)!] : []));
     return scores.length ? aggregate(scores, phraseWeights(phrases, targets[slot])).total : null;
   };
   const notes = useMemo(() => song ? displayNotes(song).flatMap((note) => song.phrases.filter((p) => owner.has(p.id) && note.start < p.end && note.end > p.start)
-    .map((p) => ({ start: Math.max(note.start, p.start), end: Math.min(note.end, p.end), hz: note.hz * registerRatio(setup.registers[mySlot ?? owner.get(p.id)!]), slot: owner.get(p.id) }))) : [],
-  [song, owner, mySlot, setup.registers[0], setup.registers[1]]);
+    .map((p) => ({ start: Math.max(note.start, p.start), end: Math.min(note.end, p.end), hz: note.hz * registerRatio(registers[owner.get(p.id)!]), slot: owner.get(p.id) }))) : [],
+  [song, owner, registers[0], registers[1]]);
+
+  useEffect(() => {
+    if (mySlot === undefined) return;
+    return subscribeDuetProgress((slot, data) => {
+      if (slot === mySlot || data.match_id !== setup.matchId || data.t < receivedAt.current || data.t > (song?.duration ?? 0) + 5) return;
+      receivedAt.current = data.t;
+      applyRemotePitch(onlinePitch, frameOwners, slot, data);
+      setRemoteScore(data.running);
+    });
+  }, [mySlot, setup.matchId, song, onlinePitch, frameOwners]);
 
   useEffect(() => {
     let live = true;
@@ -238,12 +260,28 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
       }
       if (t >= rangeStart && t < rangeEnd && guide && guideVolume > 0 && audio.vocals) guideUsed.current = true;
       rate((at) => audio.tracker.analysed * SCORING_CONFIG.hopSeconds >= at || t >= at + 0.5);
+      if (mySlot !== undefined) {
+        const hz = audio.tracker.hz;
+        for (let k = copiedFrame.current; k < Math.min(hz.length, onlinePitch.length); k++)
+          if (frameOwners[k] === mySlot) onlinePitch[k] = hz[k];
+        copiedFrame.current = hz.length;
+        if (t >= 0 && t - lastSent.current >= 0.1) {
+          const phrases = owned.filter((p) => rated.current.has(p.id));
+          const scores = phrases.map((p) => rated.current.get(p.id)!);
+          const start = Math.max(sentFrame.current, hz.length - MAX_PITCH_BATCH);
+          sendLive('progress', { match_id: setup.matchId, t,
+            running: scores.length ? aggregate(scores, phraseWeights(phrases, targets[mySlot])).total : null,
+            pitch: { start, hz: hz.slice(start).map((h, i) => frameOwners[start + i] === mySlot ? h : null) } });
+          sentFrame.current = hz.length;
+          lastSent.current = t;
+        }
+      }
       if (t >= Math.max(rangeEnd + 0.3, ...owned.map((p) => phraseSettlesAt(p) + 0.1))) { finish(); return; }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [phase, rate, finish, rangeStart, rangeEnd, owned, guide, guideVolume, setup.matchId]);
+  }, [phase, rate, finish, rangeStart, rangeEnd, owned, guide, guideVolume, setup.matchId, mySlot, onlinePitch, frameOwners, targets]);
 
   const getTime = useCallback(() => {
     const time = engine.current?.clipTime();
@@ -290,7 +328,7 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
         </div>
       </div>
       <div className={`sing-stage${cueOn ? ` sing-stage--cue-p${handoff!.slot + 1}` : ''}`}>
-        {song && displayTarget ? <PitchLane height={laneHeight} song={song} notes={notes} sections={sections} target={displayTarget} getTime={getTime} userHz={engine.current?.tracker.hz ?? EMPTY} ratings={ratings} /> : <div className="sing-lane sing-lane--empty" />}
+        {song && displayTarget ? <PitchLane height={laneHeight} song={song} notes={notes} sections={sections} target={displayTarget} getTime={getTime} userHz={mySlot === undefined ? engine.current?.tracker.hz ?? EMPTY : onlinePitch} ratings={ratings} /> : <div className="sing-lane sing-lane--empty" />}
         {/* one polite announcement per handoff (the visible countdown is aria-hidden so it does not chatter) */}
         <span className="sr-only" aria-live="polite">
           {cueOn ? `Next: ${names(handoff!.slot)} sings in a few seconds.` : ''}
@@ -308,6 +346,7 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
       {phase === 'error' && <PixelButton onClick={() => void restart()}>{setup.online ? 'STOP DUET FOR RESTART' : 'RESTART TOGETHER'}</PixelButton>}
       <Panel>
         <div className="duet-audio-controls">
+        <MicInputControl />
         <div className="ui-seg" role="group" aria-label="Lyric helpers">
           <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showRoman} onClick={() => setShowRoman((v) => !v)}>ROMANIZATION</PixelButton>
           <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showTrans} onClick={() => setShowTrans((v) => !v)}>ENGLISH</PixelButton>

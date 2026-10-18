@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { createMicGain } from '../../audio/micGain';
+import { MicInputControl } from '../../ui/MicInputControl';
 import { Notice, PixelButton } from '../../ui';
 
 /** Raw capture: the browser's voice processing would distort pitch and level (CLAUDE.md, live singing). */
@@ -43,6 +45,11 @@ export function MicCheck({ onPassedChange, onStreamReady }: {
 }) {
   const [status, setStatus] = useState<MicStatus>({ kind: 'idle' });
   const [level, setLevel] = useState(0);
+  const [clipping, setClipping] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [recordingPreview, setRecordingPreview] = useState(false);
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
   const stopRef = useRef<() => void>(() => {});
 
   // Release everything if the player leaves mid-check.
@@ -50,9 +57,14 @@ export function MicCheck({ onPassedChange, onStreamReady }: {
 
   useEffect(() => onPassedChange(status.kind === 'passed'), [status.kind, onPassedChange]);
 
-  async function start() {
+  async function start(recordPreview = false) {
     stopRef.current();
     setLevel(0);
+    setClipping(false); setPreviewError(null); setPreviewUrl(null);
+    if (recordPreview && typeof MediaRecorder === 'undefined') {
+      setPreviewError('Recording playback is unavailable in this browser. You can still use TEST MIC.');
+      return;
+    }
     if (!navigator.mediaDevices?.getUserMedia) {
       setStatus({ kind: 'unsupported' });
       return;
@@ -79,44 +91,84 @@ export function MicCheck({ onPassedChange, onStreamReady }: {
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 2048;
     const source = ctx.createMediaStreamSource(stream);
-    source.connect(analyser);
+    const inputGain = createMicGain(ctx);
+    source.connect(inputGain.node).connect(analyser);
+    let recorder: MediaRecorder | null = null;
+    let recordingStream: MediaStream | null = null;
+    if (recordPreview) {
+      try {
+        const destination = ctx.createMediaStreamDestination();
+        inputGain.node.connect(destination);
+        recordingStream = destination.stream;
+        recorder = new MediaRecorder(recordingStream);
+        const chunks: Blob[] = [];
+        recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+        recorder.onstop = () => {
+          if (cancelled) return;
+          if (chunks.length) setPreviewUrl(URL.createObjectURL(new Blob(chunks, { type: recorder!.mimeType })));
+          else setPreviewError('The recording was empty. Record another test clip.');
+        };
+        recorder.start();
+        setRecordingPreview(true);
+      } catch {
+        inputGain.close(); source.disconnect(); analyser.disconnect();
+        recordingStream?.getTracks().forEach((t) => t.stop());
+        stream.getTracks().forEach((t) => t.stop()); void ctx.close();
+        setStatus({ kind: 'idle' }); setPreviewError('Could not record a test clip. Try TEST MIC instead.');
+        return;
+      }
+    }
     const buf = new Float32Array(analyser.fftSize);
 
     let frame = 0;
     let stopped = false;
     let heard = 0;
-    let last = performance.now();
+    const started = performance.now();
+    let last = started;
     let transferred = false;
     const stop = () => {
       if (stopped) return;
       stopped = true;
       cancelAnimationFrame(frame);
       clearTimeout(timeout);
-      source.disconnect(); analyser.disconnect();
+      if (recorder?.state === 'recording') recorder.stop();
+      recordingStream?.getTracks().forEach((t) => t.stop());
+      source.disconnect(); analyser.disconnect(); inputGain.close();
       if (!transferred) {
         stream.getTracks().forEach((t) => t.stop());
         void ctx.close();
       }
       setLevel(0);
+      setRecordingPreview(false);
     };
-    stopRef.current = stop;
+    stopRef.current = () => { cancelled = true; stop(); };
     const timeout = window.setTimeout(() => {
       stop();
       setStatus({ kind: 'silent' });
     }, LISTEN_TIMEOUT_MS);
 
+    if (recorder) recorder.onerror = () => {
+      cancelled = true;
+      stop();
+      setPreviewUrl(null);
+      setPreviewError('Could not record a test clip. Try recording again or use TEST MIC.');
+      setStatus({ kind: 'idle' });
+    };
     setStatus({ kind: 'listening' });
     const tick = (now: number) => {
       analyser.getFloatTimeDomainData(buf);
       let sum = 0;
-      for (const v of buf) sum += v * v;
+      let peak = 0;
+      for (const v of buf) { sum += v * v; peak = Math.max(peak, Math.abs(v)); }
+      setClipping(peak >= 0.98);
       const rms = Math.sqrt(sum / buf.length);
       if (track.readyState !== 'live') { stop(); setStatus({ kind: 'no-device' }); return; }
       // Log-ish meter so a normal voice fills most of the bar.
       setLevel(Math.min(1, Math.max(0, (20 * Math.log10(rms + 1e-9) + 54) / 48)));
       if (rms > HEARD_RMS) heard += (now - last) / 1000;
       last = now;
-      if (heard >= HEARD_SECONDS) {
+      if ((!recordPreview && heard >= HEARD_SECONDS) || (recordPreview && now - started >= 3000)) {
+        if (heard < HEARD_SECONDS) { stop(); setStatus({ kind: 'silent' }); return; }
         const applied = describeApplied(track);
         if (onStreamReady) { transferred = true; onStreamReady(stream, ctx); }
         stop();
@@ -135,7 +187,7 @@ export function MicCheck({ onPassedChange, onStreamReady }: {
   return (
     <div className="solo-mic">
       <div className="solo-mic__row">
-        <PixelButton tone={status.kind === 'passed' ? 'paper' : 'sky'} onClick={start} disabled={busy}>
+        <PixelButton tone={status.kind === 'passed' ? 'paper' : 'sky'} onClick={() => void start()} disabled={busy}>
           {status.kind === 'idle' ? 'TEST MIC' : busy ? 'LISTENING…' : 'TEST AGAIN'}
         </PixelButton>
         <div
@@ -154,6 +206,14 @@ export function MicCheck({ onPassedChange, onStreamReady }: {
           ))}
         </div>
       </div>
+      <MicInputControl />
+      <p className="solo-hint">Raise MIC INPUT for a quiet microphone. Lower it if your voice sounds distorted.</p>
+      {clipping && <Notice tone="warn">Microphone is too loud. Lower MIC INPUT to avoid distortion.</Notice>}
+      <PixelButton tone="paper" size="sm" onClick={() => void start(true)} disabled={busy}>RECORD 3-SECOND TEST</PixelButton>
+      {recordingPreview && <p className="solo-hint">Recording 3 seconds… sing a short line, then play it back below.</p>}
+      {previewUrl && <audio controls style={{ maxWidth: '100%' }} src={previewUrl} aria-label="Microphone test recording" />}
+      <p className="solo-hint">Test recordings stay on this device. Use headphones for playback.</p>
+      {previewError && <Notice tone="warn">{previewError}</Notice>}
       <MicMessage status={status} />
     </div>
   );

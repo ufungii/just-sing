@@ -6,6 +6,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import { bearerToken, request } from './api';
+import { validDuetProgress, type DuetProgress } from './duetLive';
 import type { MatchView, NewMatch, Rating, TimeRange } from './types';
 
 export interface RoomSnapshot {
@@ -91,6 +92,7 @@ let timers: number[] = [];
 let retry = 0;
 let generation = 0;
 const listeners = new Set<() => void>();
+const duetListeners = new Set<(slot: number, data: DuetProgress) => void>();
 const voiceListeners = new Set<(slot: number, data: VoiceSignal) => void>();
 
 /** Ephemeral signaling only. SDP/ICE must never be persisted with match results. */
@@ -106,6 +108,10 @@ export function subscribeRoomLive(listener: () => void) {
 export function subscribeVoice(listener: (slot: number, data: VoiceSignal) => void) {
   voiceListeners.add(listener);
   return () => { voiceListeners.delete(listener); };
+}
+export function subscribeDuetProgress(listener: (slot: number, data: DuetProgress) => void) {
+  duetListeners.add(listener);
+  return () => { duetListeners.delete(listener); };
 }
 export function sendVoice(data: VoiceSignal) {
   if (ws?.readyState === 1) ws.send(JSON.stringify({ type: 'voice_signal', data }));
@@ -144,7 +150,12 @@ async function open() {
       if (state.snapshot && snap.state_version < state.snapshot.state_version) return; // stale
       const turnChanged = state.snapshot?.match?.active_slot !== snap.match?.active_slot || state.snapshot?.match?.id !== snap.match?.id;
       set({ snapshot: snap, ...(turnChanged ? { progress: null, badges: [] } : {}) });
-    } else if (ev.type === 'turn_progress' && ev.data) set({ progress: { slot: ev.slot, t: ev.data.t, running: ev.data.running } });
+    } else if (ev.type === 'turn_progress' && ev.data) {
+      if (validDuetProgress(ev.data)) {
+        if (ev.data.match_id === state.snapshot?.match?.id && (ev.slot === 0 || ev.slot === 1))
+          duetListeners.forEach((l) => l(ev.slot, ev.data));
+      } else if (typeof ev.data === 'object' && !('match_id' in ev.data)) set({ progress: { slot: ev.slot, t: ev.data.t, running: ev.data.running } });
+    }
     else if (ev.type === 'phrase_rating' && ev.data) set({ badges: [...state.badges, ev.data] });
     else if (ev.type === 'voice_signal' && ev.data) voiceListeners.forEach((l) => l(ev.slot, ev.data));
   };
