@@ -263,18 +263,13 @@ Server `app@just-sing.ink`, checkout `/home/app/just-sing`, systemd service `jus
 cd /home/app/just-sing
 (
   set -e
-  git switch main
   git pull --ff-only origin main
-  uv pip install --python .venv-new/bin/python -r api/requirements.txt
+  .venv-new/bin/python -m pip install -r api/requirements.txt
   (cd web && npm ci && npm run build)
-  .venv-new/bin/alembic -c api/alembic.ini current
   .venv-new/bin/alembic -c api/alembic.ini upgrade head
   .venv-new/bin/python -m api.seed
   sudo systemctl restart just-sing
 )
-sudo systemctl status just-sing --no-pager -l
-curl -fsS http://127.0.0.1:8000/api/ready
-curl -fsS https://just-sing.ink/api/ready
 ```
 
 ## ✦ Repo map
