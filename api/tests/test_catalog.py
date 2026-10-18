@@ -112,3 +112,14 @@ def test_guide_vocals_are_served_like_the_instrumental(tmp_path, monkeypatch):
     assert client.get("/api/clips/ml-vocals/vocals").json()["error"]["code"] == "audio_missing"
     (folder / "vocals.mp3").write_bytes(b"xyz")
     assert client.get("/api/clips/ml-vocals/vocals").content == b"xyz"
+
+
+def test_preview_serves_the_original_recording_when_present(tmp_path, monkeypatch):
+    folder = write_song(tmp_path, "ml-preview")
+    songs, folders, reviewed = clip_catalog.load_catalog([tmp_path])
+    monkeypatch.setitem(clip_catalog.CATALOG, "ml-preview", songs["ml-preview"])
+    monkeypatch.setitem(clip_catalog.SONG_DIR, "ml-preview", folders["ml-preview"])
+    monkeypatch.setitem(clip_catalog.REVIEWED, "ml-preview", False)
+    assert client.get("/api/clips/ml-preview/preview").json()["error"]["code"] == "audio_missing"
+    (folder / "original.mp3").write_bytes(b"orig")
+    assert client.get("/api/clips/ml-preview/preview").content == b"orig"

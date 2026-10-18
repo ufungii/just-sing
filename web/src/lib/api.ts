@@ -108,6 +108,8 @@ export const getClips = () => request<ClipSummary[]>('/api/clips');
 export const getManifest = (clipId: string) => request<Song>(`/api/clips/${encodeURIComponent(clipId)}/manifest`);
 /** Instrumental only; 404 audio_missing when the clip has no installed audio (e.g. the synthetic demo). */
 export const audioUrl = (clipId: string) => `/api/clips/${encodeURIComponent(clipId)}/audio`;
+/** The original recording for song-select previews; 404 on a server without it (the preview then mixes the stems). */
+export const previewUrl = (clipId: string) => `/api/clips/${encodeURIComponent(clipId)}/preview`;
 export const vocalsUrl = (clipId: string) => `/api/clips/${encodeURIComponent(clipId)}/vocals`;
 
 // ---------- solo play ----------
