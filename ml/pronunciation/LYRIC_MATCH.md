@@ -47,6 +47,33 @@ Numbers are in `ml/evals/results/lyric_match_*.md`.
   same two takes, so the table above is **not an independent test** of that number. It needs more
   takes from different singers.
 
+**Draft line times are fine.** Moving every line's times in Daniel's take on purpose still left
+96% of lines matching with times up to 1 s off. That held with each start and end off at random,
+and with whole lines slid by 1 s it was 93%. "aah" stayed at 0-4%. The original and the player
+are cut at the same wrong times, so they still line up with each other. Fingerprint draft
+manifests now and rerun after the timing review.
+
+**A singer who drifts off the beat loses lines.** A second Love Scenario take by the same
+singer was sung from memory with no instrumental playing. It drifts from about 0.5 s off to about
+3 s late over 57 s. At one fixed start time its first 8 lines are `unclear`
+and its last 7 `match`. Yet at each line's own best time, every line beats its hum clearly
+(gain +0.17 to +0.34), so the words were there; only the timing was off. In the app the
+instrumental keeps players in time. But this check
+assumes the player sings on the song's clock, so a line sung more than about a second late
+is not credited.
+
+**A real hum is harder to reject than our synthetic one (correction).** The "aah" control above is
+resynthesised, and a real human hum passes the first test more easily. The test recording is Daniel
+humming 34 s of Love Scenario with no words, from memory and without the music. It cannot be
+placed on the song's clock, so we gave the check its best case: for each line, the start time in the
+recording with the largest gain. Under that search, every one of the 54 lines cleared the hum test
+(median gain +0.12, against +0.21 for his worded take under the same search). Both tests together
+matched **32/54 lines for the hum, against 44/54 for words**. So the check separates humming from
+words better than chance, but it does **not** reject real humming reliably. The search gives each
+line about 140 tries, which favours both takes; the app uses one fixed start time. The fair test,
+a hum sung along with the instrumental, is still to do. Until then, do not claim that humming
+cannot pass.
+
 ## Not shown yet (limits)
 
 - **Same tune, wrong words** is not directly tested. The controls show that the words matter
@@ -81,68 +108,64 @@ Run it after the line timings are final. If line times change, rerun it, because
 stores per-line slices. It is derived from the copyrighted vocal, so it stays in the gitignored
 `ml/data/`. Like the audio, it is served only for the clips the deployment is allowed to serve.
 
-## For the API (proposal for waychlate)
+## In the API (built: `api/lyric_check.py`)
 
-`POST /matches/{match_id}/lyric-match` (multipart). Same handling rules as the practice upload:
-FFmpeg to 16 kHz mono, run blocking outside the event loop, one at a time with busy/retry, and
-delete the upload after scoring or on failure. Never store the recording.
+`POST /api/lyric-check` (multipart). It's on when the server starts with `PRONUNCIATION_SCORER=1`, and it
+shares that model and its busy lock. Same handling rules as the practice upload: FFmpeg to 16 kHz mono,
+blocking work off the event loop, one model job at a time, and the upload deleted after the check or on
+failure. Nothing is stored.
 
 Request fields:
-- `audio`: the player's mic recording of the turn (WAV/WebM).
-- `offset_s`: the time in the recording at which clip time 0 falls, **after** the latency
-  correction. That is `(clip start on the AudioContext clock - recording start on the same clock)
-  + latency_s`. The singer is late by the device latency, so adding it lines their voice up with
-  the clip.
-- optional `pitch_hz` plus `hop_s`: the Pitchy track the browser already measured. If it is
-  missing, the server tracks pitch itself with pyin.
+- `clip_id`
+- `audio`: the solo take. The web app sends a 16 kHz mono WAV, at most 12 MB and 330 s.
+- `offset_s`: the time in the recording at which clip time 0 falls, with the device latency already
+  removed. The web app's recorder places every mic sample on the clip clock exactly like the pitch
+  tracker does (`web/src/audio/takeRecorder.ts`), so `offset_s` is just minus the clip time where the
+  recording starts.
 
-Server call:
+The server finds `lyric_fingerprints.npz` next to the clip's `song.json`, caches it, and reloads it if
+the file changes. The server tracks the hum's pitch itself with pyin. The browser's Pitchy track is
+not sent.
 
-```python
-from ml.pronunciation.lyric_match import load_fingerprints, lyric_match
-fp = load_fingerprints(f"ml/data/{song_id}/lyric_fingerprints.npz")   # cache per song
-result = lyric_match(wav_16k, 16000, fp, offset_s=offset_s)          # take_hz=... if provided
-```
-
-Response (proposed `contracts/lyric_match.example.json`; it needs a team OK because it is a
-contract change):
+Response (`contracts/lyric_check.example.json`):
 
 ```json
 {
-  "match_id": "m_123",
   "clip_id": "love-scenario",
-  "lyric_match_version": "0.1.0",
   "status": "ok",
+  "lyric_match_version": "0.1.0",
   "lines": [
     { "line_index": 0, "status": "match" },
     { "line_index": 1, "status": "unclear" },
     { "line_index": 2, "status": "not_sung" },
     { "line_index": 5, "status": "not_covered" }
-  ],
-  "summary": { "graded": 2, "match": 1, "not_sung": 1, "not_covered": 1 }
+  ]
 }
 ```
 
-- `status` is `ok`, `unavailable` (no fingerprints for this clip, model not loaded, or busy) or
-  `error`. Just as with practice, `unavailable` is never a bad result.
+- `status` is `ok`, `unavailable` (the checker isn't running, or this clip has no fingerprints) or
+  `error` (the check failed). Neither `unavailable` nor `error` is a bad result.
+- A busy model gets 429 `pronunciation_busy` (retryable), and the web app retries once.
 - `line_index` indexes the manifest's `lines`.
-- The function also returns `gain` and `share` per line. Log them for calibration, but do not
-  send them to the UI.
-- Store only this JSON next to the match, if anything. It is not part of the score or the
-  leaderboard.
+- `gain` and `share` per line go to the server log for calibration, not to the UI.
 
-## For the UI (proposal for Daniel)
+Tests: `api/tests/test_lyric_check.py` (no database or model needed). It was also checked with the
+real model through the endpoint on 40 s of a real take: 12/12 lines matched at the right offset,
+2/9 when read 6 s off.
 
-These go on the results screen after the song, never during singing. The check takes about
-10 s, so show a small "checking lyrics..." state. Per lyric line:
+## In the UI (built: results screen, solo only)
 
-| status | Show |
+After the song the results screen uploads the take once and shows "checking your lyrics…". Each
+phrase row then decorates its lyric line:
+
+| status | Shown |
 |---|---|
-| `match` | a small check by the line ("lyrics ✓") |
-| `unclear` | a soft hint: "words unclear on this line". Do not say "wrong" and do not highlight a word |
-| `not_sung` | a muted "not sung" |
+| `match` | a mint highlighter on the Korean line, plus a "LYRICS ♪" tag |
+| `unclear` | a wavy pink underline plus a soft "words?" tag. It never says "wrong" and never points at a word |
+| `not_sung` | a faded line plus a "not sung" tag |
 | `not_covered` | nothing |
-| `status: unavailable` | hide the lyric column, or show "lyric check unavailable", with a retry |
+| `unavailable` or `error` | "lyric check is offline right now". Scores are unaffected |
 
-Label the section as automated: "Compared with the original singer. Not checked by a fluent
-speaker."
+A summary line says how many sung lines sounded like the original lyrics. It is labelled
+"Compared with the original singer by a speech model. Automated, not checked by a fluent speaker,
+and not part of your score." Battle and online turns don't run the check.

@@ -1,13 +1,13 @@
 /**
  * Every threshold the live scorer uses, in one place (CLAUDE.md: "thresholds live in config, not code").
  *
- * The scoring values below mirror ml/scoring/config.py (SCORING_VERSION 0.2.0) and ml/scoring/SPEC.md.
+ * The scoring values below mirror ml/scoring/config.py (SCORING_VERSION 0.3.0) and ml/scoring/SPEC.md.
  * `npm test` runs this port against contracts/fixtures; never change the math or these numbers in only
  * one language.
  */
 
 /** Must match ml/scoring/config.py SCORING_VERSION, which the server stores with every result. */
-export const SCORING_VERSION = '0.2.0';
+export const SCORING_VERSION = '0.3.0';
 
 export const SCORING_CONFIG = {
   // ---------- live pitch capture (what counts as a voiced user frame) ----------
@@ -47,9 +47,10 @@ export const SCORING_CONFIG = {
   // ---------- phrase score and rating ----------
   pitchWeight: 0.8,
   timingWeight: 0.2,
-  perfect: 90,
-  great: 75,
-  okay: 50,
+  // Set in 0.3.0 from real takes through the live tracker (ml/evals/band_calibration.py).
+  perfect: 80,
+  great: 65,
+  okay: 40,
   /** Below this share of scoreable frames sung, a phrase is a miss (never for a mic failure). */
   minCoverage: 0.25,
 

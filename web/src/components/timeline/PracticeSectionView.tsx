@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import type { Song, TimeRange } from '../../lib/types';
+import { PixelButton } from '../../ui';
 import { boundaries, includedPhrases, snapBoundary } from './range';
 
 const timestamp = (time: number) => `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, '0')}`;
@@ -82,8 +83,8 @@ export function PracticeSectionView({ song, selection, position, disabled, onSee
             {line.romanized && line.romanized !== line.text && <small>{line.romanized}</small>}
           </button>
           {!disabled && <div className="practice-lyric-actions">
-            <button onClick={() => onLineEdge(index, 'start')} aria-label={`Start at line ${index + 1}`}>Start here</button>
-            <button onClick={() => onLineEdge(index, 'end')} aria-label={`End at line ${index + 1}`}>End here</button>
+            <PixelButton size="sm" tone="mint" onClick={() => onLineEdge(index, 'start')} aria-label={`Start at line ${index + 1}`}>Start here</PixelButton>
+            <PixelButton size="sm" tone="pink" onClick={() => onLineEdge(index, 'end')} aria-label={`End at line ${index + 1}`}>End here</PixelButton>
           </div>}
         </div>
         {index === last && <div className="practice-lyric-marker is-end"><span className="practice-boundary-label" data-boundary="end">END · {timestamp(selection.end)}</span></div>}
@@ -95,10 +96,10 @@ export function PracticeSectionView({ song, selection, position, disabled, onSee
         <span><strong>{timestamp(position)}</strong> <span>/ {timestamp(song.duration)}</span></span>
         <span className="practice-selection-summary">{timestamp(selection.start)} – {timestamp(selection.end)} · {Math.round(selection.end - selection.start)} sec selected</span>
         <div className="practice-zoom">
-          <button onClick={() => zoom(span * 1.6)} disabled={span >= song.duration}>Zoom out</button>
-          <button onClick={() => zoom(span / 1.6)} disabled={span <= Math.min(2, song.duration)}>Zoom in</button>
-          <button onClick={() => setView({ start: 0, end: song.duration })}>Fit song</button>
-          <button onClick={() => zoom((selection.end - selection.start) * 1.2, (selection.start + selection.end) / 2)}>Fit selection</button>
+          <PixelButton size="sm" tone="paper" onClick={() => zoom(span * 1.6)} disabled={span >= song.duration}>Zoom out</PixelButton>
+          <PixelButton size="sm" tone="paper" onClick={() => zoom(span / 1.6)} disabled={span <= Math.min(2, song.duration)}>Zoom in</PixelButton>
+          <PixelButton size="sm" tone="paper" onClick={() => setView({ start: 0, end: song.duration })}>Fit song</PixelButton>
+          <PixelButton size="sm" tone="paper" onClick={() => zoom((selection.end - selection.start) * 1.2, (selection.start + selection.end) / 2)}>Fit selection</PixelButton>
         </div>
       </div>
       <div ref={track} className="practice-song-bar">
@@ -129,7 +130,7 @@ export function PracticeSectionView({ song, selection, position, disabled, onSee
             }}><span>{edge === 'start' ? 'Start' : 'End'}</span><i aria-hidden="true" /></button>;
         })}
       </div>
-      <div className="practice-bar-times"><span>{timestamp(view.start)}</span><span>Drag the pink handles to choose your section</span><span>{timestamp(view.end)}</span></div>
+      <div className="practice-bar-times"><span>{timestamp(view.start)}</span><span>Drag the START and END handles to choose your section</span><span>{timestamp(view.end)}</span></div>
       {children}
     </div>
   </div>;

@@ -3,7 +3,8 @@
  * Every call goes to the same origin (/api), which the Vite dev server proxies to FastAPI and
  * which FastAPI serves itself in production, so the httpOnly guest cookie just works.
  */
-import type { ClipSummary, HistoryItem, MatchView, NewMatch, PhraseScore, Practice, Register, Score, Song, TimeRange } from './types';
+import { blockedPlayerNameReason } from './playerNamePolicy';
+import type { ClipSummary, HistoryItem, LyricCheck, MatchView, NewMatch, PhraseScore, Practice, Register, Score, Song, TimeRange } from './types';
 
 /** The API's error envelope, or a network failure (code "network"). Branch on `code`, show `message`. */
 export class ApiError extends Error {
@@ -86,12 +87,13 @@ export async function createGuest(displayName: string): Promise<{ id: string; di
   return guest;
 }
 
-/** Runs `call`; if the server has no guest session yet, creates one with `displayName` and retries once. */
+/** Create/retry once for a missing guest, or replace a legacy blocked guest after choosing an allowed name. */
 export async function asGuest<T>(displayName: string, call: () => Promise<T>): Promise<T> {
   try {
     return await call();
   } catch (e) {
-    if (e instanceof ApiError && e.code === 'not_authenticated') {
+    if (e instanceof ApiError && (e.code === 'not_authenticated'
+      || (e.code === 'invalid_player_name' && !blockedPlayerNameReason(displayName)))) {
       await createGuest(displayName || 'Player');
       return call();
     }
@@ -146,4 +148,15 @@ export function submitPractice(clipId: string, phraseId: string, audio: Blob): P
   form.set('phrase_id', phraseId);
   form.set('audio', audio, 'speech.webm');
   return request<Practice>('/api/practice', { method: 'POST', body: form });
+}
+
+// ---------- lyric check after singing ----------
+
+/** Upload a solo take for the line-level lyric check. offsetS: time in the WAV at which clip time 0 falls. */
+export function checkLyrics(clipId: string, wav: Blob, offsetS: number): Promise<LyricCheck> {
+  const form = new FormData();
+  form.set('clip_id', clipId);
+  form.set('offset_s', offsetS.toFixed(3));
+  form.set('audio', wav, 'take.wav');
+  return request<LyricCheck>('/api/lyric-check', { method: 'POST', body: form });
 }
