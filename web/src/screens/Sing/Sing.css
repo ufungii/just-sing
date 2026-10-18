@@ -156,8 +156,8 @@
   flex-wrap: wrap;
 }
 
-.sing-lyrics-head__left { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
-.duet-voice { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.sing-lyrics-head__left { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.duet-voice { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .sing-mic-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 
 .sing-meter {
@@ -308,13 +308,10 @@
 
 /* ---------- running-score bars (top right) ---------- */
 
-.score-bars { display: flex; flex: none; flex-direction: column; gap: 12px; width: 460px; }
-/* Fixed columns keep both tracks the same size regardless of either player's name. */
-.score-bar { display: grid; grid-template-columns: 150px 290px; align-items: center; gap: 14px; }
+.score-bars { display: grid; flex: none; grid-template-columns: max-content minmax(200px, 1fr); gap: 12px 14px; width: 500px; }
+/* The name column grows to fit the longest name; subgrid keeps both tracks the same size and aligned. */
+.score-bar { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; }
 .score-bar__name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-display);
   font-weight: 700;
@@ -487,7 +484,6 @@
 }
 @media (prefers-reduced-motion: reduce) { .score-bar__burst { display: none; } }
 @media (max-width: 1100px) {
-  .score-bars { width: 340px; }
-  .score-bar { grid-template-columns: 110px 216px; }
+  .score-bars { width: 380px; grid-template-columns: max-content minmax(140px, 1fr); }
   .score-bar__name { font-size: 18px; }
 }

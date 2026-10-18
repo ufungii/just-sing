@@ -27,6 +27,7 @@ import type { LyricStatus } from '../../lib/types';
 import { PitchLane, useLaneHeight } from './PitchLane';
 import { SongThumb } from '../../components/songs/SongJacket';
 import './Sing.css';
+import { shortName } from '../../lib/players';
 
 type Phase =
   | { k: 'loading' }
@@ -306,7 +307,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
       onBack={quit}
       backLabel="QUIT"
       lead={<SongThumb clipId={setup.clipId} />}
-      subtitle={song && <>{setup.battle && <>P{setup.battle.turn + 1} {setup.playerName.toUpperCase()} · </>}{song.title} <span>· {song.artist}</span></>}
+      subtitle={song && <>{setup.battle && <>P{setup.battle.turn + 1} {shortName(setup.playerName).toUpperCase()} · </>}{song.title} <span>· {song.artist}</span></>}
       right={
         <div className="sing-hud">
           {lyricTally && lyricTally.graded > 0 && (
@@ -314,7 +315,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
               LYRICS {lyricTally.matched}/{lyricTally.graded}
             </span>
           )}
-          <ScoreBars bars={[{ name: setup.playerName, score: running, slot: setup.battle?.turn === 1 ? 1 : 0 }]} />
+          <ScoreBars bars={[{ name: shortName(setup.playerName), score: running, slot: setup.battle?.turn === 1 ? 1 : 0 }]} />
         </div>
       }
     >
@@ -378,13 +379,13 @@ export function Sing({ setup }: { setup: SingSetup }) {
           )}
         </div>
         <div className="sing-mic-stack">
-          <MicInputControl />
           <div className="sing-meter" title="Mic level" aria-label="Mic level">
             <span className="sing-meter__label">MIC</span>
             <span className="sing-meter__bar">
               <span style={{ width: `${Math.min(1, level / 0.2) * 100}%` }} />
             </span>
           </div>
+          <MicInputControl />
         </div>
       </div>
     </ScreenShell>

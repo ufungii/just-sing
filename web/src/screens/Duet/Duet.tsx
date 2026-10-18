@@ -22,6 +22,7 @@ import { ScoreBars } from '../Sing/ScoreBars';
 import { bestClock, sectionAt, serverNow, type ClockSample } from './timeline';
 import { SongThumb } from '../../components/songs/SongJacket';
 import '../Sing/Sing.css';
+import { shortName } from '../../lib/players';
 
 type Phase = 'loading' | 'ready' | 'waiting' | 'playing' | 'saving' | 'saved' | 'error';
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -84,7 +85,7 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
   // The next section that hands the mic to the other singer, and how long until then.
   const handoff = sections.slice(sectionIndex + 1).find((s) => s.slot !== activeSlot);
   const handoffIn = handoff ? handoff.start - now : Infinity;
-  const names = (slot: number) => `P${slot + 1} ${match?.players.find((p) => p.slot === slot)?.display_name ?? 'Player'}`;
+  const names = (slot: number) => `P${slot + 1} ${shortName(match?.players.find((p) => p.slot === slot)?.display_name ?? 'Player')}`;
   const cueOn = phase === 'playing' && !!handoff && handoffIn > 0 && handoffIn <= HANDOFF_CUE;
   /** A singer's running score over the phrases rated so far, or null before the first one. */
   const slotScore = (slot: number) => {
@@ -373,13 +374,13 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
           }
         </div>
         <div className="sing-mic-stack">
-          <MicInputControl />
           <div className="sing-meter" title="Mic level" aria-label="Mic level">
             <span className="sing-meter__label">MIC</span>
             <span className="sing-meter__bar">
               <span style={{ width: `${Math.min(1, (engine.current?.tracker.level ?? 0) / 0.2) * 100}%` }} />
             </span>
           </div>
+          <MicInputControl />
         </div>
       </div>
       {setup.online && <>

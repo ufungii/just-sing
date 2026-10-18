@@ -2,7 +2,7 @@ import { nameEasterEgg } from '../EasterEgg/name';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DuetVoice, type VoiceStatus } from '../../audio/duetVoice';
 import { ApiError, asGuest, retryTurn } from '../../lib/api';
-import { getPlayer, usePlayers } from '../../lib/players';
+import { getPlayer, shortName, usePlayers } from '../../lib/players';
 import { PlayerPicker } from '../../components/players/PlayerPicker';
 import { ProfileDialog } from '../../components/players/ProfileDialog';
 import { SongJacket } from '../../components/songs/SongJacket';
@@ -337,7 +337,7 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
       {notice && <Notice tone="error">{notice}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
       {live.conn !== 'open' && <Notice tone="warn">Reconnecting to the room… what you see may be out of date.</Notice>}
-      {other && !other.connected && live.conn === 'open' && <Notice tone="warn">{other.display_name} is disconnected. They can rejoin from the room list.</Notice>}
+      {other && !other.connected && live.conn === 'open' && <Notice tone="warn">{shortName(other.display_name)} is disconnected. They can rejoin from the room list.</Notice>}
     </>
   );
 
@@ -369,7 +369,7 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
                   const p = snap.members.find((m) => m.slot === slot);
                   return (
                     <li key={slot} style={{ fontSize: 22 }}>
-                      {p ? `${p.display_name}${slot === 0 ? ' (host)' : ''}${slot === room.slot ? ' (you)' : ''}: ${p.ready ? 'READY' : 'not ready'}${p.connected ? '' : ' · offline'}` : 'Waiting for a friend to join…'}
+                      {p ? `${shortName(p.display_name)}${slot === 0 ? ' (host)' : ''}${slot === room.slot ? ' (you)' : ''}: ${p.ready ? 'READY' : 'not ready'}${p.connected ? '' : ' · offline'}` : 'Waiting for a friend to join…'}
                     </li>
                   );
                 })}
@@ -469,19 +469,19 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
             <PixelButton tone="hot" size="lg" disabled={busy} onClick={() => act(() => retryTurn(match.id))}>TRY THAT TURN AGAIN</PixelButton>
           </Panel>
         ) : (
-          <Notice tone="warn">Waiting for {singer?.display_name ?? 'the other player'} to retry their turn.</Notice>
+          <Notice tone="warn">Waiting for {singer ? shortName(singer.display_name) : 'the other player'} to retry their turn.</Notice>
         )
       ) : myTurn ? (
         <Panel tone="pink" label="YOUR TURN">
-          <p style={{ fontSize: 24, margin: '0 0 16px' }}>{me?.display_name}, headphones on. Same song and rules for both of you.</p>
+          <p style={{ fontSize: 24, margin: '0 0 16px' }}>{me ? shortName(me.display_name) : ''}, headphones on. Same song and rules for both of you.</p>
           <PixelButton tone="hot" size="lg" disabled={busy} onClick={sing}>SING ▶</PixelButton>
         </Panel>
       ) : (
-        <Panel tone="sky" label={`WAITING FOR ${(singer?.display_name ?? 'THE OTHER PLAYER').toUpperCase()}`}>
+        <Panel tone="sky" label={`WAITING FOR ${(singer ? shortName(singer.display_name) : 'THE OTHER PLAYER').toUpperCase()}`}>
           <p style={{ fontSize: 22, margin: '0 0 12px' }}>
             {match.attempts.some((a) => a.slot === room.slot && a.state === 'accepted')
               ? 'Your score is saved. The winner appears when they finish.'
-              : `${singer?.display_name ?? 'They'} is singing. Your turn comes next.`}
+              : `${singer ? shortName(singer.display_name) : 'They'} is singing. Your turn comes next.`}
           </p>
           <div className="sing-progress" aria-hidden="true">
             <div className="sing-progress__fill" style={{ width: `${dur && p ? Math.max(0, Math.min(1, (p.t - rangeStart) / dur)) * 100 : 0}%` }} />

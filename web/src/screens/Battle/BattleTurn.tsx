@@ -7,6 +7,7 @@ import { PhraseChips, ScoreSummary } from '../Results/PhraseChips';
 import { useManifest } from '../Results/useManifest';
 import { buildTargetTrack, phraseWeights, pronunciationScore } from '../../scoring';
 import './MatchBoard.css';
+import { shortName } from '../../lib/players';
 
 /** The battle screen after a turn: the hand-off after player 1, the final results after player 2. */
 export function BattleTurn({ result }: { result: SingResult }) {
@@ -165,7 +166,7 @@ export function MatchBoard({ match, song }: { match: MatchView; song: ReturnType
       ? 'Waiting for the final score…'
       : view.winner_slot === null
         ? 'TIE!'
-        : `${view.players.find((p) => p.slot === view.winner_slot)?.display_name ?? '?'} WINS!`;
+        : `${shortName(view.players.find((p) => p.slot === view.winner_slot)?.display_name ?? '?')} WINS!`;
   return (
     <>
       <Panel tone="mint" label="WINNER">
@@ -189,7 +190,7 @@ export function MatchBoard({ match, song }: { match: MatchView; song: ReturnType
         const lyrics = feedback?.status === 'pending' ? 'checking' as const : lines
           ? { matched: graded.filter((s) => s === 'match').length, graded: graded.length, score: pronunciation } : 'unavailable' as const;
         return (
-          <Panel key={p.slot} className={view.state === 'finished' && view.winner_slot === p.slot ? 'match-board__winner' : undefined} tone={p.slot === 0 ? 'pink' : 'sky'} label={`P${p.slot + 1} · ${p.display_name.toUpperCase()}`}>
+          <Panel key={p.slot} className={view.state === 'finished' && view.winner_slot === p.slot ? 'match-board__winner' : undefined} tone={p.slot === 0 ? 'pink' : 'sky'} label={`P${p.slot + 1} · ${shortName(p.display_name).toUpperCase()}`}>
             {score ? (
               <>
                 <ScoreSummary total={score.total} pitch={score.pitch} timing={score.timing} range={score.range} lyrics={lyrics} decimals />

@@ -25,6 +25,12 @@ interface PlayerState {
 /** The server's display-name limit. */
 export const PLAYER_NAME_MAX = 40;
 
+/** A name as shown on screen: longer than 10 characters is cut to 10 plus "..." (the pixel font draws "…" like an underscore). */
+export const shortName = (name: string, max = 10) => {
+  const chars = [...name];
+  return chars.length > max ? `${chars.slice(0, max).join('')}...` : name;
+};
+
 const KEY = 'just-sing.players';
 const listeners = new Set<() => void>();
 let state: PlayerState = load();
