@@ -44,6 +44,30 @@ Without a pronunciation scorer (the default), `/api/practice` and `/api/lyric-ch
 | `WEB_DIST` | Folder with the built frontend. Default `web/dist`. |
 | `RECONNECT_GRACE_SECONDS` | Extra time after a clip ends before a started turn is treated as lost, default 60. |
 
+## Speech features on the demo server (spoken practice + lyric check)
+
+This is for running them on your own machine. The production server (`just-sing.ink`) is already set up
+(`.venv-new`, see `docs/pronunciation-in-total-handoff.md`).
+
+Both run on the server machine with one local Korean speech model (no paid API). The server needs
+**one** environment with the API packages and the speech packages installed. The simplest way is
+to add the API packages to the speech environment from `ml/README.md`:
+
+```bash
+uv pip install --python ml/pronunciation/.venv/bin/python -r api/requirements.txt
+cd web && npm run build && cd ..                       # the server serves web/dist, so rebuild after pulling
+PRONUNCIATION_SCORER=1 ml/pronunciation/.venv/bin/uvicorn api.main:app --host 127.0.0.1 --port 8000
+```
+
+- The first start downloads the model (about 1.3 GB, once) and warms it up in about 30 s.
+  `GET /api/ready` should then report `"pronunciation": "available"` and `"lyric_check": "available"`.
+- The lyric check also needs `ml/data/<song>/lyric_fingerprints.npz` next to each demo song's
+  `song.json` (ML A's pipeline step). A song without one shows "lyric check is offline" on the
+  results screen. Singing and scores still work.
+- About 2.8 GB of RAM. On a CPU, the lyric check takes about 10 s per 35 s of singing.
+- Without `PRONUNCIATION_SCORER=1` both features answer `unavailable` and the app says they are
+  offline. Nothing breaks.
+
 ## Frontend: one origin
 
 The server also serves the built frontend, so the browser (and Electron, which loads the server's URL) talks to one
@@ -129,6 +153,7 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | GET | `/api/history`, `/api/leaderboard?clip_id=` | One row per match: `total` is your own score (null in a local battle; see `players`). Leaderboard: best solo totals of logged-in players on the current clip version |
 | POST | `/api/turns/{attempt_id}/coach` | Coaching blurb for a finished turn: `{status: ok\|unavailable, coach_blurb}`. Generated once, then cached. |
 | POST | `/api/practice` | Multipart: `clip_id`, `phrase_id`, `audio` (WAV/MP3/WebM/Ogg, max 5 MB and 15 s) |
+| POST | `/api/lyric-check/line` | The live path: one lyric line while the song plays. Multipart: `clip_id`, `line_index`, `offset_s` (time in the slice of clip time 0), `audio` (max 1 MB and 30 s). Same answer shape; grades only that line. Waits up to 8 s for the shared model, then 429 `pronunciation_busy`. About 1.4 s per line on CPU. |
 | POST | `/api/lyric-check` | Multipart: `clip_id`, `offset_s` (time in the recording of clip time 0, latency already removed), `audio` (the solo take, max 12 MB and 330 s). Returns `contracts/lyric_check.example.json`: per lyric line `match` / `unclear` / `not_sung` / `not_covered`. Display only, never part of a score; nothing is stored. Shares the practice model and its busy lock (429 `pronunciation_busy`). Takes about 10 s per 35 s of audio on CPU. |
 | POST | `/api/rooms` | Create `{duet: true, visibility?: "public"\|"private", password?, clip_id?}`. `clip_id` is optional (the host picks the song in the lobby; a default is used until then). A private room needs a 3-16 character `password` (422 `invalid_password` otherwise); only a scrypt hash is stored and it is never returned |
 | GET | `/api/rooms` | Lobby rooms with an open seat, newest first, plus rooms you already sit in (`mine: true`). Query `visibility=public\|private`, `q` (host-name substring). Rows are `{id, visibility, host_name, clip_id, players, created_at, mine}`: no code, no password data |

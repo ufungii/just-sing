@@ -27,7 +27,7 @@ export function voiceSdp(sdp: string): string {
 }
 
 /**
- * One disposable peer per online duet. Only signaling traverses the room server. The source mic
+ * One peer across the online lobby and its duet. Only signaling traverses the room server. The source mic
  * remains untouched for scoring; an independent WebAudio stream sends silence outside our sections.
  * A second receive gate prevents remote audio playing during our own sections (even from a bad peer).
  */
@@ -55,12 +55,12 @@ export class DuetVoice {
   private statsBusy = false;
 
   constructor(private readonly ctx: AudioContext, mic: MediaStream, output: AudioNode,
-    private readonly roomId: string, private readonly matchId: string, private readonly slot: number,
-    private readonly report: (status: VoiceStatus) => void) {
+    private readonly roomId: string, private matchId: string | null, private readonly slot: number,
+    private report: (status: VoiceStatus) => void, muted = false) {
     if (typeof RTCPeerConnection === 'undefined') throw new Error('WebRTC unavailable');
     this.source = ctx.createMediaStreamSource(mic);
     this.sendGate = ctx.createGain(); this.sendGate.gain.value = 0;
-    this.muteGain = ctx.createGain();
+    this.muteGain = ctx.createGain(); this.muteGain.gain.value = muted ? 0 : 1;
     this.outgoing = ctx.createMediaStreamDestination();
     this.source.connect(this.sendGate).connect(this.muteGain).connect(this.outgoing);
     for (const track of this.outgoing.stream.getAudioTracks()) track.contentHint = 'music';
@@ -71,7 +71,7 @@ export class DuetVoice {
       if (from === this.slot || data.match_id !== this.matchId || !this.available) return;
       // Serialize SDP and trickled candidates. A candidate may arrive before setRemoteDescription.
       const session = this.session;
-      this.queue = this.queue.then(() => { if (this.session === session) return this.signal(data); })
+      this.queue = this.queue.then(() => { if (this.session === session && data.match_id === this.matchId) return this.signal(data); })
         .catch(() => { if (this.session === session) this.fail(); });
     }), subscribeRoomLive(() => this.presence())];
     this.timer = setInterval(() => {
@@ -83,6 +83,18 @@ export class DuetVoice {
       void this.stats();
     }, 2000);
     this.presence();
+  }
+
+  setReporter(report: (status: VoiceStatus) => void) { this.report = report; this.status(this.lastState); }
+  /** Reused by the instrumental so section gates share its exact audio clock. */
+  get context() { return this.ctx; }
+  setOutput(output: AudioNode) { this.volumeGain.disconnect(); this.volumeGain.connect(output); }
+
+  private gate(open: boolean) {
+    for (const node of [this.sendGate, this.receiveGate]) {
+      node.gain.cancelScheduledValues(this.ctx.currentTime);
+      node.gain.setValueAtTime(open ? 1 : 0, this.ctx.currentTime);
+    }
   }
 
   setMuted(muted: boolean) { this.muteGain.gain.setValueAtTime(muted ? 0 : 1, this.ctx.currentTime); }
@@ -101,10 +113,27 @@ export class DuetVoice {
     if (this.closed) return;
     const live = roomLive();
     const snap = live.snapshot;
-    const available = live.conn === 'open' && snap?.id === this.roomId && snap.state === 'playing' &&
-      snap.match?.id === this.matchId && ['preparing', 'active'].includes(snap.match.state) &&
+    const lobby = snap?.state === 'lobby';
+    const song = snap?.state === 'playing' && !!snap.match?.duet &&
+      ['preparing', 'active'].includes(snap.match.state);
+    const context = lobby ? null : snap?.match?.id ?? null;
+    // Close the open lobby gates on the snapshot itself, before React mounts song preparation.
+    // A connected peer survives the context change; stale lobby SDP/ICE cannot cross that boundary.
+    const contextChanged = context !== this.matchId;
+    if (contextChanged || !lobby && !song) this.gate(false);
+    this.matchId = context;
+    const available = live.conn === 'open' && snap?.id === this.roomId && !!(lobby || song) &&
       snap.members.length === 2 && snap.members.every((m) => m.connected);
-    if (available === this.available) return;
+    if (lobby) this.gate(available);
+    if (available === this.available) {
+      if (available && contextChanged) {
+        // A lobby negotiation still in flight may have sent old-context SDP. Start it afresh;
+        // established audio keeps the same peer and only its privacy schedule changes.
+        if (this.pc?.connectionState !== 'connected') this.reset();
+        this.hello();
+      }
+      return;
+    }
     this.available = available;
     this.reset();
     if (available) this.hello();
@@ -222,6 +251,7 @@ export class DuetVoice {
   }
   close() {
     if (this.closed) return;
+    this.gate(false);
     this.closed = true; this.available = false;
     clearInterval(this.timer); this.unsubscribe.forEach((unsubscribe) => unsubscribe());
     this.pc?.close(); this.detachRemote();

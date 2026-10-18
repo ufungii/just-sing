@@ -19,7 +19,9 @@ import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
 import { GuideControl } from '../../ui/GuideControl';
 import { ScoreBars } from './ScoreBars';
 import { Countdown, Judgement } from './Judgement';
-import { Lyrics } from './Lyrics';
+import { LiveLyricChecker } from './liveLyrics';
+import { Lyrics, type LineVerdicts } from './Lyrics';
+import type { LyricStatus } from '../../lib/types';
 import { PitchLane, useLaneHeight } from './PitchLane';
 import { SongThumb } from '../../components/songs/SongJacket';
 import './Sing.css';
@@ -64,6 +66,9 @@ export function Sing({ setup }: { setup: SingSetup }) {
   const laneHeight = useLaneHeight();
   const [guide, setGuide] = useState(loadGuide);
   const [hasGuide, setHasGuide] = useState(false);
+  const [lyricTally, setLyricTally] = useState<{ matched: number; graded: number } | null>(null);
+  const [lyricResults, setLyricResults] = useState<{ sent: Set<number>; done: Map<number, LyricStatus> }>(() => ({ sent: new Set(), done: new Map() }));
+  const lyricRef = useRef<LiveLyricChecker | null>(null);
 
   const engineRef = useRef<SingEngine | null>(null);
   const ratedRef = useRef(new Map<string, PhraseScore>());
@@ -154,6 +159,8 @@ export function Sing({ setup }: { setup: SingSetup }) {
     rateUpTo(() => true);
     // Solo turns keep the voice for the lyric check on the results screen (uploaded once, never stored).
     const take = !setup.battle && !setup.online ? engineRef.current?.recorder.toWav() ?? null : null;
+    const lyricsLive = lyricRef.current?.finish() ?? null; // the lines checked during the song
+    lyricRef.current = null;
     engineRef.current?.close();
     engineRef.current = null;
     setPhase({ k: 'saving' });
@@ -175,7 +182,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
         }
       }
     }
-    const result = { setup, phrases, local, saved, saveError: saved ? null : saveErrorRef.current, take };
+    const result = { setup, phrases, local, saved, saveError: saved ? null : saveErrorRef.current, take, lyricsLive };
     if (setup.online) {
       const room = { id: setup.online.roomId, slot: setup.online.slot, prefs: { register: setup.register, offset: setup.calibrationOffset } };
       return nav.go({ name: 'online', room, notice: saved ? undefined : (saveErrorRef.current ?? 'Your score was not saved.') });
@@ -207,6 +214,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
         sendLive('progress', { t, running: rated.length ? aggregate(rated, phraseWeights(selected, target!)).total : 0 });
       }
       rateUpTo((settlesAt) => analysed >= settlesAt || t >= settlesAt + 0.5);
+      lyricRef.current?.poll(t);
       if (t >= Math.max(rangeEnd + 0.3, ...selected.map((p) => phraseSettlesAt(p) + 0.1))) {
         void finish();
         return;
@@ -229,6 +237,18 @@ export function Sing({ setup }: { setup: SingSetup }) {
           setSaveWarning("Couldn't reach the server, so this score won't be saved. Keep singing!");
         },
       );
+    }
+    if (song && !setup.battle && !setup.online) {
+      // Check each sung line on the server while the song plays (solo only), so results are ready at the end.
+      const lines = [...new Set(selected.map((p) => p.line_index))].map((index) => ({ index, line: song.lines[index] })).filter((l) => l.line);
+      const checker = new LiveLyricChecker(setup.clipId, lines, engine.recorder, () => {
+        const statuses = [...checker.results.values()].filter((s) => s === 'match' || s === 'unclear');
+        setLyricTally({ matched: statuses.filter((s) => s === 'match').length, graded: statuses.length });
+        setLyricResults({ sent: new Set(checker.sent), done: new Map(checker.results) });
+      }, (index) => setLyricResults((r) => ({ sent: new Set(r.sent).add(index), done: r.done })));
+      lyricRef.current = checker;
+      setLyricTally(null);
+      setLyricResults({ sent: new Set(), done: new Map() });
     }
     await engine.start();
     setPhase({ k: 'playing' });
@@ -253,6 +273,15 @@ export function Sing({ setup }: { setup: SingSetup }) {
   }, [rangeStart]);
 
   // ---------- render ----------
+  // Live lyric check per manifest line, keyed by Line for the lyrics panel ("checking…" once sent).
+  const verdicts = useMemo<LineVerdicts>(() => {
+    const out: LineVerdicts = new Map();
+    if (!song) return out;
+    for (const i of lyricResults.sent) out.set(song.lines[i], lyricResults.done.get(i) ?? 'checking');
+    for (const [i, s] of lyricResults.done) out.set(song.lines[i], s);
+    return out;
+  }, [song, lyricResults]);
+
   const rated = [...ratings.values()];
   const running = song && target && rated.length ? aggregate(rated, phraseWeights(selected, target)).total : 0;
   const playing = phase.k === 'playing';
@@ -279,6 +308,11 @@ export function Sing({ setup }: { setup: SingSetup }) {
       right={
         <div className="sing-hud">
           <span className="sing-chip">{REGISTER_LABEL[setup.register]}</span>
+          {lyricTally && lyricTally.graded > 0 && (
+            <span className="sing-chip sing-chip--lyrics" title="Lines whose words sounded like the original singer (checked as you sing)">
+              LYRICS {lyricTally.matched}/{lyricTally.graded}
+            </span>
+          )}
           <ScoreBars bars={[{ name: setup.playerName, score: running, slot: setup.battle?.turn === 1 ? 1 : 0 }]} />
         </div>
       }
@@ -345,7 +379,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
           </div>
         </div>
         {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman={showRoman} showTrans={showTrans}
-          singerAt={setup.battle?.turn === 1 ? () => 1 : undefined} />}
+          singerAt={setup.battle?.turn === 1 ? () => 1 : undefined} verdicts={verdicts} />}
       </Panel>
     </ScreenShell>
   );

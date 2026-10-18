@@ -29,14 +29,17 @@ router = APIRouter(prefix="/api")
 
 MAX_BYTES = 12 * 1024 * 1024   # a 16 kHz mono WAV of a full 5-minute song is about 9.6 MB
 MAX_SECONDS = 330.0
+LINE_MAX_BYTES = 1024 * 1024   # one line plus margins: a few seconds of 16 kHz mono WAV
+LINE_MAX_SECONDS = 30.0
+LINE_WAIT_S = 8.0              # a line check waits this long for the shared model, then answers busy
 FINGERPRINTS = "lyric_fingerprints.npz"
 
 
 class Checker(Protocol):
     version: str
 
-    def check(self, wav: Path, fingerprints: Path, offset_s: float) -> list[dict]:
-        """[{"line_index", "status"}] for every fingerprinted line. Raise on failure."""
+    def check(self, wav: Path, fingerprints: Path, offset_s: float, only: set[int] | None = None) -> list[dict]:
+        """[{"line_index", "status"}] for every fingerprinted line (or only those in `only`). Raise on failure."""
         ...
 
 
@@ -60,11 +63,11 @@ class LyricMatchChecker:
             self._cache[path] = (mtime, self._lm.load_fingerprints(path))
         return self._cache[path][1]
 
-    def check(self, wav: Path, fingerprints: Path, offset_s: float) -> list[dict]:
+    def check(self, wav: Path, fingerprints: Path, offset_s: float, only: set[int] | None = None) -> list[dict]:
         import soundfile as sf
 
         audio, sr = sf.read(str(wav), dtype="float32")
-        result = self._lm.lyric_match(audio, sr, self._fingerprints(fingerprints), offset_s=offset_s)
+        result = self._lm.lyric_match(audio, sr, self._fingerprints(fingerprints), offset_s=offset_s, only=only)
         # gain/share stay in the server log for calibration; the UI only gets the status.
         log.info("lyric check: %s", result["summary"])
         return [{"line_index": r["line_index"], "status": r["status"]} for r in result["lines"]]
@@ -112,4 +115,34 @@ def lyric_check(clip_id: str = Form(), offset_s: float = Form(ge=-MAX_SECONDS, l
             lines, status = [], "error"
         finally:
             practice._busy.release()
+    return LyricCheck(clip_id=clip_id, status=status, lyric_match_version=checker.version, lines=lines)
+
+
+@router.post("/lyric-check/line", response_model=LyricCheck)
+def lyric_check_line(clip_id: str = Form(), line_index: int = Form(ge=0),
+                     offset_s: float = Form(ge=-MAX_SECONDS, le=MAX_SECONDS),
+                     audio: UploadFile = File(), guest=Depends(current_guest)):
+    """The live path: one lyric line, uploaded by the singing screen as soon as the line has been sung, so
+    the results are ready when the song ends. `audio` is a short slice around the line and `offset_s` the
+    time in that slice of clip time 0 (usually negative). Same comparison as the full-take check."""
+    if clip_id not in CATALOG:
+        raise ApiError(404, "clip_not_found", f"No clip with id '{clip_id}'.")
+    fingerprints = fingerprint_path(clip_id)
+    if checker is None or fingerprints is None:
+        return LyricCheck(clip_id=clip_id, status="unavailable")
+
+    with tempfile.TemporaryDirectory() as d:
+        wav = practice._normalize(audio, Path(d), LINE_MAX_BYTES, LINE_MAX_SECONDS)
+        # Lines arrive every few seconds during a song, so wait briefly for the model instead of failing.
+        if not practice._busy.acquire(timeout=LINE_WAIT_S):
+            raise ApiError(429, "pronunciation_busy", "The speech model is busy. Try again in a few seconds.", True)
+        try:
+            lines = [LyricLine(**r) for r in checker.check(wav, fingerprints, offset_s, only={line_index})]
+            status = "ok"
+        except Exception:
+            log.exception("lyric line check failed")
+            lines, status = [], "error"
+        finally:
+            practice._busy.release()
+    # A line too short to grade (or not fingerprinted) comes back ok with no lines.
     return LyricCheck(clip_id=clip_id, status=status, lyric_match_version=checker.version, lines=lines)

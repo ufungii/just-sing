@@ -1,5 +1,5 @@
 import { chromium, expect, test, type Page } from '@playwright/test';
-import { duetPlayer, expectOwnedScores, openOnlineDuet, schedules, joinListedRoom } from './duetHarness';
+import { duetPlayer, expectOwnedScores, openOnlineDuet, schedules, joinListedRoom, openOnlineLobby, mic } from './duetHarness';
 
 /** Inspect actual decoded WebRTC audio, separately from the application's listening gain. */
 async function observeVoice(page: Page) {
@@ -52,7 +52,28 @@ test('live voice: real peer audio, private count-in, section handoff, mute, sock
     const { page: host, errors: hostErrors } = await duetPlayer(browser, baseURL!);
     const { page: guest, errors: guestErrors } = await duetPlayer(browser, baseURL!);
     for (const page of [host, guest]) await observeVoice(page);
-    const { song } = await openOnlineDuet(host, guest, 'duet-demo');
+    const { song } = await openOnlineDuet(host, guest, 'duet-demo', {
+      beforeMicChecks: async () => {
+        for (const page of [host, guest]) {
+          await expect(page.getByRole('button', { name: 'Mute my mic to opponent' })).toBeDisabled();
+          await expect(page.getByRole('button', { name: 'Mute my mic to opponent' })).toHaveAttribute('aria-pressed', 'true');
+          expect(await page.evaluate(() => (window as any).__micOpens)).toBe(0);
+          expect(await page.evaluate(() => (window as any).__voicePeers.length)).toBe(0);
+        }
+      },
+      afterMicChecks: async () => {
+        for (const page of [host, guest]) {
+          await expect(page.getByTestId('lobby-voice-status')).toHaveAttribute('data-state', 'connected', { timeout: 20_000 });
+          await expect.poll(() => rms(page)).toBeGreaterThan(0.02);
+        }
+        await host.getByRole('button', { name: 'Mute my mic to opponent' }).click();
+        await expect.poll(() => rms(guest)).toBeLessThan(0.001);
+        await expect.poll(() => rms(host)).toBeGreaterThan(0.02); // opposite direction remains open
+        await host.getByRole('button', { name: 'Mute my mic to opponent' }).click();
+        await expect.poll(() => rms(guest)).toBeGreaterThan(0.02);
+      },
+    });
+    for (const page of [host, guest]) expect(await page.evaluate(() => (window as any).__voicePeers.length)).toBe(1); // lobby peer survives handover
     for (const page of [host, guest]) await expect(status(page)).toHaveAttribute('data-state', 'connected', { timeout: 20_000 });
     for (const page of [host, guest]) await expect.poll(() => rms(page)).toBeLessThan(0.001);
     await host.getByRole('button', { name: 'READY TO SING' }).click();
@@ -94,7 +115,14 @@ test('live voice: real peer audio, private count-in, section handoff, mute, sock
     for (const page of [host, guest]) await expect(page.locator('.battle-headline')).toContainText(/WINS|TIE/, { timeout: 40_000 });
     for (const page of [host, guest]) {
       expect(await schedules(page)).toHaveLength(1); // synthetic click backing, no installed guide
-      expect(await page.evaluate(() => (window as any).__micOpens)).toBe(2);
+      expect(await page.evaluate(() => (window as any).__micOpens)).toBe(1);
+      expect(await page.evaluate(() => (window as any).__micStreams.every((s: MediaStream) =>
+        s.getTracks().every((t) => t.readyState === 'ended')))).toBe(true);
+      expect(await page.evaluate(() => {
+        const w = window as any;
+        return w.__voiceSources.filter((s: MediaStreamAudioSourceNode) => w.__micStreams.includes(s.mediaStream))
+          .every((s: MediaStreamAudioSourceNode) => s.context.state === 'closed');
+      })).toBe(true);
       expect(await page.evaluate(() => (window as any).__voicePeers.every((p: RTCPeerConnection) => p.connectionState === 'closed'))).toBe(true);
     }
     const final = await (await host.request.get(`/api/matches/${match.id}`)).json();
@@ -133,5 +161,65 @@ test('live voice: mute survives shared restart, rejoin cannot replay, quit relea
     for (const page of [host, guest]) expect(await page.evaluate(() =>
       (window as any).__voicePeers.every((p: RTCPeerConnection) => p.connectionState === 'closed'))).toBe(true);
     expect([...hostErrors, ...guestErrors]).toEqual([]);
+  } finally { await browser.close(); }
+});
+
+
+test('lobby voice: recheck preserves mute, failure is explicit, revoked capture and leave clean up', async ({ baseURL }) => {
+  const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+  try {
+    const { page: host } = await duetPlayer(browser, baseURL!);
+    const { page: guest } = await duetPlayer(browser, baseURL!);
+    for (const page of [host, guest]) await observeVoice(page);
+    await openOnlineLobby(host, guest, 'duet-demo');
+    for (const page of [host, guest]) await mic(page);
+    for (const page of [host, guest]) await expect(page.getByTestId('lobby-voice-status')).toHaveAttribute('data-state', 'connected', { timeout: 20_000 });
+    await host.getByRole('button', { name: 'Mute my mic to opponent' }).click();
+    await host.getByRole('button', { name: 'TEST AGAIN', exact: true }).click();
+    await expect(host.getByText('Mic works!')).toBeVisible();
+    expect(await host.evaluate(() => (window as any).__micStreams[0].getTracks().every((t: MediaStreamTrack) => t.readyState === 'ended'))).toBe(true);
+    await expect(host.getByRole('button', { name: 'Mute my mic to opponent' })).toHaveAttribute('aria-pressed', 'true');
+    for (const page of [host, guest]) await expect(page.getByTestId('lobby-voice-status')).toHaveAttribute('data-state', 'connected', { timeout: 20_000 });
+    await expect.poll(() => rms(guest)).toBeLessThan(0.001);
+    await guest.evaluate(() => {
+      const pc = (window as any).__voicePeers.at(-1);
+      Object.defineProperty(pc, 'connectionState', { get: () => 'failed' });
+      pc.dispatchEvent(new Event('connectionstatechange'));
+    });
+    await expect(guest.getByTestId('lobby-voice-status')).toContainText('Voice connection failed. Public STUN only; no TURN relay');
+    await host.evaluate(() => {
+      const track = (window as any).__micStreams.at(-1).getAudioTracks()[0];
+      track.stop(); track.dispatchEvent(new Event('ended'));
+    });
+    await expect(host.getByRole('button', { name: 'Mute my mic to opponent' })).toBeDisabled();
+    await expect(host.getByRole('button', { name: 'DO THE MIC CHECK FIRST' })).toBeVisible();
+    await host.getByRole('button', { name: /LEAVE/ }).click();
+    await expect(guest.getByText('The host closed the room.')).toBeVisible();
+    for (const page of [host, guest]) {
+      expect(await page.evaluate(() => (window as any).__micStreams.every((s: MediaStream) => s.getTracks().every((t) => t.readyState === 'ended')))).toBe(true);
+    }
+  } finally { await browser.close(); }
+});
+
+test('lobby mic permission result arriving after leave is released without opening voice', async ({ baseURL }) => {
+  const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+  try {
+    const { page: host } = await duetPlayer(browser, baseURL!);
+    const { page: guest } = await duetPlayer(browser, baseURL!);
+    for (const page of [host, guest]) await observeVoice(page);
+    await openOnlineLobby(host, guest, 'duet-demo');
+    await host.evaluate(() => {
+      const get = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      navigator.mediaDevices.getUserMedia = async (constraints) => {
+        const stream = await get(constraints);
+        return new Promise((resolve) => { (window as any).__resolvePendingMic = () => resolve(stream); });
+      };
+    });
+    await host.getByRole('button', { name: 'TEST MIC', exact: true }).click();
+    await host.waitForFunction(() => !!(window as any).__resolvePendingMic);
+    await host.getByRole('button', { name: /LEAVE/ }).click();
+    await host.evaluate(() => (window as any).__resolvePendingMic());
+    await expect.poll(() => host.evaluate(() => (window as any).__micStreams[0].getTracks()[0].readyState)).toBe('ended');
+    expect(await host.evaluate(() => (window as any).__voicePeers.length)).toBe(0);
   } finally { await browser.close(); }
 });

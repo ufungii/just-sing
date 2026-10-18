@@ -1,5 +1,6 @@
 import { nameEasterEgg } from '../EasterEgg/name';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { DuetVoice, type VoiceStatus } from '../../audio/duetVoice';
 import { ApiError, asGuest, retryTurn } from '../../lib/api';
 import { getPlayer, usePlayers } from '../../lib/players';
 import { PlayerPicker } from '../../components/players/PlayerPicker';
@@ -169,17 +170,22 @@ function RoomList({ who, clips, busy, onJoin }: { who: string; clips: Clips; bus
   return (
     <Panel tone="sky" label="ROOMS">
       <Segmented label="Show rooms" options={TABS} value={tab} onChange={setTab} />
-      <input className="solo-input" aria-label="Search by host name" value={query} placeholder="SEARCH BY HOST" onChange={(e) => setQuery(e.target.value)} />
+      <input className="solo-input room-search" aria-label="Search by host name" value={query} placeholder="SEARCH BY HOST" onChange={(e) => setQuery(e.target.value)} />
       {failed && <Notice tone="warn">Can’t load rooms right now. Trying again…</Notice>}
       {rooms && !shown.length && <p className="solo-hint">{rooms.length ? 'No rooms match.' : 'No open rooms yet. Make one!'}</p>}
       <ul role="list" style={{ listStyle: 'none', padding: 0, margin: 0 }} data-testid="room-list">
         {shown.map((r) => (
-          <li key={r.id} style={{ fontSize: 22, margin: '8px 0' }}>
-            <PixelButton tone={r.visibility === 'private' ? 'lav' : 'mint'} size="sm" disabled={busy}
-              onClick={() => (r.visibility === 'private' && !r.mine ? (setAsking(asking === r.id ? null : r.id), setPassword('')) : onJoin(r.id))}>
-              {r.mine ? 'REJOIN' : r.visibility === 'private' ? '🔒 JOIN' : 'JOIN'}
-            </PixelButton>{' '}
-            <strong>{r.host_name}</strong> · {titleOf(r.clip_id)} · {r.players}/2
+          <li key={r.id} className="room-row">
+            <div className="room-row__main">
+              <PixelButton tone={r.visibility === 'private' ? 'lav' : 'mint'} size="sm" disabled={busy}
+                onClick={() => (r.visibility === 'private' && !r.mine ? (setAsking(asking === r.id ? null : r.id), setPassword('')) : onJoin(r.id))}>
+                {r.mine ? 'REJOIN' : r.visibility === 'private' ? '🔒 JOIN' : 'JOIN'}
+              </PixelButton>
+              <span className="room-row__text">
+                <strong className="room-row__host" title={r.host_name}>{r.host_name}</strong>
+                <span className="room-row__details">{titleOf(r.clip_id)} · {r.players}/2</span>
+              </span>
+            </div>
             {asking === r.id && (
               <div className="solo-field">
                 <input className="solo-input" aria-label="Room password" autoFocus value={password} maxLength={PASSWORD_MAX} placeholder="PASSWORD"
@@ -206,6 +212,42 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [gone, setGone] = useState<string | null>(null);
   const [voiceMuted, setVoiceMuted] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>({ state: 'waiting' });
+  const [voiceCapture, setVoiceCapture] = useState<{ peer: DuetVoice; stream: MediaStream } | null>(null);
+  const captureRef = useRef<typeof voiceCapture>(null);
+  const releaseVoice = useCallback(() => {
+    const capture = captureRef.current;
+    captureRef.current = null;
+    if (capture) {
+      capture.peer.close();
+      capture.stream.getTracks().forEach((track) => track.stop());
+      void capture.peer.context.close();
+    }
+    setVoiceCapture(null);
+  }, []);
+  const micPassed = useCallback((passed: boolean) => {
+    setMicOk(passed);
+    if (!passed) releaseVoice();
+  }, [releaseVoice]);
+  const micReady = useCallback((stream: MediaStream, ctx: AudioContext) => {
+    releaseVoice();
+    try {
+      const peer = new DuetVoice(ctx, stream, ctx.destination, room.id, null, room.slot, setVoiceStatus, voiceMuted);
+      const capture = { peer, stream };
+      captureRef.current = capture;
+      setVoiceCapture(capture);
+      // Device removal/revocation must silence sharing and require a fresh check.
+      stream.getAudioTracks().forEach((track) => track.addEventListener('ended', () => {
+        if (captureRef.current === capture) { setMicOk(false); releaseVoice(); }
+      }, { once: true }));
+    } catch {
+      stream.getTracks().forEach((track) => track.stop());
+      void ctx.close();
+      setVoiceStatus({ state: 'unavailable' });
+    }
+  }, [releaseVoice, room.id, room.slot, voiceMuted]);
+  useEffect(() => { voiceCapture?.peer.setMuted(voiceMuted); }, [voiceMuted, voiceCapture]);
+  useEffect(() => () => releaseVoice(), [releaseVoice]);
 
   // Connect once, and seed with a plain GET so the screen never waits on the socket.
   useEffect(() => {
@@ -219,6 +261,10 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
 
   const snap = live.snapshot;
   const isHost = room.slot === 0;
+  useEffect(() => {
+    if (gone || live.conn === 'refused' || snap && snap.state !== 'lobby' && !(snap.state === 'playing' && snap.match?.duet &&
+      ['preparing', 'active'].includes(snap.match.state))) releaseVoice();
+  }, [snap?.state, snap?.match?.state, gone, live.conn, releaseVoice]);
   // The host leaving the lobby closes the room for everyone.
   const leave = () => {
     if (isHost && snap?.state === 'lobby') abortRoom(room.id).catch(() => {});
@@ -301,7 +347,7 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
     return (
       <ScreenShell title="ROOM" kao="(＾▽＾)ﾉ" onBack={leave} backLabel="LEAVE">
         {notices}
-        <div className="solo-grid">
+        <div className="solo-grid solo-grid--stack">
           <Panel tone="pink" label={isHost ? 'PICK A SONG' : 'SONG (THE HOST PICKS)'} className="solo-stage">
             <div className="solo-stage__row">
               <SongJacket entry={entries.find((e) => e.clip?.id === snap.clip_id) ?? null} />
@@ -331,12 +377,18 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
               <Segmented label="Voice range" options={REGISTERS} value={register} onChange={setRegister} />
             </Panel>
             <Panel tone="sky" label="MIC CHECK">
-              <p className="solo-hint">Headphones required. During the duet, your voice is shared live with the other player in your sections. It is not recorded. Muting sharing keeps your local scoring active.</p>
-              <PixelButton size="sm" aria-label="Mute my mic to opponent" aria-pressed={voiceMuted}
-                tone={voiceMuted ? 'paper' : 'hot'} onClick={() => setVoiceMuted((v) => !v)}>
-                {voiceMuted ? 'MY VOICE MUTED' : 'SHARING MY VOICE'}
+              <p className="solo-hint">Headphones required to prevent echo. After the mic check, both players can talk here. During the song, sharing opens only in your sections; count-in is silent. Voice is not recorded. Muting sharing keeps local scoring active.</p>
+              <PixelButton size="sm" aria-label="Mute my mic to opponent" aria-pressed={!micOk || voiceMuted}
+                tone={!micOk || voiceMuted ? 'paper' : 'hot'} disabled={!micOk} onClick={() => setVoiceMuted((v) => !v)}>
+                {!micOk || voiceMuted ? 'MY VOICE MUTED' : 'SHARING MY VOICE'}
               </PixelButton>
-              <MicCheck onPassedChange={setMicOk} />
+              <p role="status" data-testid="lobby-voice-status" data-state={voiceStatus.state}>
+                {!micOk ? 'Your voice is muted until you pass the mic check.' : voiceStatus.state === 'connected'
+                  ? 'Lobby voice connected.' : voiceStatus.state === 'unavailable'
+                    ? 'Voice connection failed. Public STUN only; no TURN relay is configured, so strict networks can block voice.'
+                    : voiceStatus.state === 'waiting' ? 'Voice waits for both players to connect and pass the mic check.' : 'Connecting lobby voice…'}
+              </p>
+              <MicCheck onPassedChange={micPassed} onStreamReady={micReady} />
             </Panel>
           </div>
           <div className="solo-go">
@@ -395,7 +447,7 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
     );
     return <Duet key={match.id} setup={{ matchId: match.id, clipId: snap.clip_id, registers: [register, register],
       calibrationOffset: offset, online: { roomId: room.id, slot: room.slot } }} onLeave={leave}
-      voiceMuted={voiceMuted} onVoiceMuted={setVoiceMuted} />;
+      voiceMuted={voiceMuted} onVoiceMuted={setVoiceMuted} sharedVoice={voiceCapture?.peer} checkedMic={voiceCapture?.stream} onVoiceFinished={releaseVoice} />;
   }
 
   // ---- playing: my turn, or waiting for the other singer ----

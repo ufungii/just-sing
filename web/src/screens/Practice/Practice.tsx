@@ -44,11 +44,12 @@ function describeError(e: unknown): { message: string; retry: boolean } {
   }
 }
 
-export function Practice() {
+/** `start`: open on this clip and line (from the results screen); otherwise the first clip and line. */
+export function Practice({ start }: { start?: { clipId: string; phraseId: string } } = {}) {
   const [clips, setClips] = useState<ClipSummary[] | null>(null);
   const [clipsError, setClipsError] = useState<string | null>(null);
   const [clipsTry, setClipsTry] = useState(0);
-  const [clipId, setClipId] = useState<string | null>(null);
+  const [clipId, setClipId] = useState<string | null>(start?.clipId ?? null);
 
   const [song, setSong] = useState<Song | null>(null);
   const [songError, setSongError] = useState<string | null>(null);
@@ -93,13 +94,15 @@ export function Practice() {
       .then((s) => {
         if (!live) return;
         setSong(s);
-        setPhraseId(practicePhrases(s)[0]?.id ?? null);
+        const eligible = practicePhrases(s);
+        const wanted = start && start.clipId === clipId ? eligible.find((p) => p.id === start.phraseId) : undefined;
+        setPhraseId((wanted ?? eligible[0])?.id ?? null);
       })
       .catch((e) => live && setSongError(e instanceof ApiError ? e.message : 'Could not load this clip.'));
     return () => {
       live = false;
     };
-  }, [clipId, songTry]);
+  }, [clipId, songTry, start]);
 
   // A new line means a new take and fresh feedback.
   useEffect(() => replaceTake(null), [clipId, phraseId]);

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from . import play
 from .db import get_engine
+from .rooms import close_stale_rooms
 from .tables import GuestSession, Match, MatchPlayer, PracticeAttempt, Room, RoomMember, TurnAttempt
 
 log = logging.getLogger(__name__)
@@ -62,13 +63,14 @@ def reconcile_attempts() -> int:
 
 
 async def cleanup_loop(tick_seconds: int = 15, cleanup_every: int = 240):
-    """Every tick: recover lost turns. Every `cleanup_every` ticks (hourly): delete expired guests.
+    """Every tick: recover lost turns and close empty lobbies. Every `cleanup_every` ticks (hourly): delete expired guests.
     A database outage is logged, never fatal."""
     n = 0
     while True:
         if os.getenv("DATABASE_URL"):
             try:
                 await asyncio.to_thread(reconcile_attempts)
+                await asyncio.to_thread(close_stale_rooms)
                 if n % cleanup_every == 0:
                     removed = await asyncio.to_thread(cleanup_expired)
                     log.info("retention: removed %d expired guest(s)", removed)
