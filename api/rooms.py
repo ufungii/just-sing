@@ -264,6 +264,12 @@ def _within_limit(log_: deque, limit: int, now: float) -> bool:
     return len(log_) < limit
 
 
+def limit_joins_per_ip(request: Request):
+    """Per network address as well as per guest, so a fresh guest cookie does not reset the limit."""
+    if play.too_many("joins", play.client_ip(request), JOINS_PER_MINUTE * 3):
+        raise ApiError(429, "too_many_joins", "Too many join attempts. Wait a minute.", True)
+
+
 def _join(s: Session, room: Room, guest: GuestSession, password: str | None, client: str) -> dict:
     """Seat `guest` in a locked, loaded `room`. Private rooms need the password; wrong guesses are rate limited
     per player and per network address so a fresh cookie does not reset the budget."""
@@ -299,7 +305,7 @@ def _count_join(guest: GuestSession):
     _join_log[guest.id].append(time.monotonic())
 
 
-@router.post("/api/rooms/join")
+@router.post("/api/rooms/join", dependencies=[Depends(limit_joins_per_ip)])
 def join_room(body: JoinIn, guest=Depends(current_guest), s: Session = Depends(get_db), request: Request = None):
     play.require_player_name(guest.display_name)
     _count_join(guest)
@@ -309,7 +315,7 @@ def join_room(body: JoinIn, guest=Depends(current_guest), s: Session = Depends(g
     return _join(s, room, guest, body.password, request.client.host if request and request.client else "?")
 
 
-@router.post("/api/rooms/{room_id}/join")
+@router.post("/api/rooms/{room_id}/join", dependencies=[Depends(limit_joins_per_ip)])
 def join_room_by_id(room_id: uuid.UUID, body: JoinByIdIn, guest=Depends(current_guest), s: Session = Depends(get_db),
                     request: Request = None):
     play.require_player_name(guest.display_name)

@@ -17,6 +17,7 @@ import { useNav, type SingSetup } from '../../routes';
 import { aggregate, buildTargetTrack, displayNotes, phraseSettlesAt, phraseTotal, phraseWeights, registerRatio, scorePhrase, SCORING_CONFIG } from '../../scoring';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
 import { GuideControl } from '../../ui/GuideControl';
+import { ScoreBars } from './ScoreBars';
 import { Countdown, Judgement } from './Judgement';
 import { Lyrics } from './Lyrics';
 import { PitchLane, useLaneHeight } from './PitchLane';
@@ -278,9 +279,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
       right={
         <div className="sing-hud">
           <span className="sing-chip">{REGISTER_LABEL[setup.register]}</span>
-          <span className="sing-chip sing-chip--score" aria-label="Running score">
-            {running.toFixed(1)}
-          </span>
+          <ScoreBars bars={[{ name: setup.playerName, score: running, slot: setup.battle?.turn === 1 ? 1 : 0 }]} />
         </div>
       }
     >
