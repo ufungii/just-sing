@@ -92,6 +92,8 @@ export interface Score {
   total: number;
   pitch: number;
   timing: number;
+  /** 0-100 lyric score from the lyric check; null = not checked (the total then ignores it). Automated, not validated. */
+  pronunciation?: number | null;
   phrases: PhraseScore[];
   coach_blurb: string | null;
   guided?: boolean; // guide vocals were audible (client-reported); such runs skip the leaderboard
