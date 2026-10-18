@@ -27,3 +27,6 @@
 }
 @keyframes match-shine { to { transform: rotate(360deg); } }
 @media (max-width: 720px) { .match-board__players { grid-template-columns: 1fr; } }
+
+/* Player names on the results panels (the panel label) are large. */
+.match-board__slot > .ui-panel > .ui-panel__label { margin-bottom: 16px; font-size: 28px; }
