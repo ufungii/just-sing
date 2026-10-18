@@ -5,8 +5,8 @@
 Pick a song, sing along with the instrumental, and watch your voice draw a live line over the
 melody while the lyrics scroll by in Hangul, romanization and English. Every phrase gets a
 rating the moment you finish it (**PERFECT! / GREAT / OKAY / BAD / MISS**). At the end you get
-a pitch and timing score, a check of whether you sang the right words, and a little pep talk
-from Mic-chan.
+a pitch and timing score, an overall **pronunciation report** (did you sing the right words?),
+and a little pep talk from Mic-chan.
 
 Built in 36 hours at **SwampHacks XII** by a team of four, none of us fluent in Korean (yet!).
 
@@ -18,7 +18,7 @@ Built in 36 hours at **SwampHacks XII** by a team of four, none of us fluent in 
 
 | Mode | What happens |
 |---|---|
-| **SING** ♪(^▽^)♪ | Pick a clip and a register (original, an octave down, or an octave up), then sing. Your pitch traces over the target notes, and each phrase is rated live, in the browser, with no waiting on a server. Each lyric line you sang is marked mint if the words came through, or gets a wavy underline if they didn't (as you sing on a fast server, a bit after on ours). Solo, or **1P vs 2P** on one laptop (player 2's lines in blue), with the same scoring rules for both. |
+| **SING** ♪(^▽^)♪ | Pick a clip and a register (original, an octave down, or an octave up), then sing. Your pitch traces over the target notes, and each phrase is rated live, in the browser, with no waiting on a server. When the song ends you get your score plus an overall pronunciation report. Solo, or **1P vs 2P** on one laptop (player 2's lines in blue), with the same scoring rules for both. |
 | **ONLINE** (＾▽＾)ﾉ ⇄ ヽ(＾▽＾) | Make a room, send the code to a friend, and sing against each other from two computers. |
 | **SAY IT RIGHT** (・ω・) | Read one lyric line out loud at speaking pace, then see which words came through and which ones to practise. Separate from singing; it never touches your score. |
 
@@ -37,10 +37,10 @@ It runs in the browser or as a desktop app (Electron), both talking to the same 
  vocal stem ──► CREPE: reference melody (Hz)   your mic ──► Pitchy: your pitch, every 20 ms
    │            + lyric & phrase timing            │
    │                                               ▼
-   └──► wav2vec2: "lyric fingerprints"         scoring engine rates each phrase on the spot
-        (how each original line sounds)            │   (pitch in cents + note-start timing)
+   └──► wav2vec2: "fingerprints"               scoring engine rates each phrase on the spot
+        (how the original singer sounds)           │   (pitch in cents + note-start timing)
                                                    ▼
-                                               results: score · phrase ratings · lyric check
+                                               results: score · phrase ratings · pronunciation report
                                                        · Gemini coaching blurb (words only)
 ```
 
@@ -61,23 +61,20 @@ reviewer, so training or fine-tuning would have produced numbers nobody could ch
   latency correction. Rests, backing-vocal regions and mic noise earn nothing. The engine is
   written twice, once in Python (the reference the evals test) and once in TypeScript (what the
   game runs live). Both pass the same shared test cases in `contracts/fixtures/`.
-- **Lyric check while singing** (`ml/pronunciation/lyric_match.py`): speech recognisers fail on
-  singing (we measured it), so we don't transcribe. Each sung line is compared with *the original
-  singer's recording of the same line*, using speech-model features (wav2vec2) aligned by DTW.
-  It also has to sound clearly more like the original than a wordless hum of the player's own
-  melody does, so getting the tune right is not enough to pass. The game sends **each line to the
-  server as soon as it's sung**, so in principle the lyrics light up during the song. In practice
-  that only keeps up on a fast machine: on our small CPU-only server a line takes longer to check
-  than the song takes to sing it (see the evaluation below), so marks arrive late and the results
-  screen can fall back to checking the whole take after the song.
-- **Your score vs your pronunciation:** the total is **pitch and timing only**. Pronunciation is
-  reported right next to it: a LYRICS bar (0–100) with a plain verdict (**CLEAR / MIXED /
-  UNCLEAR**), a mark on every lyric line, and a **SAY IT ▶** button on unclear lines that opens
-  spoken practice for exactly that line.
+- **Pronunciation report after you sing** (`ml/pronunciation/lyric_match.py`): speech recognisers
+  fail on singing (we measured it), so we don't transcribe. Instead your take is compared with
+  *the original singer's recording of the same song*, using speech-model features (wav2vec2)
+  aligned by DTW. It also has to sound clearly more like the original than a wordless hum of your
+  own melody does, so getting the tune right is not enough to pass. The result is one overall
+  **pronunciation score (0–100)**, the share of the song whose words matched the original, plus a
+  plain verdict: **CLEAR / MIXED / UNCLEAR**. It's built during and right after the song: a couple
+  of seconds on a fast machine, noticeably longer on our small CPU-only server.
+- **Your score vs your pronunciation:** the total is **pitch and timing only**. The pronunciation
+  report sits right next to it on the results screen as its own bar, so you can see both at a glance.
 - **Spoken pronunciation** (`ml/pronunciation/`): the expected Korean text is force-aligned to
   your speech with a Korean wav2vec2 CTC model, and the weakest words in the phrase are
   highlighted.
-- **Calibration** (`ml/evals/`): rating cutoffs, tolerances and the lyric-check margin were set
+- **Calibration** (`ml/evals/`): rating cutoffs, tolerances and the pronunciation-check margin were set
   from real takes and controlled damage, and the numbers are below.
 - **Gemini** writes translations and the coaching blurb from the measured numbers. **No language
   model ever decides a score or a winner.**
@@ -126,39 +123,27 @@ those, the original singer gets mostly Perfect and Great, a decent amateur mostl
 and two semitones off is all Bad. The same take read 7 s off its correct timing drops from ~60
 to 15–22.
 
-### Lyric check while singing
+### Pronunciation report after singing
+
+Each number is the share of the song's lyric lines whose words matched the original singer, which
+is what the overall pronunciation score is built from.
 
 | | Love Scenario (54 lines) | Last Christmas (9 lines) |
 |---|---|---|
-| Real take: lines marked "match" | **89%** | **89%** |
+| Real take, sung with the words | **89%** | **89%** |
 | A teammate **humming** the song along with the music, no words | **0%** (6 lines) | – |
 | Same take, words replaced by a synthetic "aah" on the same melody | 0% | 0% |
 | Real take compared against the wrong part of the song | 4% | 0% |
-| Quiet | 0% (all "not sung") | 0% |
+| Quiet | 0% (nothing sung) | 0% |
 
-That table checks the whole recording at once. The game checks **one line at a time** during
-the song, which hears less audio around each line:
-
-| Line by line, during the song | Result |
-|---|---|
-| Real take: lines marked "match" | 45/54 (83%) and 7/9 |
-| The real hum | 1 of 6 lines |
-| Time per line, on a developer laptop (CPU only) | median 1.4 s, slowest 2.5 s |
-| **Time per line, on our production server** (8 lines, measured over the internet) | **median 7.7 s, slowest 13.8 s** |
-| How often a new line ends in the song | about every 3.9 s |
-
-The accuracy holds up on the server (the lines we sent through it came back correct). The speed
-doesn't: at ~7.7 s per line against a new line every ~3.9 s, checks queue up and fall further
-behind as the song goes on, so the "lights up as you sing" part is not reliable on that machine.
-We found two cheap speed-ups (stop the model after the one layer we use, and track pitch on a
-coarser grid for the hum), but did not ship them.
-
-Draft lyric timings off by up to 1 s barely matter (96% → 93–96%).
+Draft lyric timings off by up to 1 s barely matter (96% → 93–96%). The report is computed on the
+server and takes a while: about a minute for a full song on a laptop CPU, and longer on our small
+server (we haven't timed a full song there).
 
 **How we got there (honestly):** our synthetic "aah" made the check look perfect, but a *real*
 hum is harder to reject. Hummed along with the music, it still passed 3 of 6 lines at our first
 margin, with gains of +0.04 to +0.09 against +0.19 to +0.36 for the same lines sung with words.
-Raising the margin to 0.10 rejects the hum on every line and keeps 89% of real lines. We picked
+Raising the margin to 0.10 rejects the hum on every line and keeps 89% of the real take. We picked
 that margin on these same few recordings, so more singers (and more hums) are the next test.
 
 ### Spoken pronunciation (SAY IT RIGHT)
@@ -210,38 +195,33 @@ a real take loses ~7 points. At our recommended setting (clarity 0.65, RMS gate 
 - **No unrestricted time-warping (DTW) in the score.** Warping would align away exactly the rhythm
   mistakes the game should catch. Timing is measured against note starts after **one** device
   latency correction. We allow one small shift of up to 0.1 s per phrase. A per-frame
-  "best match nearby" rule let random pitches score 42, so we dropped it. The lyric check *does*
+  "best match nearby" rule let random pitches score 42, so we dropped it. The pronunciation report *does*
   use DTW, because there it only removes tempo so the words can be compared. It never touches
   the score.
 - **Scoring in the browser, with a Python reference and shared test cases.** Ratings have to pop
   up instantly, so the browser scores live. The Python engine is what the evals test, and the
   shared test cases keep the two in step. They caught real bugs: latency not applied to pitch,
   and excluded regions still costing timing points.
-- **Heavy work offline.** Vocal separation, CREPE and the lyric fingerprints run once per song.
+- **Heavy work offline.** Vocal separation, CREPE and the per-song fingerprints run once per song.
   The live path is a light tracker plus arithmetic.
 - **Free, local, pretrained speech models instead of a paid API.** They cost nothing, work
   offline, and we can evaluate them ourselves. We chose forced alignment over transcription
   after measuring Whisper's autocorrection.
-- **Spoken practice is separate from singing, and the lyric check compares sound with sound.**
+- **Spoken practice is separate from singing, and the pronunciation report compares sound with sound.**
   Recognisers can't read sung Korean (they told right from wrong lyrics at AUC 0.62–0.65, barely
   above chance), so we stopped asking them to.
 - **Pronunciation is reported next to the score, not inside it.** We built and tested a rule that
-  folds the lyric check into the total as a "humming guard" (it's in both scoring engines, with
-  shared test cases), but we left it switched off. It rests on one or two singers, and an honest
-  take with one uncertain line could lose a big chunk of its total.
-- **Check each line during the song, not the whole take afterwards.** Same comparison, but the
-  goal was results ready right when the song ends instead of a minute later. It works on a fast
-  CPU (~1.4 s per line) but not on our small production server (~7.7 s per line), so for the
-  demo expect the marks to lag. The price of short slices is a few lines (89% → 83% matched),
-  because they give the model less to listen to.
+  folds the pronunciation score into the total as a "humming guard" (it's in both scoring engines,
+  with shared test cases), but we left it switched off. It rests on one or two singers, and an
+  honest take that the check is unsure about could lose a big chunk of its total.
 
 ## ✦ What failed or surprised us (；へ；)
 
 - Our first rating cutoffs came from synthetic voices and were impossible for real ones, even
   for the original artist.
-- Our first lyric-check rule passed a wordless "aah" on 76% of lines: the tune was doing all the
-  work. The hum control fixed that. Then a real human hum still passed half its lines, so we
-  raised the margin until it failed every line.
+- Our first pronunciation check passed a wordless "aah" on 76% of the song: the tune was doing all
+  the work. The hum control fixed that. Then a real human hum still passed about half, so we
+  raised the margin until it failed every time.
 - Whisper's transcripts looked perfect while silently hiding the mistakes we wanted to find.
 - Tempo drift is punished hard (5% slower costs ~30 points). That's the price of not warping
   time.
@@ -252,8 +232,8 @@ a real take loses ~7 points. At our recommended setting (clarity 0.65, RMS gate 
 
 - **Few real singers.** The real-take numbers come from one or two teammates and two songs.
   The thresholds are a starting point.
-- **No fluent Korean reviewer.** All pronunciation feedback is automated and word or line level.
-  It doesn't judge accent or individual sounds. The Hangul lyrics come from **TODO: source**,
+- **No fluent Korean reviewer.** All pronunciation feedback is automated: one overall score for
+  singing, word by word for spoken practice. It doesn't judge accent or individual sounds. The Hangul lyrics come from **TODO: source**,
   not from our own transcription.
 - **Song timings are drafts** until someone has checked them by ear (`song.review.json` marks
   the reviewed ones).
@@ -264,11 +244,11 @@ a real take loses ~7 points. At our recommended setting (clarity 0.65, RMS gate 
 
 ## ✦ Next
 
-1. More singers and more hums, to recalibrate the cutoffs and the lyric-check margin on people
+1. More singers and more hums, to recalibrate the cutoffs and the pronunciation-check margin on people
    other than us. Then decide whether the humming guard should count toward the total.
 2. A good spoken reading (and more speakers) for SAY IT RIGHT, to learn what "correct" scores.
-3. Word-level highlights while singing: today the verdict is per line, because per-word evidence
-   on singing isn't reliable yet.
+3. Per-word feedback while singing: today the singing report is one overall score, because
+   per-word evidence on singing isn't reliable yet.
 4. Extract the reference melody with the browser's own tracker, to close the remaining tracker
    gap.
 
@@ -296,7 +276,7 @@ cd desktop && npm install && npm start
 # or download an installer from the GitHub Releases tab (see desktop/README.md)
 ```
 
-Spoken practice and the lyric check need the speech environment
+Spoken practice and the pronunciation report need the speech environment
 (`pip install -r ml/pronunciation/requirements.txt`) and `PRONUNCIATION_SCORER=1`. Without them
 both features show as "offline", and the singing game still works. Setting up songs is covered in
 [`ml/pipeline/README.md`](ml/pipeline/README.md), and the evals in [`ml/README.md`](ml/README.md).
@@ -327,9 +307,9 @@ cd /home/app/just-sing
 ```
 web/               the game: React + TypeScript + Vite, Canvas pitch lane, live scoring
 desktop/           Electron shell that opens the server's URL
-api/               FastAPI: songs, sessions (Auth0 / guest), matches, practice, lyric check
+api/               FastAPI: songs, sessions (Auth0 / guest), matches, practice, pronunciation report
 ml/scoring/        Python reference scoring engine + spec
-ml/pronunciation/  spoken-practice scorer and lyric check (local pretrained models)
+ml/pronunciation/  spoken-practice scorer and pronunciation report (local pretrained models)
 ml/pipeline/       offline song preparation: Demucs, CREPE, lyric timing, Gemini translations
 ml/evals/          every number in this README, and the scripts that produce it
 contracts/         shared data shapes and test cases (Python and TypeScript both pass them)
