@@ -229,9 +229,6 @@ export function Practice({ start }: { start?: { clipId: string; phraseId: string
                 {!take && <span className="practice-muted">Record a take first.</span>}
               </div>
               <Feedback check={check} onRetry={runCheck} />
-              <p className="practice-disclaimer">
-                Automated word-level feedback. Not reviewed by a fluent speaker. Doesn't affect singing scores.
-              </p>
             </Panel>
           </div>
         </div>
