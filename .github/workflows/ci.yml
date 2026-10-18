@@ -35,6 +35,8 @@ jobs:
             api/requirements.txt
             ml/requirements.txt
       - run: pip install -r api/requirements.txt -r ml/requirements.txt
+      # Practice and lyric-check uploads are decoded with FFmpeg (the server has it too).
+      - run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
       # No DATABASE_URL here: database-backed tests skip (api/tests/conftest.py requires TEST_DATABASE_URL).
       - run: python -m pytest api/tests -q
         env:

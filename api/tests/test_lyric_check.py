@@ -1,5 +1,6 @@
 """Lyric check upload: unavailable states, ok/error/busy, upload limits and temp cleanup.
 Runs without a database or the speech model: the guest dependency and the checker are faked."""
+import shutil
 import subprocess
 
 import pytest
@@ -10,6 +11,9 @@ from api.main import app
 from api.play import current_guest
 
 CLIP = "synthetic-demo"
+
+# Uploads are normalized with FFmpeg, and the test audio is generated with it.
+pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg on PATH")
 
 
 class FakeChecker:
