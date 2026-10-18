@@ -241,6 +241,31 @@ second are refused. After reconnecting, trust the fresh durable snapshot.
 | `clip_catalog.py`, `catalog/<id>/song.json` | Song loading and validation; the synthetic fixture lives in `catalog/` |
 | `migrations/` | Alembic migrations (committed) |
 
+## Updating the server
+
+The Ubuntu server runs `just-sing.service` (uvicorn as user `app`, from `/home/app/just-sing`) and serves the built
+frontend from `web/dist`. After pushing to `main`:
+
+```bash
+ssh app@just-sing.ink
+cd ~/just-sing && git pull
+.venv/bin/pip install -r api/requirements.txt            # only if requirements changed
+.venv/bin/alembic -c api/alembic.ini upgrade head        # only if there is a new migration
+(cd web && npm ci && npm run build)                      # only if web/ changed
+.venv/bin/python -m api.seed                             # after adding or changing songs
+sudo systemctl restart just-sing                         # Python changes and new songs
+```
+
+Song audio and `menu-bgm.mp3` are not in git. Copy them from your machine with rsync:
+
+```bash
+rsync -a --exclude='*.png' "<song folder>/" app@just-sing.ink:just-sing/ml/data/<song_id>/
+rsync -a menu-bgm.mp3 app@just-sing.ink:just-sing/web/public/audio/   # and web/dist/audio/ to skip a rebuild
+```
+
+`api/scripts/fetch_drive_audio.sh` downloads the shared Drive folder into `ml/data/downloads/`; each song's id is the
+`id` in its `song.json`, not the Drive folder name. A frontend-only change needs no restart.
+
 ## Songs from the ML pipeline
 
 `python -m ml.pipeline.run` writes `ml/data/<id>/song.json` (the `contracts/song.example.json` shape) with its audio
