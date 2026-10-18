@@ -350,30 +350,34 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
           singerAt={(time) => sections[sectionAt(sections, time)]?.slot ?? 0} />}
       </Panel>
       <div className="sing-lyrics-head">
-        <div className="ui-seg" role="group" aria-label="Lyric helpers">
-          <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showRoman} onClick={() => setShowRoman((v) => !v)}>ROMANIZATION</PixelButton>
-          <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showTrans} onClick={() => setShowTrans((v) => !v)}>ENGLISH</PixelButton>
-        </div>
-        <MicInputControl />
-        {engine.current?.vocals && <GuideControl on={guide} volume={guideVolume} onToggle={() => setGuide((v) => !v)} onVolume={setGuideVolume} />}
-        {setup.online &&
-          <div className="ui-guide" title="Hear the other singer live during their sections. Headphones required.">
-            <span className="ui-guide__label">OTHER SINGER</span>
-            <input type="range" className="ui-slider" min={0} max={100} value={Math.round(voiceVolume * 100)}
-              aria-label="Other singer volume" style={{ '--fill': `${voiceVolume * 100}%` } as React.CSSProperties}
-              onChange={(e) => setVoiceVolume(Number(e.target.value) / 100)} />
-            <PixelButton size="sm" tone={voiceMuted ? 'paper' : 'hot'} aria-pressed={voiceMuted}
-              onClick={() => onVoiceMuted?.(!voiceMuted)} aria-label="Mute my mic to opponent">
-              <PixelIcon name={voiceMuted ? 'speakerOff' : 'speaker'} size={20} />
-              {voiceMuted ? 'MY VOICE MUTED' : 'SHARING MY VOICE'}
-            </PixelButton>
+        <div className="sing-lyrics-head__left">
+          <div className="ui-seg" role="group" aria-label="Lyric helpers">
+            <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showRoman} onClick={() => setShowRoman((v) => !v)}>ROMANIZATION</PixelButton>
+            <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showTrans} onClick={() => setShowTrans((v) => !v)}>ENGLISH</PixelButton>
           </div>
-        }
-        <div className="sing-meter" title="Mic level" aria-label="Mic level">
-          <span className="sing-meter__label">MIC</span>
-          <span className="sing-meter__bar">
-            <span style={{ width: `${Math.min(1, (engine.current?.tracker.level ?? 0) / 0.2) * 100}%` }} />
-          </span>
+          {engine.current?.vocals && <GuideControl on={guide} volume={guideVolume} onToggle={() => setGuide((v) => !v)} onVolume={setGuideVolume} />}
+          {setup.online &&
+            <div className="ui-guide" title="Hear the other singer live during their sections. Headphones required.">
+              <span className="ui-guide__label">OTHER SINGER</span>
+              <input type="range" className="ui-slider" min={0} max={100} value={Math.round(voiceVolume * 100)}
+                aria-label="Other singer volume" style={{ '--fill': `${voiceVolume * 100}%` } as React.CSSProperties}
+                onChange={(e) => setVoiceVolume(Number(e.target.value) / 100)} />
+              <PixelButton size="sm" tone={voiceMuted ? 'paper' : 'hot'} aria-pressed={voiceMuted}
+                onClick={() => onVoiceMuted?.(!voiceMuted)} aria-label="Mute my mic to opponent">
+                <PixelIcon name={voiceMuted ? 'speakerOff' : 'speaker'} size={20} />
+                {voiceMuted ? 'MY VOICE MUTED' : 'SHARING MY VOICE'}
+              </PixelButton>
+            </div>
+          }
+        </div>
+        <div className="sing-mic-stack">
+          <MicInputControl />
+          <div className="sing-meter" title="Mic level" aria-label="Mic level">
+            <span className="sing-meter__label">MIC</span>
+            <span className="sing-meter__bar">
+              <span style={{ width: `${Math.min(1, (engine.current?.tracker.level ?? 0) / 0.2) * 100}%` }} />
+            </span>
+          </div>
         </div>
       </div>
       {setup.online && <>

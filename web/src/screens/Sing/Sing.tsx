@@ -364,23 +364,27 @@ export function Sing({ setup }: { setup: SingSetup }) {
           singerAt={setup.battle?.turn === 1 ? () => 1 : undefined} verdicts={verdicts} />}
       </Panel>
       <div className="sing-lyrics-head">
-        <div className="ui-seg" role="group" aria-label="Lyric helpers">
-          <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showRoman} onClick={() => setShowRoman((v) => !v)}>
-            ROMANIZATION
-          </PixelButton>
-          <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showTrans} onClick={() => setShowTrans((v) => !v)}>
-            ENGLISH
-          </PixelButton>
+        <div className="sing-lyrics-head__left">
+          <div className="ui-seg" role="group" aria-label="Lyric helpers">
+            <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showRoman} onClick={() => setShowRoman((v) => !v)}>
+              ROMANIZATION
+            </PixelButton>
+            <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showTrans} onClick={() => setShowTrans((v) => !v)}>
+              ENGLISH
+            </PixelButton>
+          </div>
+          {hasGuide && (
+            <GuideControl on={guide.on} volume={guide.vol} onToggle={() => setGuide((g) => ({ ...g, on: !g.on }))} onVolume={(vol) => setGuide({ on: true, vol })} />
+          )}
         </div>
-        <MicInputControl />
-        {hasGuide && (
-          <GuideControl on={guide.on} volume={guide.vol} onToggle={() => setGuide((g) => ({ ...g, on: !g.on }))} onVolume={(vol) => setGuide({ on: true, vol })} />
-        )}
-        <div className="sing-meter" title="Mic level" aria-label="Mic level">
-          <span className="sing-meter__label">MIC</span>
-          <span className="sing-meter__bar">
-            <span style={{ width: `${Math.min(1, level / 0.2) * 100}%` }} />
-          </span>
+        <div className="sing-mic-stack">
+          <MicInputControl />
+          <div className="sing-meter" title="Mic level" aria-label="Mic level">
+            <span className="sing-meter__label">MIC</span>
+            <span className="sing-meter__bar">
+              <span style={{ width: `${Math.min(1, level / 0.2) * 100}%` }} />
+            </span>
+          </div>
         </div>
       </div>
     </ScreenShell>
