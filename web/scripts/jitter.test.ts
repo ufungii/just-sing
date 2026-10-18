@@ -21,7 +21,9 @@ function wav(path: string) {
 // Live-pitch jitter on the recorded takes, run from web/ (scripts/ is not type-checked by `tsc -b`, which only covers src/).
 // Print the numbers with: npx vitest run scripts/jitter.test.ts --disableConsoleIntercept
 const TAKES = ['../e2e/takes/synthetic-demo/good.wav', '../e2e/takes/synthetic-demo/wrong.wav', '../e2e/takes/russian-roulette/good.wav', '../e2e/takes/russian-roulette/wrong.wav'];
-it.each(TAKES.filter(existsSync))('smoothing does not increase frame-to-frame jumps on %s', (path) => {
+const availableTakes = TAKES.filter(existsSync);
+if (!availableTakes.length) it.skip('jitter comparison needs generated local take WAVs', () => {});
+it.each(availableTakes)('smoothing does not increase frame-to-frame jumps on %s', (path) => {
   const sr = 48000, samples = wav(path), frames = Math.floor(samples.length / sr / 0.02) - 4;
   const tracker = new PitchTracker(sr, 0, frames);
   tracker.start(0);

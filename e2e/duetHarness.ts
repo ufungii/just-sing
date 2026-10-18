@@ -7,10 +7,12 @@ export async function duetPlayer(browser: Browser, baseURL: string, wallClockSke
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.addInitScript((skew) => {
+    localStorage.setItem('just-sing.showTestClips', '1');
     const realNow = Date.now;
     Date.now = () => realNow() + skew;
     (window as any).__audioSchedules = [];
     (window as any).__micOpens = 0;
+    (window as any).__micStreams = [];
     const originalStart = AudioBufferSourceNode.prototype.start;
     AudioBufferSourceNode.prototype.start = function (when = 0, offset = 0, duration?: number) {
       (window as any).__audioSchedules.push({ when, offset, duration, contextNow: this.context.currentTime,
@@ -31,6 +33,7 @@ export async function duetPlayer(browser: Browser, baseURL: string, wallClockSke
         const stop = track.stop.bind(track);
         track.stop = () => { stop(); void ctx.close(); };
       }
+      (window as any).__micStreams.push(dest.stream);
       return dest.stream;
     };
   }, wallClockSkew);
@@ -103,7 +106,7 @@ export async function joinListedRoom(page: Page, hostName: string) {
 
 export const ONLINE_HOST = 'E2E-Bot-duet-online';
 
-export async function openOnlineDuet(host: Page, guest: Page, clipId = DUET_CLIP) {
+export async function openOnlineLobby(host: Page, guest: Page, clipId = DUET_CLIP) {
   await host.goto('/');
   const song = await manifest(host, clipId);
   await host.getByText('ONLINE', { exact: true }).first().click();
@@ -117,8 +120,19 @@ export async function openOnlineDuet(host: Page, guest: Page, clipId = DUET_CLIP
   await createFirstPlayer(guest, 'E2E-Rival-duet-online');
   await guest.getByRole('button', { name: 'JOIN ROOM', exact: true }).click();
   await guest.getByTestId('room-list').getByRole('listitem').filter({ hasText: ONLINE_HOST }).getByRole('button').first().click();
-  for (const page of [host, guest]) { await mic(page); await page.getByRole('button', { name: 'READY ✓', exact: true }).click(); }
+  return { song, hostName: ONLINE_HOST };
+}
+
+export async function openOnlineDuet(host: Page, guest: Page, clipId = DUET_CLIP, lobby?: {
+  beforeMicChecks?: () => Promise<void>;
+  afterMicChecks?: () => Promise<void>;
+}) {
+  const { song, hostName } = await openOnlineLobby(host, guest, clipId);
+  await lobby?.beforeMicChecks?.();
+  for (const page of [host, guest]) await mic(page);
+  await lobby?.afterMicChecks?.();
+  for (const page of [host, guest]) await page.getByRole('button', { name: 'READY ✓', exact: true }).click();
   await host.getByRole('button', { name: 'START ♪', exact: true }).click();
   for (const page of [host, guest]) await expect(page.getByRole('button', { name: 'READY TO SING' })).toBeVisible();
-  return { song, hostName: ONLINE_HOST };
+  return { song, hostName };
 }

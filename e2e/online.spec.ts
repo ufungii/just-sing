@@ -34,7 +34,7 @@ test('online duet: loaded barrier, synchronized handoffs and independent assigne
       expect(history.total).toBe(final.attempts.find((a: any) => a.slot === slot).score.total);
       expect(history.range).toBeNull(); expect(history.duet).toBe(true);
       expect(await schedules(page)).toHaveLength(2);
-      expect(await page.evaluate(() => (window as any).__micOpens)).toBe(2);
+      expect(await page.evaluate(() => (window as any).__micOpens)).toBe(1); // reuse the successful lobby mic check
     }
     expect([...hostErrors, ...guestErrors]).toEqual([]);
   } finally { await browser.close(); }
