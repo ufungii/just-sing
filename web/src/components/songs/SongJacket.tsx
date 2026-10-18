@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { coverUrl, formatDuration } from './setlist';
+import { coverUrl } from './setlist';
 import type { SongEntry } from './setlist';
 import './songs.css';
 
@@ -47,6 +47,12 @@ export function PixelHeartFace({ size }: { size: number }) {
   );
 }
 
+/** m:ss, e.g. 3:37. */
+const songLength = (seconds: number) => {
+  const s = Math.round(seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
+
 /**
  * Album cover for a prepared song, or `fallback` when there is none. Covers are local-only files
  * (web/public/covers/<clip id>.png, gitignored), so a fresh clone shows the drawn pixel art instead.
@@ -92,10 +98,10 @@ export function SongJacket({ entry }: { entry: SongEntry | null }) {
           {entry?.title ?? 'Pick a song'}
         </h2>
         <p className="song-jacket__artist">{entry?.artist ?? 'from the wheel'}</p>
-        {entry?.clip && (
+        {entry?.clip && <p className="song-jacket__length">{songLength(entry.clip.duration)}</p>}
+        {entry?.kind === 'test' && (
           <div className="song-jacket__chips">
-            <span className="song-jacket__chip">CLIP {formatDuration(entry.clip.duration)}</span>
-            {entry.kind === 'test' && <span className="song-jacket__chip">TEST CLIP</span>}
+            <span className="song-jacket__chip">TEST CLIP</span>
           </div>
         )}
       </div>

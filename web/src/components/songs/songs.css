@@ -245,8 +245,7 @@
   box-shadow:
     inset 0 0 0 4px var(--paper),
     inset 8px 8px 0 var(--bevel),
-    inset -8px -10px 0 var(--side),
-    var(--extrude-lift) 0 var(--ink);
+    inset -8px -10px 0 var(--side);
 }
 .song-jacket__art-label {
   padding: 3px 10px;
@@ -257,7 +256,16 @@
   font-size: 12px;
 }
 
-.song-jacket__info { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+/* Always as tall as a two-line title plus artist and length (spare room goes at the bottom), so the
+   jacket, and the wheel sized to it, keep one height whichever song is picked. */
+.song-jacket__info {
+  --title-size: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: calc(var(--title-size) * 2.1 + 66px);
+}
 
 /* Layered 3D title, like the logo: a plum shadow copy sits under the pink face. */
 .song-jacket__title {
@@ -265,7 +273,7 @@
   margin: 4px 0 0;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 40px;
+  font-size: var(--title-size);
   line-height: 1.05;
   color: var(--hot);
   overflow-wrap: anywhere;
@@ -282,6 +290,8 @@
 .song-jacket__artist { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 18px; }
 
 .song-jacket__chips { display: flex; flex-wrap: wrap; gap: 10px; }
+/* Song length under the artist: plain text, no box. */
+.song-jacket__length { margin: 0; font-family: var(--font-body); font-weight: 700; font-size: 18px; color: var(--ink-rose); }
 .song-jacket__chip {
   padding: 4px 10px;
   border: 3px solid var(--ink);
@@ -294,7 +304,7 @@
 @media (max-width: 1180px) {
   .song-jacket__art-wrap { width: 240px; height: 240px; }
   .song-jacket__disc { width: 200px; height: 200px; left: 100px; }
-  .song-jacket__title { font-size: 32px; }
+  .song-jacket__info { --title-size: 32px; }
 }
 
 /* ---------- album covers (local-only files; pixel art when missing) ---------- */
@@ -332,6 +342,5 @@
   overflow: hidden;
   border: var(--border-thin) solid var(--ink);
   background: var(--paper);
-  box-shadow: 5px 6px 0 var(--ink);
 }
 .song-thumb__img { width: 100%; height: 100%; object-fit: cover; }

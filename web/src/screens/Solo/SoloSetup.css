@@ -62,8 +62,13 @@
   display: grid;
   grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
   gap: 36px;
-  align-items: start;
+  align-items: stretch;
 }
+/* The wheel is exactly as tall as the jacket beside it (cover, title, artist, length), so no blank
+   band is left under the jacket: size containment keeps the list from setting the row's height,
+   and the list scrolls inside whatever height the jacket gives it. */
+.solo-stage__row > .song-wheel { contain: size; min-height: 320px; }
+.solo-stage__row > .song-wheel .song-wheel__list { flex: 1 1 0; min-height: 0; max-height: none; }
 
 /* Stage 02 box: the seats (side by side for two players), then the mic check. */
 .solo-seats { display: flex; flex-direction: column; }
@@ -237,6 +242,9 @@
 
 @media (max-width: 860px) {
   .solo-stage__row { grid-template-columns: minmax(0, 1fr); }
+  /* Stacked under the jacket, the wheel goes back to its own fixed height. */
+  .solo-stage__row > .song-wheel { contain: none; min-height: 0; }
+  .solo-stage__row > .song-wheel .song-wheel__list { flex: none; max-height: 520px; }
   .solo-seats--2 { grid-template-columns: minmax(0, 1fr); }
   .solo-go--center .solo-start { min-width: 0; width: 100%; }
   .solo-grid {
