@@ -170,17 +170,22 @@ function RoomList({ who, clips, busy, onJoin }: { who: string; clips: Clips; bus
   return (
     <Panel tone="sky" label="ROOMS">
       <Segmented label="Show rooms" options={TABS} value={tab} onChange={setTab} />
-      <input className="solo-input" aria-label="Search by host name" value={query} placeholder="SEARCH BY HOST" onChange={(e) => setQuery(e.target.value)} />
+      <input className="solo-input room-search" aria-label="Search by host name" value={query} placeholder="SEARCH BY HOST" onChange={(e) => setQuery(e.target.value)} />
       {failed && <Notice tone="warn">Can’t load rooms right now. Trying again…</Notice>}
       {rooms && !shown.length && <p className="solo-hint">{rooms.length ? 'No rooms match.' : 'No open rooms yet. Make one!'}</p>}
       <ul role="list" style={{ listStyle: 'none', padding: 0, margin: 0 }} data-testid="room-list">
         {shown.map((r) => (
-          <li key={r.id} style={{ fontSize: 22, margin: '8px 0' }}>
-            <PixelButton tone={r.visibility === 'private' ? 'lav' : 'mint'} size="sm" disabled={busy}
-              onClick={() => (r.visibility === 'private' && !r.mine ? (setAsking(asking === r.id ? null : r.id), setPassword('')) : onJoin(r.id))}>
-              {r.mine ? 'REJOIN' : r.visibility === 'private' ? '🔒 JOIN' : 'JOIN'}
-            </PixelButton>{' '}
-            <strong>{r.host_name}</strong> · {titleOf(r.clip_id)} · {r.players}/2
+          <li key={r.id} className="room-row">
+            <div className="room-row__main">
+              <PixelButton tone={r.visibility === 'private' ? 'lav' : 'mint'} size="sm" disabled={busy}
+                onClick={() => (r.visibility === 'private' && !r.mine ? (setAsking(asking === r.id ? null : r.id), setPassword('')) : onJoin(r.id))}>
+                {r.mine ? 'REJOIN' : r.visibility === 'private' ? '🔒 JOIN' : 'JOIN'}
+              </PixelButton>
+              <span className="room-row__text">
+                <strong className="room-row__host" title={r.host_name}>{r.host_name}</strong>
+                <span className="room-row__details">{titleOf(r.clip_id)} · {r.players}/2</span>
+              </span>
+            </div>
             {asking === r.id && (
               <div className="solo-field">
                 <input className="solo-input" aria-label="Room password" autoFocus value={password} maxLength={PASSWORD_MAX} placeholder="PASSWORD"
