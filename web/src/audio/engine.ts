@@ -40,6 +40,7 @@ export class SingEngine {
     /** Decoded guide vocals, or null when the clip has none. */
     readonly vocals: AudioBuffer | null,
     readonly range: TimeRange | null,
+    private readonly ownsContext: boolean,
   ) {
     this.guideGain = ctx.createGain();
     this.guideGain.gain.value = 0;
@@ -49,16 +50,16 @@ export class SingEngine {
     this.recorder = new TakeRecorder(ctx.sampleRate, offset, Math.max(0, (range?.start ?? 0) - 0.5), (range?.end ?? duration) + 1);
   }
 
-  /** Build the context, load the capture worklet and the backing track. Throws on load failure. */
-  static async create(clipId: string, duration: number, offset: number | null, range: TimeRange | null = null): Promise<SingEngine> {
-    const ctx = new AudioContext({ latencyHint: 'interactive' });
+  /** Load capture/backing; a supplied room context stays owned by that room, including on failure. */
+  static async create(clipId: string, duration: number, offset: number | null, range: TimeRange | null = null, sharedContext?: AudioContext): Promise<SingEngine> {
+    const ctx = sharedContext ?? new AudioContext({ latencyHint: 'interactive' });
     try {
       await loadCaptureWorklet(ctx);
       const backing = await loadBacking(ctx, clipId, duration);
       const vocals = await loadVocals(ctx, clipId);
-      return new SingEngine(ctx, backing, duration, offset ?? 0, vocals, range);
+      return new SingEngine(ctx, backing, duration, offset ?? 0, vocals, range, !sharedContext);
     } catch (e) {
-      void ctx.close();
+      if (!sharedContext) void ctx.close();
       throw e;
     }
   }
@@ -165,7 +166,8 @@ export class SingEngine {
       src?.disconnect();
     }
     this.detachMic();
+    this.guideGain.disconnect();
     this.voiceMix?.disconnect();
-    void this.ctx.close();
+    if (this.ownsContext) void this.ctx.close();
   }
 }

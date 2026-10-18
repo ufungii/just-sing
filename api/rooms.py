@@ -62,8 +62,14 @@ class Hub:
         """Remember whose turn it is, so progress from anyone else is refused without a DB read."""
         match = snap["match"]
         self.active_slot[room_id] = (-1 if match.get('duet') else match['active_slot']) if match and match['state'] == 'active' else None
-        self.voice_match[room_id] = str(match['id']) if (snap['state'] == 'playing' and match and
-            match.get('duet') and match['state'] in ('preparing', 'active')) else None
+        # A present None means the lobby; an absent key means signaling is forbidden.
+        if snap['state'] == 'lobby':
+            self.voice_match[room_id] = None
+        elif (snap['state'] == 'playing' and match and match.get('duet') and
+                match['state'] in ('preparing', 'active')):
+            self.voice_match[room_id] = str(match['id'])
+        else:
+            self.voice_match.pop(room_id, None)
 
     def present(self, room_id) -> set[int]:
         return {slot for _, slot in self.sockets[room_id].values()}
@@ -89,9 +95,11 @@ def _valid_voice_signal(data: object) -> bool:
     """Bound and whitelist signaling. No client-supplied destination or sender identity."""
     if not isinstance(data, dict):
         return False
-    for key in ('match_id', 'session'):
-        if not isinstance(data.get(key), str) or not 1 <= len(data[key]) <= 64:
-            return False
+    if 'match_id' not in data or (data['match_id'] is not None and
+            (not isinstance(data['match_id'], str) or not 1 <= len(data['match_id']) <= 64)):
+        return False
+    if not isinstance(data.get('session'), str) or not 1 <= len(data['session']) <= 64:
+        return False
     kind = data.get('kind')
     common = {'match_id', 'session', 'kind'}
     if kind == 'ready':
@@ -604,8 +612,9 @@ async def room_socket(ws: WebSocket, room_id: uuid.UUID):
                 if not _valid_voice_signal(data):
                     await ws.send_json(_event('error', code='bad_message', message='Invalid voice signaling.'))
                     continue
-                if hub.voice_match.get(room_id) != data['match_id'] or hub.present(room_id) != {0, 1}:
-                    await ws.send_json(_event('error', code='voice_unavailable', message='Voice needs two connected duet players.'))
+                if (room_id not in hub.voice_match or hub.voice_match[room_id] != data['match_id'] or
+                        hub.present(room_id) != {0, 1}):
+                    await ws.send_json(_event('error', code='voice_unavailable', message='Voice needs two connected players in the lobby or current duet.'))
                     continue
                 # Only the opposite seat receives SDP/ICE; another tab of the sender never does.
                 event = _event('voice_signal', slot=slot, data=data)
