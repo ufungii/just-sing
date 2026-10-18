@@ -19,7 +19,7 @@ from dataclasses import replace
 
 from ml.scoring.config import PitchConfig, SCORING_VERSION
 from ml.scoring.pitch import HOP_SECONDS, to_track, track_to_json
-from ml.scoring.score import score_turn
+from ml.scoring.score import apply_pronunciation, pronunciation_score, score_turn
 from ml.scoring.timing import onset_times
 
 OUT = Path(__file__).resolve().parents[2] / "contracts" / "fixtures"
@@ -106,12 +106,42 @@ def build_onset_cases() -> list[dict]:
     return out
 
 
+# (name, description, pitch, timing or None, line statuses, line weights). Line keys are strings in JSON.
+PRONUNCIATION_CASES = [
+    ("humming", "perfect pitch and timing, but every line fails the lyric check", 100, 100, {"0": "unclear", "1": "unclear"}, {"0": 50, "1": 50}),
+    ("silent_lines", "perfect pitch and timing, lines not sung at all", 100, 100, {"0": "not_sung", "1": "not_sung"}, {"0": 50, "1": 50}),
+    ("perfect_lyrics", "everything right", 100, 100, {"0": "match", "1": "match"}, {"0": 50, "1": 50}),
+    ("honest_shaky_pitch", "shaky pitch, good timing, words sung", 65, 80, {"0": "match", "1": "match"}, {"0": 50, "1": 50}),
+    ("honest_one_line_unclear", "honest take where the checker is unsure about one line", 65, 80, {"0": "match", "1": "unclear"}, {"0": 50, "1": 50}),
+    ("weighted_by_line_frames", "long line missed, short line matched", 80, 80, {"0": "unclear", "1": "match"}, {"0": 150, "1": 50}),
+    ("not_covered_ignored", "lines the check could not cover do not count", 80, 80, {"0": "match", "1": "not_covered"}, {"0": 50, "1": 50}),
+    ("nothing_checked", "every line uncovered: keep the pitch/timing total", 70, 60, {"0": "not_covered", "1": "not_covered"}, {"0": 50, "1": 50}),
+    ("checker_unavailable", "no statuses at all", 70, 60, {}, {"0": 50, "1": 50}),
+    ("no_onsets_in_song", "no phrase has an onset: pitch stands in for timing", 90, None, {"0": "match", "1": "match"}, {"0": 50, "1": 50}),
+]
+
+
+def build_pronunciation_cases() -> list[dict]:
+    out = []
+    for name, description, pitch, timing, statuses, weights in PRONUNCIATION_CASES:
+        base = round(pitch if timing is None else 0.8 * pitch + 0.2 * timing, 1)
+        phrases = [{"timing": timing}]
+        pron = pronunciation_score({int(k): v for k, v in statuses.items()}, {int(k): v for k, v in weights.items()})
+        got = apply_pronunciation({"total": base, "pitch": pitch, "timing": timing or 0.0, "phrases": phrases}, pron)
+        out.append({"name": name, "description": description,
+                    "input": {"pitch": pitch, "timing": timing, "total": base, "line_statuses": statuses, "line_weights": weights},
+                    "expected": {"pronunciation": got["pronunciation"], "total": got["total"]}})
+    return out
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     score = {"scoring_version": SCORING_VERSION, "tolerance": TOLERANCE, "cases": build_cases()}
     onset = {"tolerance_s": 0.001, "cases": build_onset_cases()}
     (OUT / "score_cases.json").write_text(json.dumps(score, separators=(",", ":")))
     (OUT / "onset_cases.json").write_text(json.dumps(onset, separators=(",", ":")))
+    pronunciation = {"scoring_version": SCORING_VERSION, "cases": build_pronunciation_cases()}
+    (OUT / "pronunciation_cases.json").write_text(json.dumps(pronunciation, indent=1))
     for c in score["cases"]:
         e = c["expected"]
         print(f"{c['name']:30s} total={e['total']:5.1f} pitch={e['pitch']:5.1f} timing={e['timing']:5.1f}")

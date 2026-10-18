@@ -1,0 +1,212 @@
+{
+ "scoring_version": "0.4.0",
+ "cases": [
+  {
+   "name": "humming",
+   "description": "perfect pitch and timing, but every line fails the lyric check",
+   "input": {
+    "pitch": 100,
+    "timing": 100,
+    "total": 100.0,
+    "line_statuses": {
+     "0": "unclear",
+     "1": "unclear"
+    },
+    "line_weights": {
+     "0": 50,
+     "1": 50
+    }
+   },
+   "expected": {
+    "pronunciation": 0.0,
+    "total": 40.0
+   }
+  },
+  {
+   "name": "silent_lines",
+   "description": "perfect pitch and timing, lines not sung at all",
+   "input": {
+    "pitch": 100,
+    "timing": 100,
+    "total": 100.0,
+    "line_statuses": {
+     "0": "not_sung",
+     "1": "not_sung"
+    },
+    "line_weights": {
+     "0": 50,
+     "1": 50
+    }
+   },
+   "expected": {
+    "pronunciation": 0.0,
+    "total": 40.0
+   }
+  },
+  {
+   "name": "perfect_lyrics",
+   "description": "everything right",
+   "input": {
+    "pitch": 100,
+    "timing": 100,
+    "total": 100.0,
+    "line_statuses": {
+     "0": "match",
+     "1": "match"
+    },
+    "line_weights": {
+     "0": 50,
+     "1": 50
+    }
+   },
+   "expected": {
+    "pronunciation": 100.0,
+    "total": 100.0
+   }
+  },
+  {
+   "name": "honest_shaky_pitch",
+   "description": "shaky pitch, good timing, words sung",
+   "input": {
+    "pitch": 65,
+    "timing": 80,
+    "total": 68.0,
+    "line_statuses": {
+     "0": "match",
+     "1": "match"
+    },
+    "line_weights": {
+     "0": 50,
+     "1": 50
+    }
+   },
+   "expected": {
+    "pronunciation": 100.0,
+    "total": 73.5
+   }
+  },
+  {
+   "name": "honest_one_line_unclear",
+   "description": "honest take where the checker is unsure about one line",
+   "input": {
+    "pitch": 65,
+    "timing": 80,
+    "total": 68.0,
+    "line_statuses": {
+     "0": "match",
+     "1": "unclear"
+    },
+    "line_weights": {
+     "0": 50,
+     "1": 50
+    }
+   },
+   "expected": {
+    "pronunciation": 50.0,
+    "total": 47.6
+   }
+  },
+  {
+   "name": "weighted_by_line_frames",
+   "description": "long line missed, short line matched",
+   "input": {
+    "pitch": 80,
+    "timing": 80,
+    "total": 80.0,
+    "line_statuses": {
+     "0": "unclear",
+     "1": "match"
+    },
+    "line_weights": {
+     "0": 150,
+     "1": 50
+    }
+   },
+   "expected": {
+    "pronunciation": 25.0,
+    "total": 43.1
+   }
+  },
+  {
+   "name": "not_covered_ignored",
+   "description": "lines the check could not cover do not count",
+   "input": {
+    "pitch": 80,
+    "timing": 80,
+    "total": 80.0,
+    "line_statuses": {
+     "0": "match",
+     "1": "not_covered"
+    },
+    "line_weights": {
+     "0": 50,
+     "1": 50
+    }
+   },
+   "expected": {
+    "pronunciation": 100.0,
+    "total": 84.0
+   }
+  },
+  {
+   "name": "nothing_checked",
+   "description": "every line uncovered: keep the pitch/timing total",
+   "input": {
+    "pitch": 70,
+    "timing": 60,
+    "total": 68.0,
+    "line_statuses": {
+     "0": "not_covered",
+     "1": "not_covered"
+    },
+    "line_weights": {
+     "0": 50,
+     "1": 50
+    }
+   },
+   "expected": {
+    "pronunciation": null,
+    "total": 68.0
+   }
+  },
+  {
+   "name": "checker_unavailable",
+   "description": "no statuses at all",
+   "input": {
+    "pitch": 70,
+    "timing": 60,
+    "total": 68.0,
+    "line_statuses": {},
+    "line_weights": {
+     "0": 50,
+     "1": 50
+    }
+   },
+   "expected": {
+    "pronunciation": null,
+    "total": 68.0
+   }
+  },
+  {
+   "name": "no_onsets_in_song",
+   "description": "no phrase has an onset: pitch stands in for timing",
+   "input": {
+    "pitch": 90,
+    "timing": null,
+    "total": 90,
+    "line_statuses": {
+     "0": "match",
+     "1": "match"
+    },
+    "line_weights": {
+     "0": 50,
+     "1": 50
+    }
+   },
+   "expected": {
+    "pronunciation": 100.0,
+    "total": 92.0
+   }
+  }
+ ]
+}
