@@ -1,4 +1,4 @@
-# Spoken practice on a real voice: love-scenario-chorus
+# Spoken practice on a real voice: love-scenario-chorus-medium
 
 12.2 s of speech, 16 words, scored with the shipped scorer (wav2vec2 forced alignment).
 

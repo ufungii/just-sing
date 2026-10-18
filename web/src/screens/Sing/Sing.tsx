@@ -19,7 +19,8 @@ import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
 import { GuideControl } from '../../ui/GuideControl';
 import { Countdown, Judgement } from './Judgement';
 import { LiveLyricChecker } from './liveLyrics';
-import { Lyrics } from './Lyrics';
+import { Lyrics, type LineVerdicts } from './Lyrics';
+import type { LyricStatus } from '../../lib/types';
 import { PitchLane, useLaneHeight } from './PitchLane';
 import './Sing.css';
 
@@ -64,6 +65,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
   const [guide, setGuide] = useState(loadGuide);
   const [hasGuide, setHasGuide] = useState(false);
   const [lyricTally, setLyricTally] = useState<{ matched: number; graded: number } | null>(null);
+  const [lyricResults, setLyricResults] = useState<{ sent: Set<number>; done: Map<number, LyricStatus> }>(() => ({ sent: new Set(), done: new Map() }));
   const lyricRef = useRef<LiveLyricChecker | null>(null);
 
   const engineRef = useRef<SingEngine | null>(null);
@@ -240,9 +242,11 @@ export function Sing({ setup }: { setup: SingSetup }) {
       const checker = new LiveLyricChecker(setup.clipId, lines, engine.recorder, () => {
         const statuses = [...checker.results.values()].filter((s) => s === 'match' || s === 'unclear');
         setLyricTally({ matched: statuses.filter((s) => s === 'match').length, graded: statuses.length });
-      });
+        setLyricResults({ sent: new Set(checker.sent), done: new Map(checker.results) });
+      }, (index) => setLyricResults((r) => ({ sent: new Set(r.sent).add(index), done: r.done })));
       lyricRef.current = checker;
       setLyricTally(null);
+      setLyricResults({ sent: new Set(), done: new Map() });
     }
     await engine.start();
     setPhase({ k: 'playing' });
@@ -267,6 +271,15 @@ export function Sing({ setup }: { setup: SingSetup }) {
   }, [rangeStart]);
 
   // ---------- render ----------
+  // Live lyric check per manifest line, keyed by Line for the lyrics panel ("checking…" once sent).
+  const verdicts = useMemo<LineVerdicts>(() => {
+    const out: LineVerdicts = new Map();
+    if (!song) return out;
+    for (const i of lyricResults.sent) out.set(song.lines[i], lyricResults.done.get(i) ?? 'checking');
+    for (const [i, s] of lyricResults.done) out.set(song.lines[i], s);
+    return out;
+  }, [song, lyricResults]);
+
   const rated = [...ratings.values()];
   const running = song && target && rated.length ? aggregate(rated, phraseWeights(selected, target)).total : 0;
   const playing = phase.k === 'playing';
@@ -365,7 +378,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
             </span>
           </div>
         </div>
-        {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman={showRoman} showTrans={showTrans} />}
+        {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman={showRoman} showTrans={showTrans} verdicts={verdicts} />}
       </Panel>
     </ScreenShell>
   );
