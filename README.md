@@ -10,7 +10,7 @@ and a little pep talk from Mic-chan.
 
 Built in 36 hours at **SwampHacks XII** by a team of four, none of us fluent in Korean (yet!).
 
-> **TODO before submitting:** Devpost link · demo video · a screenshot or GIF of the singing screen
+https://youtu.be/QFOFoudTSPE
 
 ---
 
