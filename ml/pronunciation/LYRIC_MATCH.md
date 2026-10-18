@@ -1,6 +1,6 @@
 # Lyric match: did the player sing the right words? (line level, while singing)
 
-`ml/pronunciation/lyric_match.py`, version 0.1.0. This is feedback only. It never changes the
+`ml/pronunciation/lyric_match.py`, version 0.2.0. This is feedback only. It never changes the
 singing score, the phrase ratings or a battle winner.
 
 ## What it does
@@ -14,7 +14,7 @@ A line is a **match** when both hold:
 
 1. **It beats its own hum.** We resynthesise the player's exact melody and loudness as a
    wordless "aah". The real line must sound clearly closer to the original line than that hum does
-   (gain of at least `min_gain` = 0.06). The hum has the same tune, rhythm and length, so the only
+   (gain of at least `min_gain` = 0.10; it was 0.06 in version 0.1.0). The hum has the same tune, rhythm and length, so the only
    thing it lacks is the words. This is what stops a good tune from passing on its own.
 2. **It is the right line.** The real line must be closer to the original's same line than to at
    least 80% of the song's other lines. This catches singing the wrong part of the song.
@@ -28,13 +28,15 @@ original.
 
 | Condition | Love Scenario (Daniel, 54 lines) | Last Christmas (9 lines sung) |
 |---|---|---|
-| Real take | **52/54 match (96%)** | **8/9 (89%)** |
+| Real take | **48/54 match (89%)** | **8/9 (89%)** |
 | Original vocal scored against itself | 54/54 | 67/67 |
-| Player's melody as a wordless "aah" | **0/54** | **0/9** |
-| Real take read 6 s off (wrong lines) | 4/53 | 0/6 |
+| Player's melody as a synthetic wordless "aah" | **0/54** | **0/9** |
+| **A real hum of the song, sung along with the instrumental** | **0/6** | (not recorded) |
+| Real take read 6 s off (wrong lines) | 2/53 | 0/6 |
 | Quiet noise | 0 (all `not_sung`) | 0 (all `not_sung`) |
 
-Median gain over the player's own hum: +0.18 / +0.20 for real singing, about 0 for "aah".
+Median gain over the player's own hum: +0.18 / +0.20 for real singing, +0.06 for a real hum, about
+0 for the synthetic "aah".
 Numbers are in `ml/evals/results/lyric_match_*.md`.
 
 **How the rule was chosen (be honest about this):**
@@ -43,11 +45,16 @@ Numbers are in `ml/evals/results/lyric_match_*.md`.
 - Requiring the right line to be the single closest line cut "aah" to 15/54 on Love Scenario but
   still let 6/9 through on the short Last Christmas take.
 - Comparing only against lines with a similar tune did not help (aah 30-36/54).
-- The beat-your-own-hum test separated cleanly on both songs. The 0.06 margin was picked on these
-  same two takes, so the table above is **not an independent test** of that number. It needs more
-  takes from different singers.
+- The beat-your-own-hum test separated cleanly on both songs against the synthetic "aah", with a
+  margin of 0.06 (version 0.1.0).
+- A **real** hum, sung along with the instrumental (23 s, 6 lines), still passed 3/6 lines at 0.06:
+  its gains were +0.04 to +0.09, while the same lines sung with words gained +0.19 to +0.36. At
+  0.10 the hum passes 0/6, and the worded takes keep 48/54 and 8/9 lines (0.12 would drop to
+  42/54). So version 0.2.0 uses **0.10**.
+- Both margins were picked on these same recordings (only 6 hummed lines), so the table above is
+  **not an independent test**. It needs more singers and more hums.
 
-**Draft line times are fine.** Moving every line's times in Daniel's take on purpose still left
+**Draft line times are fine** (measured with version 0.1.0). Moving every line's times in Daniel's take on purpose still left
 96% of lines matching with times up to 1 s off. That held with each start and end off at random,
 and with whole lines slid by 1 s it was 93%. "aah" stayed at 0-4%. The original and the player
 are cut at the same wrong times, so they still line up with each other. Fingerprint draft
@@ -62,7 +69,7 @@ instrumental keeps players in time. But this check
 assumes the player sings on the song's clock, so a line sung more than about a second late
 is not credited.
 
-**A real hum is harder to reject than our synthetic one (correction).** The "aah" control above is
+**Why the margin went up: a real hum is harder to reject than our synthetic one.** The "aah" control above is
 resynthesised, and a real human hum passes the first test more easily. The test recording is Daniel
 humming 34 s of Love Scenario with no words, from memory and without the music. It cannot be
 placed on the song's clock, so we gave the check its best case: for each line, the start time in the
@@ -70,9 +77,10 @@ recording with the largest gain. Under that search, every one of the 54 lines cl
 (median gain +0.12, against +0.21 for his worded take under the same search). Both tests together
 matched **32/54 lines for the hum, against 44/54 for words**. So the check separates humming from
 words better than chance, but it does **not** reject real humming reliably. The search gives each
-line about 140 tries, which favours both takes; the app uses one fixed start time. The fair test,
-a hum sung along with the instrumental, is still to do. Until then, do not claim that humming
-cannot pass.
+line about 140 tries, which favours both takes; the app uses one fixed start time. The fair test
+came next: a hum sung along with the instrumental, at the app's fixed timing. It passed 3/6 lines
+at 0.06 and 0/6 at 0.10 (see the table). With 0.10 we can say a real hum failed every line we
+tested, not that humming can never pass.
 
 ## Not shown yet (limits)
 
@@ -133,7 +141,7 @@ Response (`contracts/lyric_check.example.json`):
 {
   "clip_id": "love-scenario",
   "status": "ok",
-  "lyric_match_version": "0.1.0",
+  "lyric_match_version": "0.2.0",
   "lines": [
     { "line_index": 0, "status": "match" },
     { "line_index": 1, "status": "unclear" },
