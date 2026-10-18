@@ -1,9 +1,21 @@
-<!-- Boombox-kun favicon: the same 14x11 pixel sprite as src/components/pixel/BoomboxKun.tsx, centred on a square. -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -1.5 14 14" shape-rendering="crispEdges">
-  <path d="M3 0h8v1h-8z M3 1h1v1h-1z M10 1h1v1h-1z M0 2h14v9h-14z" fill="#3b2340"/>
-  <path d="M1 3h12v7h-12z" fill="#8fd3ff"/>
-  <path d="M1 3h12v1h-12z" fill="#d4eeff"/>
-  <path d="M1 5h3v3h-3z M10 5h3v3h-3z M5 4h1v1h-1z M8 4h1v1h-1z M6 6h2v1h-2z M5 8h4v1h-4z" fill="#3b2340"/>
-  <path d="M2 6h1v1h-1z M11 6h1v1h-1z" fill="#d4eeff"/>
-  <path d="M4 5h1v1h-1z M9 5h1v1h-1z" fill="#ff4f9a"/>
+<!-- Mic-chan favicon: the same 12x16 pixel sprite as src/components/pixel/MicChan.tsx, tilted like a held
+     microphone and centred on a square. Rotated pixels can't snap to the grid, so edges are left smooth. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2.49 -0.4 17.21 17.21">
+  <g transform="rotate(-25 6 8)">
+    <!-- bow -->
+    <path d="M4 0h1v1h-1z M7 0h1v1h-1z M3 1h3v1h-3z M6 1h3v1h-3z M4 2h4v1h-4z" fill="#ff4f9a"/>
+    <!-- head outline -->
+    <path d="M3 3h6v1h-6z M2 4h8v1h-8z M1 5h10v5h-10z M2 10h8v1h-8z" fill="#3b2340"/>
+    <!-- face and shine -->
+    <path d="M3 4h6v1h-6z M2 5h8v5h-8z" fill="#ffb3d6"/>
+    <path d="M3 5h2v1h-2z M2 6h1v1h-1z" fill="#ffe1ef"/>
+    <!-- eyes, mouth -->
+    <path d="M4 6h1v2h-1z M7 6h1v2h-1z M5 9h2v1h-2z" fill="#3b2340"/>
+    <!-- blush -->
+    <path d="M3 8h1v1h-1z M8 8h1v1h-1z" fill="#ff4f9a"/>
+    <!-- handle and base -->
+    <path d="M5 11h2v3h-2z M3 14h6v2h-6z" fill="#3b2340"/>
+    <!-- headphone cups -->
+    <path d="M0 7h1v2h-1z M11 6h1v2h-1z" fill="#3b2340"/>
+  </g>
 </svg>
