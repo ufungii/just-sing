@@ -110,6 +110,8 @@ def crop_song(song_id, destination_id, start, duration, data_dir=ROOT / "ml/data
         crop_track = read(crop_track_path)
         corrections = read(source / 'corrections.json') if (source / 'corrections.json').is_file() else {}
         crop_track['duet_plan'] = rebase_plan(track, section_plan(track, corrections.get('duet')), start, end)
+        if corrections.get('duet', {}).get('policy', track.get('duet_policy')) == 'balanced_section_halves':
+            crop_track['duet_policy'] = 'balanced_section_halves'
         crop_track_path.write_text(json.dumps(crop_track, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
         manifest = write_manifest(output)
         review_path = output / "song.review.json"

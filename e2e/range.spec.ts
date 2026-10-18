@@ -1,5 +1,5 @@
 import { chromium, expect, test, type Browser, type Page } from '@playwright/test';
-import { addPlayer } from './duetHarness';
+import { addPlayer, createFirstPlayer, joinListedRoom } from './duetHarness';
 
 const CLIP = 'russian-roulette';
 const NAME = `E2E-Bot-range-${Date.now().toString(36)}`;
@@ -49,7 +49,7 @@ async function chooseSection(page: Page, song: any, readOnly = false, endPhrase 
   await expect(start).toBeEnabled();
   await start.scrollIntoViewIfNeeded();
   // Move the handles with a real pointer, aiming between phrase boundaries to exercise snapping.
-  const track = await page.locator('.clip-timeline__track').boundingBox();
+  const track = await page.locator('.clip-bar__track').boundingBox();
   const knob = await start.boundingBox();
   await page.mouse.move(knob!.x + knob!.width / 2, knob!.y + knob!.height / 2);
   await page.mouse.down();
@@ -114,20 +114,20 @@ test('solo middle section: snapped handles, preview, offset audio, saved subset 
     await page.getByText('LOCAL', { exact: true }).first().click();
     await page.getByRole('button').filter({ has: page.getByText(song.title, { exact: true }) }).click();
     await chooseSection(page, song);
-    await page.getByRole('button', { name: 'FULL CLIP', exact: true }).click();
+    await page.getByRole('button', { name: 'WHOLE SONG', exact: true }).click();
     await expect(page.getByRole('slider', { name: 'Start of practice section' })).toHaveAttribute('aria-valuenow', '0');
     await chooseSection(page, song);
     // A missing optional vocal stem still permits instrumental preview.
     await page.route('**/api/clips/*/vocals', (route) => route.fulfill({ status: 404 }));
     await page.evaluate(() => { (window as any).__starts = []; (window as any).__sources = []; });
-    await page.getByRole('button', { name: 'PLAY PREVIEW ▶' }).click();
-    await expect(page.locator('.clip-timeline__playhead')).toBeVisible();
+    await page.getByRole('button', { name: 'PLAY SECTION ▶' }).click();
+    await expect(page.locator('.clip-bar__playhead')).toBeVisible();
     expect(await page.evaluate(() => (window as any).__starts.length)).toBe(1);
     await page.getByRole('button', { name: 'STOP PREVIEW' }).click();
     await page.unroute('**/api/clips/*/vocals');
     await page.evaluate(() => { (window as any).__starts = []; });
-    await page.getByRole('button', { name: 'PLAY PREVIEW ▶' }).click();
-    await expect(page.locator('.clip-timeline__playhead')).toBeVisible();
+    await page.getByRole('button', { name: 'PLAY SECTION ▶' }).click();
+    await expect(page.locator('.clip-bar__playhead')).toBeVisible();
     const previewSources = await page.evaluate(() => (window as any).__starts);
     expect(previewSources).toHaveLength(2);
     for (const src of previewSources) {
@@ -140,7 +140,7 @@ test('solo middle section: snapped handles, preview, offset audio, saved subset 
     await expect(page.getByRole('button', { name: 'STOP PREVIEW' })).toBeVisible();
     await page.getByRole('button', { name: 'STOP PREVIEW' }).click();
     // Keep screenshots lyric-free; the actual manifest is used for all selection/scoring assertions.
-    await page.screenshot({ path: 'e2e/artifacts/range-solo-setup.png', mask: [page.locator('.clip-timeline__line')] });
+    await page.screenshot({ path: 'e2e/artifacts/range-solo-setup.png', mask: [page.locator('.clip-bar__lyric')] });
     await addPlayer(page, 'PLAYER', NAME);
     await mic(page);
     await page.getByRole('button', { name: 'START ♪', exact: true }).click();
@@ -168,7 +168,7 @@ test('full-screen practice workspace applies precise phrase-snapped boundaries a
     const song=await (await page.request.get(`/api/clips/${CLIP}/manifest`)).json();
     await page.getByText('LOCAL',{exact:true}).first().click();
     await page.getByRole('button').filter({has:page.getByText(song.title,{exact:true})}).click();
-    await page.getByRole('button',{name:'OPEN SECTION EDITOR',exact:true}).click();
+    await page.getByRole('button',{name:'ADVANCED EDITOR',exact:true}).click();
     const dialog=page.getByRole('dialog',{name:'Choose a practice section'});
     await expect(dialog).toBeVisible();
     const lyrics=dialog.getByRole('region',{name:'Song lyrics',exact:true});
@@ -226,15 +226,15 @@ test('online host section: guest read-only, readiness reset, shared range with d
     const song = await (await host.request.get(`/api/clips/${CLIP}/manifest`)).json();
     const range = { start: song.phrases[1].start, end: song.phrases[3].end };
     await host.getByText('ONLINE', { exact: true }).first().click();
-    await addPlayer(host, 'PLAYER', `${NAME}-host`);
+    await createFirstPlayer(host, `${NAME}-host`);
+    await host.getByRole('button', { name: 'CREATE ROOM', exact: true }).click();
+    await host.getByRole('button', { name: /CREATE ROOM ♪/ }).click();
     await host.getByRole('button').filter({ has: host.getByText(song.title, { exact: true }) }).click();
-    await host.getByRole('button', { name: /CREATE ROOM/ }).click();
-    const code = await host.getByTestId('room-code').innerText();
     await guest.goto('/');
     await guest.getByText('ONLINE', { exact: true }).first().click();
-    await addPlayer(guest, 'PLAYER', `${NAME}-guest`);
-    await guest.getByLabel('Room code').fill(code);
-    await guest.getByRole('button', { name: 'JOIN', exact: true }).click();
+    await createFirstPlayer(guest, `${NAME}-guest`);
+    await guest.getByRole('button', { name: 'JOIN ROOM', exact: true }).click();
+    await guest.getByTestId('room-list').getByRole('listitem').filter({ hasText: `${NAME}-host` }).getByRole('button').first().click();
     await chooseSection(guest, song, true);
     // A failed host edit restores the durable full-clip selection.
     await host.route('**/api/rooms/*/range', (route) => route.fulfill({ status: 503, contentType: 'application/json',
@@ -248,7 +248,7 @@ test('online host section: guest read-only, readiness reset, shared range with d
     await chooseSection(host, song, false, 3);
     await expect(guest.getByRole('slider', { name: 'Start of practice section' })).toHaveAttribute('aria-valuenow', String(range.start));
     await expect(guest.getByRole('slider', { name: 'End of practice section' })).toHaveAttribute('aria-valuenow', String(range.end));
-    await guest.getByRole('button',{name:'OPEN SECTION EDITOR',exact:true}).click();
+    await guest.getByRole('button',{name:'ADVANCED EDITOR',exact:true}).click();
     const guestWorkspace=guest.getByRole('dialog',{name:'View practice section'});
     await expect(guestWorkspace.getByLabel('Section start',{exact:true})).toBeDisabled();
     await expect(guestWorkspace.getByLabel('Section end',{exact:true})).toBeDisabled();
@@ -257,9 +257,7 @@ test('online host section: guest read-only, readiness reset, shared range with d
     await expect(host.getByRole('button', { name: 'START (BOTH MUST BE READY)' })).toBeDisabled();
     // A full reload recovers the host selection from the server (join again with the same cookie).
     await guest.reload();
-    await guest.getByText('ONLINE', { exact: true }).first().click();
-    await guest.getByLabel('Room code').fill(code);
-    await guest.getByRole('button', { name: 'JOIN', exact: true }).click();
+    await joinListedRoom(guest, `${NAME}-host`);
     await expect(guest.getByRole('slider', { name: 'Start of practice section' })).toHaveAttribute('aria-valuenow', String(range.start));
     await mic(guest);
     for (const page of [host, guest]) await page.getByRole('button', { name: 'READY ✓', exact: true }).click();

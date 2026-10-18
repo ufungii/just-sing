@@ -17,11 +17,13 @@ import { useNav, type SingSetup } from '../../routes';
 import { aggregate, buildTargetTrack, displayNotes, phraseSettlesAt, phraseTotal, phraseWeights, registerRatio, scorePhrase, SCORING_CONFIG } from '../../scoring';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
 import { GuideControl } from '../../ui/GuideControl';
+import { ScoreBars } from './ScoreBars';
 import { Countdown, Judgement } from './Judgement';
 import { LiveLyricChecker } from './liveLyrics';
 import { Lyrics, type LineVerdicts } from './Lyrics';
 import type { LyricStatus } from '../../lib/types';
 import { PitchLane, useLaneHeight } from './PitchLane';
+import { SongThumb } from '../../components/songs/SongJacket';
 import './Sing.css';
 
 type Phase =
@@ -60,7 +62,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
   const [judge, setJudge] = useState<PhraseScore | null>(null);
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
   const [showRoman, setShowRoman] = useState(true);
-  const [showTrans, setShowTrans] = useState(true);
+  const [showTrans, setShowTrans] = useState(false);
   const laneHeight = useLaneHeight();
   const [guide, setGuide] = useState(loadGuide);
   const [hasGuide, setHasGuide] = useState(false);
@@ -301,6 +303,8 @@ export function Sing({ setup }: { setup: SingSetup }) {
       kao="♪(^▽^)♪"
       onBack={quit}
       backLabel="QUIT"
+      lead={<SongThumb clipId={setup.clipId} />}
+      subtitle={song && <>{setup.battle && <>P{setup.battle.turn + 1} {setup.playerName.toUpperCase()} · </>}{song.title} <span>· {song.artist}</span></>}
       right={
         <div className="sing-hud">
           <span className="sing-chip">{REGISTER_LABEL[setup.register]}</span>
@@ -309,14 +313,10 @@ export function Sing({ setup }: { setup: SingSetup }) {
               LYRICS {lyricTally.matched}/{lyricTally.graded}
             </span>
           )}
-          <span className="sing-chip sing-chip--score" aria-label="Running score">
-            {running.toFixed(1)}
-          </span>
+          <ScoreBars bars={[{ name: setup.playerName, score: running, slot: setup.battle?.turn === 1 ? 1 : 0 }]} />
         </div>
       }
     >
-      {song && <p className="sing-title">{setup.battle && <>P{setup.battle.turn + 1} {setup.playerName.toUpperCase()} · </>}{song.title} <span>· {song.artist}</span></p>}
-
       {setup.range && <p className="solo-hint">Practice section · {rangeLabel(setup.range)}</p>}
       {isClick && <Notice tone="warn">No instrumental installed, so you are singing to a click track.</Notice>}
       {saveWarning && <Notice tone="warn">{saveWarning}</Notice>}
@@ -361,10 +361,10 @@ export function Sing({ setup }: { setup: SingSetup }) {
       <Panel className="sing-lyrics-panel">
         <div className="sing-lyrics-head">
           <div className="ui-seg" role="group" aria-label="Lyric helpers">
-            <PixelButton size="sm" tone="paper" aria-pressed={showRoman} onClick={() => setShowRoman((v) => !v)}>
+            <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showRoman} onClick={() => setShowRoman((v) => !v)}>
               ROMANIZATION
             </PixelButton>
-            <PixelButton size="sm" tone="paper" aria-pressed={showTrans} onClick={() => setShowTrans((v) => !v)}>
+            <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showTrans} onClick={() => setShowTrans((v) => !v)}>
               ENGLISH
             </PixelButton>
           </div>
@@ -378,7 +378,8 @@ export function Sing({ setup }: { setup: SingSetup }) {
             </span>
           </div>
         </div>
-        {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman={showRoman} showTrans={showTrans} verdicts={verdicts} />}
+        {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman={showRoman} showTrans={showTrans}
+          singerAt={setup.battle?.turn === 1 ? () => 1 : undefined} verdicts={verdicts} />}
       </Panel>
     </ScreenShell>
   );

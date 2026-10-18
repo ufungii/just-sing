@@ -42,13 +42,14 @@ const MENU_MUSIC_SCREENS = new Set<Route['name']>(['home', 'results', 'history',
 
 /**
  * Development only: open a screen directly with a URL hash, e.g. http://localhost:5173/#sing.
- * Screens that need data get a sample built from the synthetic demo clip. Stripped from production builds.
+ * Screens that need data get a sample built from the synthetic demo clip, or from ?clip=<id>
+ * (e.g. http://localhost:5173/?clip=soda-pop#sing). Stripped from production builds.
  */
 function devStartRoute(): Route {
   if (!import.meta.env.DEV) return { name: 'home' };
   const setup: SingSetup = {
     runId: 'dev',
-    clipId: 'synthetic-demo',
+    clipId: new URLSearchParams(location.search).get('clip') ?? 'synthetic-demo',
     register: 0,
     calibrationOffset: null,
     playerName: 'Dev',

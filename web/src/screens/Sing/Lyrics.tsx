@@ -1,8 +1,9 @@
 /**
  * Lyrics under the lane: the current line with karaoke word highlighting from the manifest's word
- * times, optional romanization and translation, and the next line dimmed. Above them, the line just
- * sung shows its live lyric check as it arrives (about 2 s after the line ends): mint when the words
- * sounded like the original singer, a wavy underline when they were unclear.
+ * times, optional romanization and translation, and the next line dimmed. With two singers, each
+ * line takes its singer's colour (player 2 is blue), so both know whose line is coming. Above them,
+ * the line just sung shows its live lyric check as it arrives (about 2 s after the line ends): mint
+ * when the words sounded like the original singer, a wavy underline when they were unclear.
  */
 import type { CSSProperties } from 'react';
 import type { Line, LyricStatus, Word } from '../../lib/types';
@@ -45,20 +46,37 @@ function Words({ words, t, className }: { words: { text: string; start: number; 
   );
 }
 
-export function Lyrics({ lines, t, showRoman, showTrans, verdicts }: { lines: Line[]; t: number; showRoman: boolean; showTrans: boolean; verdicts?: LineVerdicts }) {
+export function Lyrics({
+  lines,
+  t,
+  showRoman,
+  showTrans,
+  singerAt,
+  verdicts,
+}: {
+  lines: Line[];
+  t: number;
+  showRoman: boolean;
+  showTrans: boolean;
+  /** Two-singer modes: which player (0 or 1) sings at a clip time. Omit for one singer. */
+  singerAt?: (time: number) => number;
+  /** Live lyric check per line (solo); omit to show no verdicts. */
+  verdicts?: LineVerdicts;
+}) {
   const idx = currentLine(lines, t);
   const sung = lastSungLine(lines, t);
   const last = sung >= 0 ? lines[sung] : null;
   const verdict = last ? verdicts?.get(last) : undefined;
   const line = idx >= 0 ? lines[idx] : null;
   const next = lines[idx + 1];
+  const p2 = (l: Line | null | undefined) => !!l && singerAt?.(l.start + 0.01) === 1;
   // Highlight romanization word by word when it splits into as many words as the Hangul line.
   const roman = line?.romanized.split(/\s+/).filter(Boolean) ?? [];
   const romanWords = line && roman.length === line.words.length ? line.words.map((w, i) => ({ ...w, text: roman[i] })) : null;
   const done = line && t >= line.end;
 
   return (
-    <div className="sing-lyrics" aria-live="off">
+    <div className={`sing-lyrics${p2(line) ? ' sing-lyrics--p2' : ''}`} aria-live="off">
       {last && verdict && verdict !== 'not_covered' && (
         <p className={`sing-lyrics__last is-${verdict}`} title="Lyric check for the line you just sang">
           <span className="sing-lyrics__last-text" lang="ko">{last.text}</span>
@@ -74,11 +92,11 @@ export function Lyrics({ lines, t, showRoman, showTrans, verdicts }: { lines: Li
         </>
       ) : (
         <p className="sing-lyrics__rest ui-kao" aria-label="instrumental">
-          ♫⋆｡♪ ₊˚♬ﾟ.
+          ♪ ･｡♬ ˚･ ♪
         </p>
       )}
       {next && (
-        <p className="sing-lyrics__next">
+        <p className={`sing-lyrics__next${p2(next) ? ' sing-lyrics__next--p2' : ''}`}>
           <span className="sing-lyrics__next-tag">NEXT</span> {next.text}
           {showRoman && <span className="sing-lyrics__next-roman"> {next.romanized}</span>}
         </p>

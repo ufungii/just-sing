@@ -83,21 +83,42 @@ export async function addPlayer(page: Page, seat: string, name: string) {
   await expect(page.getByRole('combobox', { name: seat, exact: true })).toContainText(name);
 }
 
+/** A fresh browser has no player yet, so the online menu asks for one first (name + default avatar). */
+export async function createFirstPlayer(page: Page, name: string) {
+  await page.getByPlaceholder('e.g. Mina').fill(name);
+  await page.getByRole('button', { name: 'ADD PLAYER', exact: true }).click();
+}
+
+/** Open the online room list from the home screen (the player already exists, e.g. after a reload). */
+export async function openRoomList(page: Page) {
+  await page.getByText('ONLINE', { exact: true }).first().click();
+  await page.getByRole('button', { name: 'JOIN ROOM', exact: true }).click();
+}
+
+/** Join (or rejoin) a room by tapping its row in the list. Public rooms need no password. */
+export async function joinListedRoom(page: Page, hostName: string) {
+  await openRoomList(page);
+  await page.getByTestId('room-list').getByRole('listitem').filter({ hasText: hostName }).getByRole('button').first().click();
+}
+
+export const ONLINE_HOST = 'E2E-Bot-duet-online';
+
 export async function openOnlineDuet(host: Page, guest: Page, clipId = DUET_CLIP) {
   await host.goto('/');
   const song = await manifest(host, clipId);
   await host.getByText('ONLINE', { exact: true }).first().click();
-  await addPlayer(host, 'PLAYER', 'E2E-Bot-duet-online');
+  await createFirstPlayer(host, ONLINE_HOST);
+  await host.getByRole('button', { name: 'CREATE ROOM', exact: true }).click();
+  await host.getByRole('button', { name: /CREATE ROOM ♪/ }).click();
+  // The song is chosen inside the room, by the host.
   await host.getByRole('button').filter({ has: host.getByText(song.title, { exact: true }) }).click();
-  await host.getByRole('button', { name: /CREATE ROOM/ }).click();
-  const code = await host.getByTestId('room-code').innerText();
   await guest.goto('/');
   await guest.getByText('ONLINE', { exact: true }).first().click();
-  await addPlayer(guest, 'PLAYER', 'E2E-Rival-duet-online');
-  await guest.getByLabel('Room code').fill(code.toLowerCase());
-  await guest.getByRole('button', { name: 'JOIN', exact: true }).click();
+  await createFirstPlayer(guest, 'E2E-Rival-duet-online');
+  await guest.getByRole('button', { name: 'JOIN ROOM', exact: true }).click();
+  await guest.getByTestId('room-list').getByRole('listitem').filter({ hasText: ONLINE_HOST }).getByRole('button').first().click();
   for (const page of [host, guest]) { await mic(page); await page.getByRole('button', { name: 'READY ✓', exact: true }).click(); }
   await host.getByRole('button', { name: 'START ♪', exact: true }).click();
   for (const page of [host, guest]) await expect(page.getByRole('button', { name: 'READY TO SING' })).toBeVisible();
-  return { song, code };
+  return { song, hostName: ONLINE_HOST };
 }

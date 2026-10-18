@@ -6,7 +6,7 @@ import { useNav } from '../../routes';
 import type { SingSetup } from '../../routes';
 import { Notice, Panel, PixelButton, ScreenShell, Segmented } from '../../ui';
 import { MicCheck } from './MicCheck';
-import { TimingCheck, loadCalibration } from './TimingCheck';
+import { loadCalibration } from './TimingCheck';
 import { PracticeRangePicker } from '../../components/timeline/PracticeRangePicker';
 import { SongJacket } from '../../components/songs/SongJacket';
 import { PlayerPicker } from '../../components/players/PlayerPicker';
@@ -34,8 +34,8 @@ const PLAYER_COUNTS: { value: PlayerCount; label: string }[] = [
 
 /**
  * Local setup, for one or two singers on this laptop: pick a clip, the player(s) and voice
- * range(s), check the mic, optionally measure the device's timing offset, then create a server
- * match. One player goes to the singing screen; if the match can't be created they can still sing,
+ * range(s), check the mic, then create a server match. A timing offset measured earlier on this
+ * device is still applied. One player goes to the singing screen; if the match can't be created they can still sing,
  * unsaved. Two players take turns in a duet, which needs the server to decide the winner, so there
  * is no "sing anyway" path for them.
  */
@@ -50,7 +50,8 @@ export function SoloSetup({ initialPlayers = 1 }: { initialPlayers?: PlayerCount
   const player = getPlayer(ids[0]);
   const player2 = getPlayer(ids[1]);
   const [micOk, setMicOk] = useState(false);
-  const [offset, setOffset] = useState<number | null>(loadCalibration);
+  // One latency offset per device (CLAUDE.md), measured once and kept in this device's storage.
+  const [offset] = useState<number | null>(loadCalibration);
   const [start, setStart] = useState<Start>({ kind: 'idle' });
 
   const { clips, loadClips } = useClips();
@@ -129,15 +130,12 @@ export function SoloSetup({ initialPlayers = 1 }: { initialPlayers?: PlayerCount
 
   return (
     <ScreenShell title="LOCAL" kao={count === 1 ? '(ﾉ≧▽≦)ﾉ' : '(｀∀´)ﾉ☆ヽ(＾▽＾)'}>
-      <div className="solo-top">
-        <div className="solo-ribbon">
+      <div className="solo-ribbon">
         <span className="solo-ribbon__stage">STAGE 01</span>
         <span className="solo-ribbon__title">SELECT MUSIC</span>
         <span lang="ko" className="solo-ribbon__ko">
           <span className="song-kao" aria-hidden="true">♪</span> 곡을 골라요! <span className="song-kao" aria-hidden="true">♪</span>
         </span>
-        </div>
-        <Segmented label="Number of players" options={PLAYER_COUNTS} value={count} onChange={changeCount} />
       </div>
 
       <Panel tone="pink" label="1 · PICK A SONG" className="solo-stage">
@@ -151,6 +149,7 @@ export function SoloSetup({ initialPlayers = 1 }: { initialPlayers?: PlayerCount
       <div className="solo-grid solo-grid--setup">
         <div className="solo-side">
           <Panel label="2 · WHO'S SINGING" className="solo-you">
+            <Segmented label="Number of players" options={PLAYER_COUNTS} value={count} onChange={changeCount} />
             {seat(0)}
             {count === 2 && seat(1)}
             <p className="solo-hint">
@@ -162,10 +161,6 @@ export function SoloSetup({ initialPlayers = 1 }: { initialPlayers?: PlayerCount
 
           <Panel tone="sky" label="3 · MIC CHECK">
             <MicCheck onPassedChange={setMicOk} />
-          </Panel>
-
-          <Panel tone="lav" label="4 · TIMING CHECK (OPTIONAL)">
-            <TimingCheck offset={offset} onChange={setOffset} />
           </Panel>
         </div>
 

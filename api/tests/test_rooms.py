@@ -163,6 +163,16 @@ def test_lost_turn_is_recovered_without_double_scoring(world):
     assert view["active_slot"] == 1
 
 
+def test_bad_bearer_token_falls_back_to_the_guest_cookie(world):
+    """Regression: a bearer subprotocol that cannot be verified (Auth0 off, expired token) closed the socket
+    with 4403 even when the guest cookie was valid. An invalid cookie still closes it (see the stranger above)."""
+    c, guest = world
+    host, bo = guest("host"), guest("bo")
+    room = open_room(c, host, bo)
+    with c.websocket_connect(f"/ws/rooms/{room['id']}", headers=host, subprotocols=["bearer", "not-a-real-token"]) as ws:
+        assert until(ws, "room_snapshot")["id"] == room["id"]
+
+
 def test_binary_frame_gets_an_error_and_the_socket_survives(world):
     """Regression: receive_text raised KeyError on a binary frame, killing the connection."""
     c, guest = world

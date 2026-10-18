@@ -65,7 +65,7 @@
   align-items: start;
 }
 
-/* Setup row: the three setup panels side by side, START underneath. */
+/* Setup row: the two setup panels side by side, START underneath. */
 .solo-grid--setup {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: none;
@@ -73,7 +73,7 @@
 }
 .solo-grid--setup .solo-side {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: stretch;
 }
 .solo-grid--setup .solo-go { flex-direction: row; align-items: center; justify-content: flex-end; }
@@ -205,7 +205,8 @@
 .solo-start { min-height: 84px; font-size: 30px; }
 
 @media (max-width: 1180px) {
-  .solo-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 24px; }
+  /* The songs + side layout (online lobby); the local setup row keeps its own single column. */
+  .solo-grid:not(.solo-grid--setup) { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 24px; }
   .solo-meter__cell { width: 11px; }
 }
 
@@ -218,15 +219,6 @@
     grid-template-rows: none;
     grid-template-areas: 'songs' 'side' 'go';
   }
-}
-
-/* Ribbon on the left, the 1 PLAYER / 2 PLAYERS toggle on the right of the same row. */
-.solo-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 18px 28px;
 }
 /* Two seats in 2P: a dashed divider between player 1 and player 2. */
 .solo-you .solo-field + .solo-field {

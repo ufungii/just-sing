@@ -21,6 +21,9 @@
   --sky: #8fd3ff;
   --sky-light: #d4eeff;
   --sky-dark: #4fa3da;
+  /* Player 2's lyric colours: unsung text and the sung fill */
+  --p2-ink: #234a86;
+  --p2-sung: #2f9be8;
 
   --mint: #7eefcf;
   --mint-light: #cbfcee;
