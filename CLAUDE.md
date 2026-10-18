@@ -17,7 +17,7 @@ Platform: a **desktop app built with Electron**, a thin client that opens the sh
 
 Planned demo clips (~30 s each, chosen by the team): Girls' Generation "Kissing You" and TWICE "What Is Love?". Get **one** working end to end before touching the second.
 
-The singing screen is rhythm-game first: target notes and the live trace dominate, lyrics sit underneath. Do not turn it into an analytics dashboard.
+The singing screen is rhythm-game first: target notes and the live trace dominate, lyrics sit underneath. Do not turn it into an analytics dashboard. The duet screen (`web/src/screens/Duet/`) must mirror the solo/local singing screen (`web/src/screens/Sing/`): same layout, same control placement (the toggles, mic input, guide and sliders sit in a row just below the lyrics box), same styling and defaults. A UI change to one gets made to the other in the same commit.
 
 ## Goals (in priority order)
 
