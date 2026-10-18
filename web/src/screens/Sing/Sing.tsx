@@ -317,7 +317,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
         {phase.k === 'saving' && <div className="sing-overlay"><p className="sing-overlay__text">TALLYING UP...</p></div>}
         {playing && now < rangeStart && <Countdown value={String(Math.ceil(rangeStart - now))} />}
         {playing && now >= rangeStart && now < rangeStart + 0.8 && <Countdown value="SING!" />}
-        {judge && (playing || phase.k === 'saving') && <Judgement key={judge.phrase_id} rating={judge.rating} score={phraseTotal(judge)} />}
+        {judge && (playing || phase.k === 'saving') && <Judgement key={judge.phrase_id} rating={judge.rating} />}
 
         <div className="sing-progress" aria-hidden="true">
           <div className="sing-progress__fill" style={{ width: `${song ? Math.max(0, Math.min(1, (now - rangeStart) / (rangeEnd - rangeStart))) * 100 : 0}%` }} />
