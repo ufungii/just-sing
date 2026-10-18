@@ -34,10 +34,15 @@
 /* ---------- song stage (solo): ribbon, jacket + wheel, then the setup row ---------- */
 
 .solo-ribbon {
+  position: relative;
+  z-index: 2; /* sits on top of the box below it */
   display: flex;
   align-items: stretch;
   align-self: flex-start;
   min-height: 54px;
+  /* Overlap the top-left corner of the box below: hang 14px past its left edge and 22px down
+     into it (the 24px of the column gap plus 22px). */
+  margin: 0 0 -46px -14px;
   border: var(--border) solid var(--ink);
   background: var(--paper);
   transform: rotate(-1deg);
@@ -321,3 +326,5 @@
 
 /* Breathing room before the second stage ribbon. */
 .solo-stage + .solo-ribbon { margin-top: 14px; }
+/* Push the box's content below the ribbon that overlaps its corner. */
+.solo-ribbon + .ui-panel { padding-top: 50px; }
