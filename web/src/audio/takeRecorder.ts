@@ -61,23 +61,39 @@ export class TakeRecorder {
    * (what the server's lyric check needs). Latency is already removed, so offsetS is just -from.
    */
   toWav(): { wav: Blob; offsetS: number } {
-    const pcm = this.samples();
-    const view = new DataView(new ArrayBuffer(44 + pcm.length * 2));
-    const text = (at: number, s: string) => [...s].forEach((ch, j) => view.setUint8(at + j, ch.charCodeAt(0)));
-    text(0, 'RIFF');
-    view.setUint32(4, 36 + pcm.length * 2, true);
-    text(8, 'WAVE');
-    text(12, 'fmt ');
-    view.setUint32(16, 16, true); // fmt chunk size
-    view.setUint16(20, 1, true); // PCM
-    view.setUint16(22, 1, true); // mono
-    view.setUint32(24, TAKE_RATE, true);
-    view.setUint32(28, TAKE_RATE * 2, true); // bytes per second
-    view.setUint16(32, 2, true); // bytes per frame
-    view.setUint16(34, 16, true); // bits per sample
-    text(36, 'data');
-    view.setUint32(40, pcm.length * 2, true);
-    for (let i = 0; i < pcm.length; i++) view.setInt16(44 + i * 2, Math.round(Math.max(-1, Math.min(1, pcm[i])) * 32767), true);
-    return { wav: new Blob([view.buffer], { type: 'audio/wav' }), offsetS: -this.from };
+    return { wav: encodeWav(this.samples()), offsetS: -this.from };
   }
+
+  /**
+   * A WAV of clip times [a, b) only (clamped to what this recorder keeps), for checking one lyric line
+   * while the song is still playing. offsetS is the time in that WAV of clip time 0.
+   */
+  slice(a: number, b: number): { wav: Blob; offsetS: number } {
+    const i = Math.max(0, Math.floor((a - this.from) * TAKE_RATE));
+    const j = Math.min(this.sum.length, Math.ceil((b - this.from) * TAKE_RATE));
+    const pcm = new Float32Array(Math.max(0, j - i));
+    for (let k = 0; k < pcm.length; k++) pcm[k] = this.count[i + k] ? this.sum[i + k] / this.count[i + k] : 0;
+    return { wav: encodeWav(pcm), offsetS: -(this.from + i / TAKE_RATE) };
+  }
+}
+
+/** 16-bit mono WAV at TAKE_RATE. */
+function encodeWav(pcm: Float32Array): Blob {
+  const view = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+  const text = (at: number, s: string) => [...s].forEach((ch, j) => view.setUint8(at + j, ch.charCodeAt(0)));
+  text(0, 'RIFF');
+  view.setUint32(4, 36 + pcm.length * 2, true);
+  text(8, 'WAVE');
+  text(12, 'fmt ');
+  view.setUint32(16, 16, true); // fmt chunk size
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, TAKE_RATE, true);
+  view.setUint32(28, TAKE_RATE * 2, true); // bytes per second
+  view.setUint16(32, 2, true); // bytes per frame
+  view.setUint16(34, 16, true); // bits per sample
+  text(36, 'data');
+  view.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) view.setInt16(44 + i * 2, Math.round(Math.max(-1, Math.min(1, pcm[i])) * 32767), true);
+  return new Blob([view.buffer], { type: 'audio/wav' });
 }

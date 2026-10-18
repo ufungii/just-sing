@@ -59,6 +59,8 @@ export interface SingResult {
   saveError: string | null;
   /** Solo only: the singer's voice for the lyric check (offsetS = time in the WAV of clip time 0). */
   take?: { wav: Blob; offsetS: number } | null;
+  /** Solo only: the lyric statuses checked line by line during the song (null: fall back to `take`). */
+  lyricsLive?: Promise<Map<number, import('./lib/types').LyricStatus> | null> | null;
 }
 
 export type Route =
@@ -67,7 +69,8 @@ export type Route =
   | { name: 'solo' }
   | { name: 'sing'; setup: SingSetup }
   | { name: 'results'; result: SingResult }
-  | { name: 'practice' }
+  /** `start` opens spoken practice on one line (e.g. from a results row whose words were unclear). */
+  | { name: 'practice'; start?: { clipId: string; phraseId: string } }
   | { name: 'history' }
   | { name: 'battle' }
   | { name: 'duet'; setup: DuetSetup }
