@@ -4,7 +4,7 @@
  * which FastAPI serves itself in production, so the httpOnly guest cookie just works.
  */
 import { blockedPlayerNameReason } from './playerNamePolicy';
-import type { ClipSummary, HistoryItem, LyricCheck, MatchView, NewMatch, PhraseScore, Practice, Register, Score, Song, TimeRange } from './types';
+import type { ClipSummary, HistoryItem, LyricCheck, MatchView, NewMatch, PhraseScore, Practice, Register, Score, Song, TimeRange, TurnLyrics } from './types';
 
 /** The API's error envelope, or a network failure (code "network"). Branch on `code`, show `message`. */
 export class ApiError extends Error {
@@ -129,9 +129,9 @@ export const beginTurn = (attemptId: string, register: Register, calibrationOffs
     json({ register, calibration_offset: calibrationOffset, ...(range ? { range } : {}) }),
   );
 /** Submit the finished phrase results once. Reuse the same key on retry so nothing is counted twice. */
-export const submitResult = (attemptId: string, phrases: PhraseScore[], idempotencyKey: string, guideUsed = false) =>
+export const submitResult = (attemptId: string, phrases: PhraseScore[], idempotencyKey: string, guideUsed = false, checkLyrics = false) =>
   request<Score>(`/api/turns/${attemptId}/result`, {
-    ...json({ phrases, guide_used: guideUsed }),
+    ...json({ phrases, guide_used: guideUsed, check_lyrics: checkLyrics }),
     headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
   });
 export const getCoach = (attemptId: string) =>
@@ -172,4 +172,12 @@ export function checkLyrics(clipId: string, wav: Blob, offsetS: number): Promise
   form.set('offset_s', offsetS.toFixed(3));
   form.set('audio', wav, 'take.wav');
   return request<LyricCheck>('/api/lyric-check', { method: 'POST', body: form });
+}
+
+/** Persist a multiplayer singer's feedback so both clients can display it. */
+export function checkTurnLyrics(attemptId: string, wav: Blob, offsetS: number): Promise<TurnLyrics> {
+  const form = new FormData();
+  form.set('offset_s', offsetS.toFixed(3));
+  form.set('audio', wav, 'take.wav');
+  return request<TurnLyrics>(`/api/turns/${attemptId}/lyric-check`, { method: 'POST', body: form });
 }

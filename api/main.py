@@ -137,6 +137,8 @@ async def limit_practice_upload(request: Request, call_next):
     """Refuse an oversize audio upload from its Content-Length header, before the body is read
     (the handler's own check only runs after Starlette has received the whole multipart body)."""
     limit = UPLOAD_LIMITS.get(request.url.path)
+    if request.url.path.startswith('/api/turns/') and request.url.path.endswith('/lyric-check'):
+        limit = lyric_check.MAX_BYTES
     if request.method == "POST" and limit:
         length = request.headers.get("content-length", "")
         if not length.isdigit():

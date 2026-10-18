@@ -59,6 +59,15 @@ synchronization; test those with two computers/headphones. `E2E_CLIP` does not o
 
 These browser checks establish functional audio transport on one computer. They do not establish listening quality, Internet NAT traversal or total mic-to-ear latency. TURN remains unconfigured.
 
+## Multiplayer lyrics bars
+
+`npx playwright test lyrics.spec.ts` checks local and online duets with the built-in synthetic clip and
+generated microphones. Each local singer uploads a recording; each online browser uploads only its own.
+Both player panels show separate LYRICS bars, including the unavailable state when fingerprints are absent.
+Use a disposable test database. A controlled checker returning alternating `match`/`unclear` lines can also
+run with `E2E_REQUIRE_LYRICS=1` to require the fixture's distinct 4/6 and 1/3 results on both clients. This
+checks recording, ownership, persistence and rendering; it does not measure pronunciation accuracy.
+
 ## Player-name Easter egg regression
 
 These UI-only checks cover the Players dialog (add/rename by blur or Enter),

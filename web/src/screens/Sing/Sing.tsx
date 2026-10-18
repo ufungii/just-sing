@@ -20,6 +20,7 @@ import { GuideControl } from '../../ui/GuideControl';
 import { ScoreBars } from './ScoreBars';
 import { Countdown, Judgement } from './Judgement';
 import { LiveLyricChecker } from './liveLyrics';
+import { uploadTurnLyrics } from '../Results/uploadTurnLyrics';
 import { Lyrics, type LineVerdicts } from './Lyrics';
 import type { LyricStatus } from '../../lib/types';
 import { PitchLane, useLaneHeight } from './PitchLane';
@@ -157,8 +158,9 @@ export function Sing({ setup }: { setup: SingSetup }) {
     if (finishedRef.current || !song || !target) return;
     finishedRef.current = true;
     rateUpTo(() => true);
-    // Solo turns keep the voice for the lyric check on the results screen (uploaded once, never stored).
-    const take = !setup.battle && !setup.online ? engineRef.current?.recorder.toWav() ?? null : null;
+    // Audio is temporary; multiplayer uploads are linked to the singer's saved attempt.
+    const take = engineRef.current?.recorder.toWav() ?? null;
+    const multiplayerLyrics = !!take && !!(setup.battle || setup.online);
     const lyricsLive = lyricRef.current?.finish() ?? null; // the lines checked during the song
     lyricRef.current = null;
     engineRef.current?.close();
@@ -173,10 +175,11 @@ export function Sing({ setup }: { setup: SingSetup }) {
       if (!saveErrorRef.current) {
         const key = crypto.randomUUID(); // the same key on retry, so the server counts it once
         try {
-          saved = await submitResult(setup.match.attemptId, phrases, key, guideUsedRef.current).catch((e) => {
-            if (e instanceof ApiError && e.code === 'network') return submitResult(setup.match!.attemptId, phrases, key, guideUsedRef.current);
+          saved = await submitResult(setup.match.attemptId, phrases, key, guideUsedRef.current, multiplayerLyrics).catch((e) => {
+            if (e instanceof ApiError && e.code === 'network') return submitResult(setup.match!.attemptId, phrases, key, guideUsedRef.current, multiplayerLyrics);
             throw e;
           });
+          if (multiplayerLyrics && take) void uploadTurnLyrics(setup.match.attemptId, take);
         } catch (e) {
           saveErrorRef.current = `Your score was not saved: ${errorText(e)}`;
         }
