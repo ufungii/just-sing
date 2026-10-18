@@ -4,7 +4,8 @@ import type { ClipSummary } from '../../lib/types';
 import { Notice, PixelButton } from '../../ui';
 import { buildEntries, formatDuration } from './setlist';
 import type { SongEntry } from './setlist';
-import { PixelHeartFace } from './SongJacket';
+import { PixelHeartFace, SongCover } from './SongJacket';
+import { useSongPreview } from './useSongPreview';
 import './songs.css';
 
 export type Clips = { kind: 'loading' } | { kind: 'error'; detail: string | null } | { kind: 'ok'; clips: ClipSummary[] };
@@ -17,7 +18,7 @@ export function useSongEntries(clips: Clips): SongEntry[] {
 /**
  * Arcade-style song wheel: slanted keycap banners, the chosen one popped out with a bouncing
  * pointer. Songs that aren't prepared yet stay on the wheel as "coming soon" and can't be picked.
- * Up/Down arrows move between playable songs.
+ * Up/Down arrows move between playable songs, and the chosen one plays a short preview.
  */
 export function SongWheel({
   clips,
@@ -34,6 +35,9 @@ export function SongWheel({
   const playable = entries.filter((e) => e.clip);
   const selIndex = entries.findIndex((e) => e.clip?.id === selected);
   const listRef = useRef<HTMLUListElement>(null);
+  // The chosen song plays a short loop while it stays selected.
+  const chosenClip = selIndex < 0 ? null : entries[selIndex].clip;
+  useSongPreview(chosenClip?.id ?? null, chosenClip?.duration ?? null);
 
   // Keep the chosen banner in view inside the scrolling wheel.
   useEffect(() => {
@@ -89,7 +93,7 @@ export function SongWheel({
                 }}
               >
                 <span className="song-banner__thumb" aria-hidden="true">
-                  {e.kind === 'soon' ? '?' : <PixelHeartFace size={30} />}
+                  {e.kind === 'soon' ? '?' : <SongCover clipId={e.clip!.id} className="song-banner__cover" fallback={<PixelHeartFace size={30} />} />}
                 </span>
                 <span className="song-banner__text">
                   <span className="song-banner__title">{e.title}</span>

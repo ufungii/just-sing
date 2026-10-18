@@ -70,7 +70,7 @@ export function History() {
 
   const soloButton = (
     <PixelButton tone="hot" size="lg" onClick={() => nav.go({ name: 'solo' })}>
-      ▶ SOLO SING
+      ▶ SING LOCAL
     </PixelButton>
   );
 

@@ -219,3 +219,18 @@
     grid-template-areas: 'songs' 'side' 'go';
   }
 }
+
+/* Ribbon on the left, the 1 PLAYER / 2 PLAYERS toggle on the right of the same row. */
+.solo-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 18px 28px;
+}
+/* Two seats in 2P: a dashed divider between player 1 and player 2. */
+.solo-you .solo-field + .solo-field {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 3px dashed var(--ink-rose);
+}

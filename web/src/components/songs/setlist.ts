@@ -3,8 +3,8 @@
  * come from the prepared catalog (/api/clips), which the ML pipeline fills per machine.
  *
  * A planned song becomes playable as soon as a prepared clip with the same title shows up in the
- * catalog; until then the song wheel shows it as "coming soon". No album art is used: the jacket
- * is drawn pixel art, so nothing copyrighted lands in this public repo.
+ * catalog; until then the song wheel shows it as "coming soon". Album covers are local-only files
+ * (see coverUrl), so nothing copyrighted lands in this public repo.
  */
 import type { ClipSummary } from '../../lib/types';
 
@@ -17,6 +17,7 @@ export interface PlannedSong {
 
 export const SETLIST: PlannedSong[] = [
   { title: 'Blood Sweat & Tears', artist: 'BTS' },
+  { title: 'Crazy', artist: 'LE SSERAFIM' },
   { title: 'How Sweet', artist: 'NewJeans' },
   { title: 'Last Christmas', artist: 'Wham!' },
   { title: 'Love', artist: 'Keyshia Cole' },
@@ -25,7 +26,16 @@ export const SETLIST: PlannedSong[] = [
   { title: 'Party in the USA', artist: 'Miley Cyrus' },
   { title: 'Russian Roulette', artist: 'Red Velvet' },
   { title: 'Soda Pop', artist: 'Saja Boys' },
+  { title: 'Surf', artist: 'NCT WISH' },
+  { title: 'What is Love', artist: 'TWICE' },
+  { title: 'Zombie', artist: 'DAY6' },
 ];
+
+/**
+ * Album cover for a prepared clip: web/public/covers/<clip id>.png. That folder is gitignored (covers
+ * are copyrighted and the repo is public); when a cover is missing the jacket shows pixel art.
+ */
+export const coverUrl = (clipId: string) => `/covers/${encodeURIComponent(clipId)}.png`;
 
 const TONES: SongTone[] = ['pink', 'sky', 'mint', 'lav', 'butter'];
 
@@ -48,10 +58,23 @@ export interface SongEntry {
 const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 
 /**
- * Merge the setlist with the catalog: prepared setlist songs first, then any other catalog clips
- * (test fixtures, songs not on the setlist), then the setlist songs still coming soon.
+ * The server's synthetic test clips stay off the wheel unless this per-device flag is set
+ * (localStorage `just-sing.showTestClips` = "1"); the end-to-end tests set it to sing them.
  */
-export function buildEntries(clips: ClipSummary[]): SongEntry[] {
+function showTestClips(): boolean {
+  try {
+    return localStorage.getItem('just-sing.showTestClips') === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Merge the setlist with the catalog: prepared setlist songs first, then any other catalog clips
+ * (songs not on the setlist, then test fixtures if enabled), then the setlist songs still coming soon.
+ */
+export function buildEntries(all: ClipSummary[]): SongEntry[] {
+  const clips = showTestClips() ? all : all.filter((c) => !c.synthetic);
   const byTitle = new Map(clips.map((c) => [norm(c.title), c]));
   const used = new Set<string>();
   const planned = SETLIST.map((s, i): SongEntry => {
