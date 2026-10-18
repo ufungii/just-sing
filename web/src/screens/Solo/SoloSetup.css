@@ -312,6 +312,7 @@
 .room-search { margin: 18px 0 14px; }
 .room-row { margin: 12px 0; }
 .room-row__main { display: flex; align-items: center; gap: 20px; }
+.room-row .solo-field { margin-top: 18px; } /* the password prompt under the JOIN button */
 .room-row__main > button { flex: none; }
 .room-row__text { flex: 1; min-width: 0; font-size: 22px; }
 .room-row__host { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
