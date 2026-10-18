@@ -4,9 +4,12 @@
  * them with the same config) and from the local phrase scores otherwise. The coach only ever
  * writes words about the measured numbers; it never produces a score.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { asGuest, rematch } from '../../lib/api';
+import { includedPhrases } from '../../components/timeline/range';
 import { useNav, type SingResult } from '../../routes';
+import { buildTargetTrack, phraseWeights, pronunciationScore } from '../../scoring';
+import type { Song } from '../../lib/types';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
 import { CoachPanel } from './CoachPanel';
 import { PhraseChips, ScoreSummary, type LyricTally } from './PhraseChips';
@@ -22,6 +25,7 @@ export function Results({ result }: { result: SingResult }) {
 
   const song = useManifest(setup.clipId);
   const lyrics = useLyricCheck(setup.clipId, result.take, result.lyricsLive);
+  const lyricSummary = useMemo(() => summariseLyrics(lyrics, song, setup.register, setup.range), [lyrics, song, setup.register, setup.range]);
   const [starting, setStarting] = useState(false);
 
   /** Rematch on the server when we can, so the next take saves too; otherwise sing unsaved. */
@@ -44,7 +48,7 @@ export function Results({ result }: { result: SingResult }) {
     <ScreenShell title="RESULTS" kao="ヾ(＾∇＾)">
       <div className="results-top">
         <Panel label={song ? `${song.title} / ${song.artist}` : 'YOUR SCORE'} className="results-score">
-          <ScoreSummary total={totals.total} pitch={totals.pitch} timing={totals.timing} guided={saved?.guided} range={saved ? saved.range : setup.range} lyrics={lyricTally(lyrics)} />
+          <ScoreSummary total={totals.total} pitch={totals.pitch} timing={totals.timing} guided={saved?.guided} range={saved ? saved.range : setup.range} lyrics={lyricSummary} />
           {saved ? (
             <Notice tone="ok">saved to your history ♡</Notice>
           ) : (
@@ -87,12 +91,23 @@ export function Results({ result }: { result: SingResult }) {
   );
 }
 
-/** Matched / graded lines for the LYRICS bar; 'unavailable' when the check could not run; null while waiting or not run. */
-function lyricTally(lyrics: LyricState): LyricTally | 'unavailable' | null {
+/**
+ * The LYRICS bar's numbers: matched / graded lines plus the 0-100 pronunciation score, weighted by each
+ * line's scoreable frames exactly as the 0.4.0 total does (scoring/score.ts pronunciationScore).
+ * 'unavailable' when the check could not run; null while it is still running or was not run.
+ */
+function summariseLyrics(lyrics: LyricState, song: Song | null, register: SingResult['setup']['register'], range: SingResult['setup']['range']): LyricTally | 'unavailable' | null {
   if (lyrics.state === 'offline') return 'unavailable';
   if (lyrics.state !== 'ok') return null;
   const graded = [...lyrics.lines.values()].filter((s) => s === 'match' || s === 'unclear');
-  return { matched: graded.filter((s) => s === 'match').length, graded: graded.length };
+  let score: number | null = null;
+  if (song) {
+    const byPhrase = phraseWeights(includedPhrases(song.phrases, range), buildTargetTrack(song, register));
+    const byLine = new Map<number, number>();
+    for (const p of song.phrases) byLine.set(p.line_index, (byLine.get(p.line_index) ?? 0) + (byPhrase.get(p.id) ?? 0));
+    score = pronunciationScore(lyrics.lines, byLine);
+  }
+  return { matched: graded.filter((s) => s === 'match').length, graded: graded.length, score };
 }
 
 /** One line above the phrase rows: the lyric check's state, plus what it is and isn't. */

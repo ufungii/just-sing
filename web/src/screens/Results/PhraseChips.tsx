@@ -53,16 +53,29 @@ export function ScoreBar({ label, value, tone, shown }: { label: string; value: 
   );
 }
 
-/** Lines whose words matched the original singer, out of the lines the lyric check could grade. */
+/**
+ * Lines whose words matched the original singer, out of the lines the lyric check could grade, and the
+ * 0-100 pronunciation score over them (the same calculation as the 0.4.0 turn total: each line counts by
+ * its length, "match" earns 100 and everything else 0). `score` is null when it could not be computed.
+ */
 export interface LyricTally {
   matched: number;
   graded: number;
+  score: number | null;
 }
 
 /**
- * Total plus pitch and timing bars, as one block. `lyrics` adds a LYRICS bar from the lyric check
- * (matched / graded lines), or "—" when the check could not run. Display only: the total shown is
- * whatever the caller passes in; it is never derived here.
+ * A plain-words verdict for the pronunciation score. Display-only defaults picked to fit what we measured
+ * (real singing matched 83-89% of lines, a real hum 0-17%); one or two singers, so not validated.
+ */
+export function pronunciationVerdict(score: number): 'CLEAR' | 'MIXED' | 'UNCLEAR' {
+  return score >= 80 ? 'CLEAR' : score >= 50 ? 'MIXED' : 'UNCLEAR';
+}
+
+/**
+ * Total plus pitch and timing bars, as one block. `lyrics` adds a LYRICS bar (the pronunciation score from
+ * the lyric check) with a plain-words verdict and the matched line count, or "—" when the check could not
+ * run. The total shown is whatever the caller passes in; it is never derived here.
  */
 export function ScoreSummary({ total, pitch, timing, guided, range, lyrics }: { total: number; pitch: number; timing: number; guided?: boolean; range?: TimeRange | null; lyrics?: LyricTally | 'unavailable' | null }) {
   return (
@@ -81,8 +94,11 @@ export function ScoreSummary({ total, pitch, timing, guided, range, lyrics }: { 
         )}
         {lyrics && lyrics !== 'unavailable' && lyrics.graded > 0 && (
           <>
-            <ScoreBar label="LYRICS" value={(100 * lyrics.matched) / lyrics.graded} tone="lav" shown={`${lyrics.matched}/${lyrics.graded}`} />
-            <p className="results-bar__note">Automated lyric check, not validated by a fluent speaker.</p>
+            <ScoreBar label="LYRICS" value={lyrics.score ?? (100 * lyrics.matched) / lyrics.graded} tone="lav" shown={String(whole(lyrics.score ?? (100 * lyrics.matched) / lyrics.graded))} />
+            <p className="results-bar__note">
+              <strong>Pronunciation: {pronunciationVerdict(lyrics.score ?? (100 * lyrics.matched) / lyrics.graded)}</strong>
+              {' · '}{lyrics.matched} of {lyrics.graded} sung lines sounded like the original. Automated, not validated by a fluent speaker.
+            </p>
           </>
         )}
       </div>
