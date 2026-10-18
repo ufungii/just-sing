@@ -44,7 +44,6 @@ it('shows a LYRICS bar beside pitch and timing, or a dash when lyrics were not c
   expect(html).toContain('Pronunciation: MIXED');
   expect(html).toContain('9 of 12 sung lines sounded like the original');
   expect(html).toContain('Total score 61 out of 100');
-  expect(html).toContain('not validated by a fluent speaker');
   expect(renderToStaticMarkup(<ScoreSummary total={61} pitch={64} timing={50} />)).not.toContain('LYRICS');
   expect(renderToStaticMarkup(<ScoreSummary total={61} pitch={64} timing={50} lyrics="unavailable" />)).toContain('Lyrics not checked');
 });

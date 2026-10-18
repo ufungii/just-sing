@@ -1,5 +1,25 @@
 /* Both singers' saved scores side by side; stacks on narrow windows. */
 .match-board__players { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
-.match-board__players > .ui-panel { min-width: 0; margin: 0; }
-.match-board__winner { outline: 4px solid currentColor; outline-offset: 2px; }
+.match-board__slot { position: relative; z-index: 1; min-width: 0; }
+.match-board__slot > .ui-panel { margin: 0; }
+.match-board__banner { position: relative; z-index: 2; }
+/* The winner's box shines like the vinyl on the song screen: a slow rotating sunburst behind it. */
+.match-board__winner { z-index: 0; isolation: isolate; }
+.match-board__winner::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 50%;
+  width: 170%;
+  aspect-ratio: 1;
+  margin: -85% 0 0 -85%;
+  border-radius: 50%;
+  background: repeating-conic-gradient(var(--butter) 0 10deg, transparent 10deg 24deg);
+  opacity: 0.8;
+  mask-image: radial-gradient(circle closest-side, #000 40%, transparent 100%);
+  animation: match-shine 30s linear infinite;
+  pointer-events: none;
+}
+@keyframes match-shine { to { transform: rotate(360deg); } }
 @media (max-width: 720px) { .match-board__players { grid-template-columns: 1fr; } }

@@ -3,8 +3,7 @@
  * and one row per phrase with its lyric and rating. Display only: every number shown here was
  * computed by the scoring engine (locally or on the server), never by an LLM.
  */
-import type { LyricStatus, PhraseScore, Rating, Song, TimeRange } from '../../lib/types';
-import { rangeLabel } from '../../components/timeline/range';
+import type { LyricStatus, PhraseScore, Rating, Song } from '../../lib/types';
 import { practicePhrases } from '../../lib/practicePhrases';
 import './PhraseChips.css';
 
@@ -78,11 +77,10 @@ export function pronunciationVerdict(score: number): 'CLEAR' | 'MIXED' | 'UNCLEA
  * the lyric check) with a plain-words verdict and the matched line count, or "—" when the check could not
  * run. The total shown is whatever the caller passes in; it is never derived here.
  */
-export function ScoreSummary({ total, pitch, timing, range, lyrics, decimals }: { total: number; pitch: number; timing: number; decimals?: boolean; range?: TimeRange | null; lyrics?: LyricTally | 'unavailable' | 'checking' | null }) {
+export function ScoreSummary({ total, pitch, timing, lyrics, decimals }: { total: number; pitch: number; timing: number; decimals?: boolean; lyrics?: LyricTally | 'unavailable' | 'checking' | null }) {
   const lyricScore = lyrics && typeof lyrics === 'object' ? lyrics.score ?? (lyrics.graded ? (100 * lyrics.matched) / lyrics.graded : null) : null;
   return (
     <div className="results-summary">
-      {range && <p className="solo-hint">Practice section · {rangeLabel(range)}</p>}
       <BigScore total={total} decimals={decimals} />
       <div className="results-summary__bars">
         <ScoreBar label="PITCH" value={pitch} tone="sky" />
@@ -102,7 +100,7 @@ export function ScoreSummary({ total, pitch, timing, range, lyrics, decimals }: 
             <ScoreBar label="LYRICS" value={lyricScore ?? 0} tone="lav" shown={lyricScore === null ? '—' : String(whole(lyricScore))} />
             <p className="results-bar__note">
               {lyricScore !== null && <><strong>Pronunciation: {pronunciationVerdict(lyricScore)}</strong>{' · '}</>}
-              {lyrics.matched} of {lyrics.graded} sung lines sounded like the original. Automated, not validated by a fluent speaker.
+              {lyrics.matched} of {lyrics.graded} sung lines sounded like the original.
             </p>
           </>
         )}

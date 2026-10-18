@@ -48,7 +48,7 @@ export function Results({ result }: { result: SingResult }) {
     <ScreenShell title="RESULTS" kao="ヾ(＾∇＾)">
       <div className="results-top">
         <Panel label={song ? `${song.title} / ${song.artist}` : 'YOUR SCORE'} className="results-score">
-          <ScoreSummary total={totals.total} pitch={totals.pitch} timing={totals.timing} range={saved ? saved.range : setup.range} lyrics={lyricSummary} />
+          <ScoreSummary total={totals.total} pitch={totals.pitch} timing={totals.timing} lyrics={lyricSummary} />
           {saved ? (
             <Notice tone="ok">saved to your history ♡</Notice>
           ) : (

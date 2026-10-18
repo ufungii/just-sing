@@ -169,7 +169,7 @@ export function MatchBoard({ match, song }: { match: MatchView; song: ReturnType
         : `${shortName(view.players.find((p) => p.slot === view.winner_slot)?.display_name ?? '?')} WINS!`;
   return (
     <>
-      <Panel tone="mint" label="WINNER">
+      <Panel tone="mint" label="WINNER" className="match-board__banner">
         <p className="battle-headline" style={{ fontSize: 40, margin: 0 }} aria-live="polite">{headline}</p>
       </Panel>
       <div className="match-board__players">
@@ -190,16 +190,18 @@ export function MatchBoard({ match, song }: { match: MatchView; song: ReturnType
         const lyrics = feedback?.status === 'pending' ? 'checking' as const : lines
           ? { matched: graded.filter((s) => s === 'match').length, graded: graded.length, score: pronunciation } : 'unavailable' as const;
         return (
-          <Panel key={p.slot} className={view.state === 'finished' && view.winner_slot === p.slot ? 'match-board__winner' : undefined} tone={p.slot === 0 ? 'pink' : 'sky'} label={`P${p.slot + 1} · ${shortName(p.display_name).toUpperCase()}`}>
+          <div key={p.slot} className={`match-board__slot${view.state === 'finished' && view.winner_slot === p.slot ? ' match-board__winner' : ''}`}>
+          <Panel tone={p.slot === 0 ? 'pink' : 'sky'} label={`P${p.slot + 1} · ${shortName(p.display_name).toUpperCase()}`}>
             {score ? (
               <>
-                <ScoreSummary total={score.total} pitch={score.pitch} timing={score.timing} range={score.range} lyrics={lyrics} decimals />
+                <ScoreSummary total={score.total} pitch={score.pitch} timing={score.timing} lyrics={lyrics} decimals />
                 <PhraseChips phrases={score.phrases} song={song} lyrics={lines} />
               </>
             ) : (
               <Notice tone="warn">No saved score for this player.</Notice>
             )}
           </Panel>
+          </div>
         );
       })}
       </div>
