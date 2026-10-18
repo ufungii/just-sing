@@ -179,8 +179,7 @@
 /* The controls row sits above the lyrics in stacking order, and the lyrics get their own padding and
    wrap long lines, so tall Korean glyphs (large font, tight line height) can never paint over the
    guide button or the toggles. */
-.sing-lyrics-head,
-.duet-audio-controls { position: relative; z-index: 2; }
+.sing-lyrics-head { position: relative; z-index: 2; }
 .sing-lyrics {
   position: relative;
   min-height: 190px;
@@ -305,9 +304,9 @@
 
 /* ---------- running-score bars (top right) ---------- */
 
-.score-bars { display: flex; flex: none; flex-direction: column; gap: 8px; width: 300px; }
+.score-bars { display: flex; flex: none; flex-direction: column; gap: 12px; width: 460px; }
 /* Fixed columns keep both tracks the same size regardless of either player's name. */
-.score-bar { display: grid; grid-template-columns: 120px 170px; align-items: center; gap: 10px; }
+.score-bar { display: grid; grid-template-columns: 150px 290px; align-items: center; gap: 14px; }
 .score-bar__name {
   min-width: 0;
   overflow: hidden;
@@ -315,15 +314,15 @@
   white-space: nowrap;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 17px;
+  font-size: 22px;
 }
 .score-bar__track {
   position: relative;
   min-width: 0;
-  height: 21px;
+  height: 32px;
   border: var(--border-thin) solid var(--ink);
   background: var(--paper);
-  box-shadow: 3px 4px 0 var(--ink);
+  box-shadow: 4px 5px 0 var(--ink);
 }
 .score-bar__fill {
   display: block;
@@ -401,7 +400,6 @@
 .duet-bar__who p { margin: 0; }
 .duet-bar__who [data-testid='duet-current'] { font-size: 22px; }
 .duet-bar__who [data-testid='duet-next'] { font-size: 14px; }
-.duet-audio-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; }
 .duet-voice-status { font-size: 12px; line-height: 1.3; margin: 5px 0; }
 
 /* Short screens (16:9 at 720-800 px tall, 16:10 laptops): tighten the lyrics and panels so the lane,
@@ -453,3 +451,39 @@
 }
 .sing-lyrics__last.is-unclear .sing-lyrics__last-tag { background: var(--hot-light); }
 .sing-lyrics__last.is-not_sung { opacity: 0.5; }
+
+/* A gain or loss: the track flashes (gain) or shakes (loss) and a burst of pixels flies from the fill's end. */
+.score-bar--gain .score-bar__track { animation: bar-flash 0.4s steps(4); }
+.score-bar--loss .score-bar__track { animation: bar-shake 0.4s steps(6); }
+@keyframes bar-flash {
+  50% { box-shadow: 4px 5px 0 var(--ink), 0 0 18px 6px var(--butter); }
+}
+@keyframes bar-shake {
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+.score-bar__burst { position: absolute; top: 50%; width: 0; height: 0; pointer-events: none; z-index: 3; }
+.score-bar__burst i {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border: 2px solid var(--ink);
+  animation: burst-fly 0.7s steps(5) forwards;
+}
+.score-bar__burst--gain i { background: var(--butter); }
+.score-bar__burst--gain i:nth-child(even) { background: var(--mint); }
+.score-bar__burst--loss i { background: var(--hot); }
+.score-bar__burst--loss i:nth-child(even) { background: var(--ink); }
+@keyframes burst-fly {
+  from { opacity: 1; transform: translate(0, 0) scale(1); }
+  to { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.4); }
+}
+@media (prefers-reduced-motion: reduce) { .score-bar__burst { display: none; } }
+@media (max-width: 1100px) {
+  .score-bars { width: 340px; }
+  .score-bar { grid-template-columns: 110px 216px; }
+  .score-bar__name { font-size: 18px; }
+}
