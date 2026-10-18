@@ -327,5 +327,3 @@ contracts/         shared data shapes and test cases (Python and TypeScript both
 
 Built with: React, Vite, Pitchy, FastAPI, Tiger Data (Postgres), Auth0, Gemini, Electron,
 Demucs, torchcrepe, wav2vec2 (`kresnik/wav2vec2-large-xlsr-korean`, Apache-2.0), faster-whisper.
-
-*Made with ♡ and a lot of off-key singing.* ♪
