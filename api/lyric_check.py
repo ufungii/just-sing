@@ -14,6 +14,8 @@ one model job at a time (the lock is shared with practice, which uses the same m
 import logging
 import os
 import tempfile
+import threading
+import time
 import uuid
 from pathlib import Path
 from typing import Protocol
@@ -36,7 +38,17 @@ MAX_BYTES = 12 * 1024 * 1024   # a 16 kHz mono WAV of a full 5-minute song is ab
 MAX_SECONDS = 330.0
 LINE_MAX_BYTES = 1024 * 1024   # one line plus margins: a few seconds of 16 kHz mono WAV
 LINE_MAX_SECONDS = 30.0
-LINE_WAIT_S = 8.0              # a line check waits this long for the shared model, then answers busy
+LINE_WAIT_S = 20.0             # a line check waits this long for the shared model (a whole-take check holds it ~10 s), then answers busy
+TAKE_YIELD_S = 15.0            # a whole-take check lets waiting line checks go first for at most this long
+_lines_waiting = 0             # line checks currently waiting for the model
+_lines_waiting_lock = threading.Lock()
+
+
+def _yield_to_lines(max_s: float) -> None:
+    """Let queued live line checks take the model before a whole-take check does (they feed the results screen)."""
+    deadline = time.monotonic() + max_s
+    while _lines_waiting and time.monotonic() < deadline:
+        time.sleep(0.1)
 FINGERPRINTS = "lyric_fingerprints.npz"
 
 
@@ -130,6 +142,7 @@ def check_turn_lyrics(attempt_id: uuid.UUID, offset_s: float = Form(ge=-MAX_SECO
     if checker is not None and fingerprints is not None:
         with tempfile.TemporaryDirectory() as d:
             wav = practice._normalize(audio, Path(d), MAX_BYTES, MAX_SECONDS)
+            _yield_to_lines(TAKE_YIELD_S)
             if not practice._busy.acquire(timeout=LINE_WAIT_S):
                 raise ApiError(429, 'pronunciation_busy', 'The speech model is busy. Try again shortly.', True)
             try:
@@ -193,7 +206,15 @@ def lyric_check_line(clip_id: str = Form(), line_index: int = Form(ge=0),
     with tempfile.TemporaryDirectory() as d:
         wav = practice._normalize(audio, Path(d), LINE_MAX_BYTES, LINE_MAX_SECONDS)
         # Lines arrive every few seconds during a song, so wait briefly for the model instead of failing.
-        if not practice._busy.acquire(timeout=LINE_WAIT_S):
+        global _lines_waiting
+        with _lines_waiting_lock:
+            _lines_waiting += 1
+        try:
+            got = practice._busy.acquire(timeout=LINE_WAIT_S)
+        finally:
+            with _lines_waiting_lock:
+                _lines_waiting -= 1
+        if not got:
             raise ApiError(429, "pronunciation_busy", "The speech model is busy. Try again in a few seconds.", True)
         try:
             lines = [LyricLine(**r) for r in checker.check(wav, fingerprints, offset_s, only={line_index})]

@@ -19,8 +19,8 @@ it('renders separate lyric bars per singer without changing either total or winn
   expect(html).toContain('1 of 1 sung lines');
   expect(html).toContain('Pronunciation: MIXED');
   expect(html).toContain('Pronunciation: CLEAR');
-  expect(html).toContain('Total score 80 out of 100');
-  expect(html).toContain('Total score 60 out of 100');
+  expect(html).toContain('Total score 80.0 out of 100');
+  expect(html).toContain('Total score 60.0 out of 100');
   expect(html).toContain('Alice WINS!');
 });
 
@@ -48,5 +48,5 @@ it('weights pronunciation by only each singer’s saved phrases', () => {
   expect(html).toContain('aria-label="LYRICS" aria-valuemin="0" aria-valuemax="100" aria-valuenow="33"');
   expect(html).toContain('Pronunciation: UNCLEAR');
   expect(html).toContain('Pronunciation: CLEAR');
-  expect(html).toContain('Total score 80 out of 100');
+  expect(html).toContain('Total score 80.0 out of 100');
 });

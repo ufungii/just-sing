@@ -20,8 +20,9 @@ export const RATING_LABEL: Record<Rating, string> = {
 const whole = (n: number) => Math.round(Math.min(100, Math.max(0, n)));
 
 /** The big 3D pixel total, layered like the screen titles. */
-export function BigScore({ total }: { total: number }) {
-  const text = String(whole(total));
+export function BigScore({ total, decimals = false }: { total: number; decimals?: boolean }) {
+  // Multiplayer shows one decimal: the server breaks ties at that precision, so whole numbers could look equal with a winner named.
+  const text = decimals ? Math.min(100, Math.max(0, total)).toFixed(1) : String(whole(total));
   return (
     <div className="results-big" role="img" aria-label={`Total score ${text} out of 100`}>
       <span className="results-big__label" aria-hidden="true">TOTAL</span>
@@ -77,13 +78,13 @@ export function pronunciationVerdict(score: number): 'CLEAR' | 'MIXED' | 'UNCLEA
  * the lyric check) with a plain-words verdict and the matched line count, or "—" when the check could not
  * run. The total shown is whatever the caller passes in; it is never derived here.
  */
-export function ScoreSummary({ total, pitch, timing, guided, range, lyrics }: { total: number; pitch: number; timing: number; guided?: boolean; range?: TimeRange | null; lyrics?: LyricTally | 'unavailable' | 'checking' | null }) {
+export function ScoreSummary({ total, pitch, timing, guided, range, lyrics, decimals }: { total: number; pitch: number; timing: number; guided?: boolean; decimals?: boolean; range?: TimeRange | null; lyrics?: LyricTally | 'unavailable' | 'checking' | null }) {
   const lyricScore = lyrics && typeof lyrics === 'object' ? lyrics.score ?? (lyrics.graded ? (100 * lyrics.matched) / lyrics.graded : null) : null;
   return (
     <div className="results-summary">
       {range && <p className="solo-hint">Practice section · {rangeLabel(range)} · kept off the leaderboard.</p>}
       {guided && <p className="solo-hint">Guide vocals on: this run is kept off the leaderboard.</p>}
-      <BigScore total={total} />
+      <BigScore total={total} decimals={decimals} />
       <div className="results-summary__bars">
         <ScoreBar label="PITCH" value={pitch} tone="sky" />
         <ScoreBar label="TIMING" value={timing} tone="mint" />

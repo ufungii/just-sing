@@ -147,8 +147,11 @@ def test_generated_manifest_matches_contract_and_does_not_promote_draft_lyrics(s
     root, folder, track = song
     prepare_preview(folder, track)
     manifest = write_manifest(folder)
-    contract = json.loads((Path(__file__).resolve().parents[1] / "contracts/song.example.json").read_text(encoding="utf-8"))
-    assert set(manifest) == set(contract)
+    contracts = Path(__file__).resolve().parents[1] / "contracts"
+    contract = json.loads((contracts / "song.example.json").read_text(encoding="utf-8"))
+    # duet_sections is documented by the duet contract; the generator always emits it.
+    duet = json.loads((contracts / "duet-song.example.json").read_text(encoding="utf-8"))
+    assert set(manifest) == set(contract) | {"duet_sections"} == set(duet)
     Timeline.model_validate(manifest)
     assert len(manifest["phrases"]) == len(track["lines"])
     assert manifest["reference"]["notes"] == [{"start": 0.0, "end": 6.0, "hz": 220}]

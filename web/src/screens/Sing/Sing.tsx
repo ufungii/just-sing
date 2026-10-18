@@ -297,7 +297,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
     } catch {
       // storage blocked: the setting just won't be remembered
     }
-  }, [guide, hasGuide]);
+  }, [guide, hasGuide, attempt]); // a RETRY builds a new engine whose guide gain starts at 0
 
   return (
     <ScreenShell

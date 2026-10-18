@@ -192,7 +192,7 @@ export function MatchBoard({ match, song }: { match: MatchView; song: ReturnType
           <Panel key={p.slot} className={view.state === 'finished' && view.winner_slot === p.slot ? 'match-board__winner' : undefined} tone={p.slot === 0 ? 'pink' : 'sky'} label={`P${p.slot + 1} · ${p.display_name.toUpperCase()}`}>
             {score ? (
               <>
-                <ScoreSummary total={score.total} pitch={score.pitch} timing={score.timing} guided={score.guided} range={score.range} lyrics={lyrics} />
+                <ScoreSummary total={score.total} pitch={score.pitch} timing={score.timing} range={score.range} lyrics={lyrics} decimals />
                 <PhraseChips phrases={score.phrases} song={song} lyrics={lines} />
               </>
             ) : (
