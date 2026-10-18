@@ -4,21 +4,15 @@
  * them with the same config) and from the local phrase scores otherwise. The coach only ever
  * writes words about the measured numbers; it never produces a score.
  */
-import { useEffect, useState } from 'react';
-import { MicChan } from '../../components/pixel';
-import { asGuest, getCoach, rematch } from '../../lib/api';
+import { useState } from 'react';
+import { asGuest, rematch } from '../../lib/api';
 import { useNav, type SingResult } from '../../routes';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
+import { CoachPanel } from './CoachPanel';
 import { PhraseChips, ScoreSummary } from './PhraseChips';
 import { useLyricCheck, type LyricState } from './useLyricCheck';
 import { useManifest } from './useManifest';
 import './Results.css';
-
-type Coach =
-  | { state: 'none' } // turn not saved, so there is nothing to coach on the server
-  | { state: 'loading' }
-  | { state: 'ok'; text: string }
-  | { state: 'offline' }; // Gemini unavailable or the call failed: not an error, just no blurb
 
 export function Results({ result }: { result: SingResult }) {
   const nav = useNav();
@@ -27,7 +21,6 @@ export function Results({ result }: { result: SingResult }) {
   const phrases = saved?.phrases ?? result.phrases;
 
   const song = useManifest(setup.clipId);
-  const coach = useCoach(saved ? setup.match?.attemptId ?? null : null);
   const lyrics = useLyricCheck(setup.clipId, result.take);
   const [starting, setStarting] = useState(false);
 
@@ -62,18 +55,7 @@ export function Results({ result }: { result: SingResult }) {
           )}
         </Panel>
 
-        <Panel tone="lav" label="COACH" className="results-coach">
-          <div className="results-coach__row">
-            <MicChan className="results-coach__mascot" />
-            <p className="results-bubble" aria-live="polite">
-              {coach.state === 'ok' && coach.text}
-              {coach.state === 'loading' && <span className="results-bubble__wait">thinking (・_・;) …</span>}
-              {coach.state === 'offline' && <>coach is offline right now ♪ your scores are all here, though!</>}
-              {coach.state === 'none' && <>save a turn and I'll leave you a tip ♡</>}
-            </p>
-          </div>
-          {coach.state === 'ok' && <p className="results-fine">Written by Gemini from your measured scores only.</p>}
-        </Panel>
+        <CoachPanel attemptId={saved ? setup.match?.attemptId ?? null : null} />
       </div>
 
       <Panel label="PHRASES">
@@ -116,18 +98,3 @@ function LyricSummary({ lyrics }: { lyrics: LyricState }) {
 }
 
 /** Asks the server for the coaching blurb of a saved attempt. */
-function useCoach(attemptId: string | null): Coach {
-  const [coach, setCoach] = useState<Coach>(attemptId ? { state: 'loading' } : { state: 'none' });
-  useEffect(() => {
-    if (!attemptId) return;
-    let live = true;
-    getCoach(attemptId).then(
-      (r) => live && setCoach(r.status === 'ok' && r.coach_blurb ? { state: 'ok', text: r.coach_blurb } : { state: 'offline' }),
-      () => live && setCoach({ state: 'offline' }),
-    );
-    return () => {
-      live = false;
-    };
-  }, [attemptId]);
-  return coach;
-}
