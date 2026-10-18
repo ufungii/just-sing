@@ -13,7 +13,7 @@ from statistics import median
 from .text import korean_practice_text, apply_cached_translations
 from .common import ROOT, digest, read
 from .author_edits import apply_author_edits
-from .duet import section_plan, assign_sections
+from .duet import section_plan, assign_sections, balanced_sections
 
 GENERATOR = "ml.pipeline.manifest"
 
@@ -149,6 +149,11 @@ def build_manifest(folder):
         phrases, plan, short_clip=bool(provenance.get('clip_source_id')))
     review['duet_assignment'] = {'policy': 'whole_line_demo_split' if fallback else 'song_sections',
                                  'reviewed': False}
+    policy = corrections.get('duet', {}).get('policy', track.get('duet_policy'))
+    if policy == 'balanced_section_halves':
+        weights = {p['id']: scoreable_seconds(reference, p['start'], p['end']) for p in phrases}
+        manifest['duet_sections'], balance = balanced_sections(phrases, plan, weights)
+        review['duet_assignment'].update(policy=policy, balance=balance)
     if corrections_path.is_file():
         manifest = apply_author_edits(manifest, corrections.get('author'), hashes)
         if corrections.get('author'):
