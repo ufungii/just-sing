@@ -124,7 +124,7 @@ export function History() {
                     {item.range && <span className="history-row__artist">Practice section · {rangeLabel(item.range)}</span>}
                   </span>
                   <span className="history-row__date">{dateFmt.format(new Date(item.created_at))}</span>
-                  <span className="history-row__total">{Math.round(item.total)}</span>
+                  <span className="history-row__total">{item.total === null ? '–' : Math.round(item.total)}</span>
                   <span className="history-row__caret" aria-hidden="true">
                     {isOpen ? '▼' : '▶'}
                   </span>
