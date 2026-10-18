@@ -357,6 +357,8 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
             <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showTrans} onClick={() => setShowTrans((v) => !v)}>ENGLISH</PixelButton>
           </div>
           {engine.current?.vocals && <GuideControl on={guide} volume={guideVolume} onToggle={() => setGuide((v) => !v)} onVolume={setGuideVolume} />}
+        </div>
+        <div className="sing-lyrics-head__center">
           {setup.online &&
             <div className="duet-voice">
               <PixelButton size="sm" tone={voiceMuted ? 'paper' : 'hot'} aria-pressed={voiceMuted}

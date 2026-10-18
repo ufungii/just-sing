@@ -151,14 +151,16 @@
 .sing-lyrics-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
   flex-wrap: wrap;
+  margin-top: -14px; /* sit right under the lyrics box: cancels most of the shell's row gap */
 }
 
-.sing-lyrics-head__left { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.sing-lyrics-head__left { flex: 1 1 0; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.sing-lyrics-head__center { flex: none; }
 .duet-voice { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.sing-mic-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.sing-mic-stack { flex: 1 1 0; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 
 .sing-meter {
   display: flex;
