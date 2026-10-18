@@ -131,7 +131,7 @@ export async function openOnlineDuet(host: Page, guest: Page, clipId = DUET_CLIP
   await lobby?.beforeMicChecks?.();
   for (const page of [host, guest]) await mic(page);
   await lobby?.afterMicChecks?.();
-  for (const page of [host, guest]) await page.getByRole('button', { name: 'READY ✓', exact: true }).click();
+  for (const page of [host, guest]) await page.getByRole('button', { name: 'NOT READY', exact: true }).click();
   await host.getByRole('button', { name: 'START ♪', exact: true }).click();
   for (const page of [host, guest]) await expect(page.getByRole('button', { name: 'READY TO SING' })).toBeVisible();
   return { song, hostName };

@@ -244,7 +244,7 @@ test('online host section: guest read-only, readiness reset, shared range with d
     await expect(host.getByText('Range save unavailable.')).toBeVisible();
     await expect(hostStart).toHaveAttribute('aria-valuenow', '0');
     await host.unroute('**/api/rooms/*/range');
-    for (const page of [host, guest]) { await mic(page); await page.getByRole('button', { name: 'READY ✓', exact: true }).click(); }
+    for (const page of [host, guest]) { await mic(page); await page.getByRole('button', { name: 'NOT READY', exact: true }).click(); }
     await chooseSection(host, song, false, 3);
     await expect(guest.getByRole('slider', { name: 'Start of practice section' })).toHaveAttribute('aria-valuenow', String(range.start));
     await expect(guest.getByRole('slider', { name: 'End of practice section' })).toHaveAttribute('aria-valuenow', String(range.end));
@@ -260,7 +260,7 @@ test('online host section: guest read-only, readiness reset, shared range with d
     await joinListedRoom(guest, `${NAME}-host`);
     await expect(guest.getByRole('slider', { name: 'Start of practice section' })).toHaveAttribute('aria-valuenow', String(range.start));
     await mic(guest);
-    for (const page of [host, guest]) await page.getByRole('button', { name: 'READY ✓', exact: true }).click();
+    for (const page of [host, guest]) await page.getByRole('button', { name: 'NOT READY', exact: true }).click();
     await host.getByRole('button', { name: 'START ♪', exact: true }).click();
     for (const page of [host, guest]) await expect(page.getByRole('button', { name: 'READY TO SING' })).toBeVisible();
     const frozenResponse = guest.waitForResponse((r) => r.url().endsWith('/duet/ready'));
