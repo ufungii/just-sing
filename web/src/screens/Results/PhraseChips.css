@@ -32,9 +32,9 @@
 }
 .results-big__num span { position: absolute; left: 0; top: 0; }
 .results-big__num .l3 { top: 7px; color: var(--ink); }
-.results-big__num .l2 { top: 4px; color: #8c2f63; }
-.results-big__num .l1 { top: 2px; color: #c93a7e; }
-.results-big__num .l0 { color: var(--hot); }
+.results-big__num .l2 { top: 4px; color: var(--num-2, #8c2f63); }
+.results-big__num .l1 { top: 2px; color: var(--num-1, #c93a7e); }
+.results-big__num .l0 { color: var(--num-0, var(--hot)); }
 
 /* ---------- segmented bars ---------- */
 

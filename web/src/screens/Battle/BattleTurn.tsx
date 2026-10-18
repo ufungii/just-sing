@@ -190,7 +190,7 @@ export function MatchBoard({ match, song }: { match: MatchView; song: ReturnType
         const lyrics = feedback?.status === 'pending' ? 'checking' as const : lines
           ? { matched: graded.filter((s) => s === 'match').length, graded: graded.length, score: pronunciation } : 'unavailable' as const;
         return (
-          <div key={p.slot} className={`match-board__slot${view.state === 'finished' && view.winner_slot === p.slot ? ' match-board__winner' : ''}`}>
+          <div key={p.slot} className={`match-board__slot match-board__slot--p${p.slot + 1}${view.state === 'finished' && view.winner_slot === p.slot ? ' match-board__winner' : ''}`}>
           <Panel tone={p.slot === 0 ? 'pink' : 'sky'} label={`P${p.slot + 1} · ${shortName(p.display_name).toUpperCase()}`}>
             {score ? (
               <>
