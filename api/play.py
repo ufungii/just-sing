@@ -5,7 +5,9 @@ import logging
 import math
 import os
 import secrets
+import time
 import uuid
+from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, Request, Response
@@ -203,7 +205,35 @@ class ResultIn(BaseModel):
     guide_used: bool = False  # client-reported (not cheat-proof): guide vocals were audible during the turn
 
 
-@router.post("/guests")
+GUESTS_PER_MINUTE_PER_IP = 20  # a shared network (school, venue) still fits a room full of players
+_hits: dict[tuple[str, str], deque] = defaultdict(deque)
+
+
+def too_many(bucket: str, key: str, limit: int, window_s: float = 60.0) -> bool:
+    """Sliding-window limiter; records the hit unless it is refused. ponytail: in-memory, one worker; a shared
+    store (Postgres/Redis) if the API ever runs several workers. The client key is request.client.host, which
+    uvicorn already resolves from X-Forwarded-For when the proxy is trusted (nothing here reads that header)."""
+    now = time.monotonic()
+    hits = _hits[bucket, key]
+    while hits and now - hits[0] > window_s:
+        hits.popleft()
+    if len(hits) >= limit:
+        return True
+    hits.append(now)
+    return False
+
+
+def client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def limit_guest_creation(request: Request):
+    """Route dependency (runs before the database session is opened)."""
+    if too_many("guests", client_ip(request), GUESTS_PER_MINUTE_PER_IP):
+        raise ApiError(429, "too_many_guests", "Too many new players from this network. Wait a minute.", True)
+
+
+@router.post("/guests", dependencies=[Depends(limit_guest_creation)])
 def create_guest(body: GuestIn, response: Response, s: Session = Depends(get_db)):
     token = secrets.token_urlsafe(32)  # only the hash is stored
     guest = GuestSession(display_name=body.display_name, token_hash=_hash(token),
