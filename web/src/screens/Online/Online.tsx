@@ -16,7 +16,7 @@ import { MatchBoard } from '../Battle/BattleTurn';
 import { useManifest } from '../Results/useManifest';
 import { MicCheck } from '../Solo/MicCheck';
 import { ClipList, REGISTERS, useClips } from '../Solo/SoloSetup';
-import { TimingCheck, loadCalibration } from '../Solo/TimingCheck';
+import { loadCalibration } from '../Solo/TimingCheck';
 import { PracticeRangePicker } from '../../components/timeline/PracticeRangePicker';
 import { rangeLabel } from '../../components/timeline/range';
 import '../Solo/SoloSetup.css';
@@ -100,7 +100,7 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
   const live = useRoomLive();
   const { clips, loadClips } = useClips();
   const [register, setRegister] = useState<Register>(room.prefs?.register ?? 0);
-  const [offset, setOffset] = useState<number | null>(() => (room.prefs ? room.prefs.offset : loadCalibration()));
+  const [offset] = useState<number | null>(() => (room.prefs ? room.prefs.offset : loadCalibration()));
   const [micOk, setMicOk] = useState(!!room.prefs); // coming back from singing: the mic already worked
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -227,9 +227,6 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
                 {voiceMuted ? 'MY VOICE MUTED' : 'SHARING MY VOICE'}
               </PixelButton>
               <MicCheck onPassedChange={setMicOk} />
-            </Panel>
-            <Panel tone="lav" label="TIMING CHECK (OPTIONAL)">
-              <TimingCheck offset={offset} onChange={setOffset} />
             </Panel>
           </div>
           <div className="solo-go">
