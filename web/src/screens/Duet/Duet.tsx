@@ -274,7 +274,7 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
         {phase === 'waiting' && <div className="sing-overlay">Waiting for both microphones and audio…</div>}
         {phase === 'playing' && now < rangeStart - 3 && <div className="sing-overlay">Starting together…</div>}
         {phase === 'playing' && now >= rangeStart - 3 && now < rangeStart && <Countdown value={String(Math.ceil(rangeStart - now))} />}
-        {phase === 'playing' && judge && <Judgement key={judge.phrase_id} rating={judge.rating} score={judge.score} />}
+        {phase === 'playing' && judge && <Judgement key={judge.phrase_id} rating={judge.rating} />}
         <div className="sing-progress"><div className="sing-progress__fill" style={{ width: `${Math.max(0, Math.min(1, (now - rangeStart) / (rangeEnd - rangeStart))) * 100}%` }} /></div>
       </div>
       {(phase === 'saving' || phase === 'saved') && <Notice>{phase === 'saving' ? 'Saving assigned phrases…' : error ? 'The song is over. Retry saving your existing result.' : 'Your score is saved. Waiting for the other result…'}</Notice>}
