@@ -154,7 +154,7 @@
   align-items: flex-start;
   gap: 16px;
   flex-wrap: wrap;
-  margin-top: -6px; /* sit just under the lyrics box: cancels part of the shell's row gap */
+  margin-top: 2px; /* just under the lyrics box */
 }
 
 .sing-lyrics-head__left { flex: 1 1 0; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
@@ -503,3 +503,19 @@
   .sing-lyrics__next-roman { font-size: clamp(11px, 1.7vh, 18px); }
   .sing-lyrics__rest { font-size: clamp(18px, 3.2vh, 34px); padding: 2px 0; }
 }
+
+/* Singer-switch callouts (who sings, who is next, the NEXT pill) lie over the top centre of the lane,
+   so they never take layout space and nothing moves when they change or appear. */
+.duet-callouts {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.duet-callouts .duet-bar { margin: 0; opacity: 0.93; }

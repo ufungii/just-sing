@@ -308,6 +308,21 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
       lead={<SongThumb clipId={setup.clipId} />} subtitle={song && <>{song.title} <span>· {song.artist}</span></>}
       right={
         <div className="sing-hud">
+          <ScoreBars bars={([0, 1] as const).map((slot) => ({ name: names(slot), score: slotScore(slot), slot, testId: `duet-score-${slot}` }))} />
+        </div>
+      }>
+      {plan?.range && <p className="solo-hint">Practice section · {rangeLabel(plan.range)}</p>}
+      {error && <Notice tone="error">{error}</Notice>}
+      <div className={`sing-stage${cueOn ? ` sing-stage--cue-p${handoff!.slot + 1}` : ''}`}>
+        <div className="duet-callouts">
+          <div className={`duet-bar duet-bar--p${activeSlot + 1}`} title="One song. Follow the singer cue; the music keeps playing through each switch.">
+            <div className="duet-bar__who">
+              <p data-testid="duet-current" data-slot={activeSlot} aria-live="polite">
+                {names(activeSlot)} {mySlot === undefined || mySlot === activeSlot ? '· SING' : '· LISTEN'}
+              </p>
+              <p data-testid="duet-next">{next ? `Next: ${names(next.slot)} at ${next.start.toFixed(1)} s` : 'Final section'}</p>
+            </div>
+          </div>
           {cueOn && (
             <div className={`duet-pill duet-pill--p${handoff!.slot + 1}`} data-testid="duet-handoff" aria-hidden="true">
               <PixelIcon name="speaker" size={26} />
@@ -315,20 +330,7 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
               <b>{Math.ceil(handoffIn)}</b>
             </div>
           )}
-          <ScoreBars bars={([0, 1] as const).map((slot) => ({ name: names(slot), score: slotScore(slot), slot, testId: `duet-score-${slot}` }))} />
         </div>
-      }>
-      {plan?.range && <p className="solo-hint">Practice section · {rangeLabel(plan.range)}</p>}
-      {error && <Notice tone="error">{error}</Notice>}
-      <div className={`duet-bar duet-bar--p${activeSlot + 1}`} title="One song. Follow the singer cue; the music keeps playing through each switch.">
-        <div className="duet-bar__who">
-          <p data-testid="duet-current" data-slot={activeSlot} aria-live="polite">
-            {names(activeSlot)} {mySlot === undefined || mySlot === activeSlot ? '· SING' : '· LISTEN'}
-          </p>
-          <p data-testid="duet-next">{next ? `Next: ${names(next.slot)} at ${next.start.toFixed(1)} s` : 'Final section'}</p>
-        </div>
-      </div>
-      <div className={`sing-stage${cueOn ? ` sing-stage--cue-p${handoff!.slot + 1}` : ''}`}>
         {song && displayTarget ? <PitchLane fill height={laneHeight} song={song} notes={notes} sections={sections} target={displayTarget} getTime={getTime} userHz={mySlot === undefined ? engine.current?.tracker.hz ?? EMPTY : onlinePitch} ratings={ratings} /> : <div className="sing-lane sing-lane--fill sing-lane--empty" />}
         {/* one polite announcement per handoff (the visible countdown is aria-hidden so it does not chatter) */}
         <span className="sr-only" aria-live="polite">
