@@ -153,6 +153,32 @@ Tests: `api/tests/test_lyric_check.py` (no database or model needed). It was als
 real model through the endpoint on 40 s of a real take: 12/12 lines matched at the right offset,
 2/9 when read 6 s off.
 
+## Live path: one line at a time, during the song
+
+Checking the whole take after the song took about a minute for a 4-minute song on the server's CPU. So
+the singing screen now sends each lyric line as soon as it has been sung (`web/src/screens/Sing/liveLyrics.ts`):
+a slice from 0.3 s before the line to 0.5 s after it, to `POST /api/lyric-check/line` (`clip_id`,
+`line_index`, `offset_s`, `audio`). Requests go one at a time in line order. The server grades only that
+line, but still compares it against **all** of the song's lines, so the rule is the same as for a
+whole take. A small "LYRICS x/y" chip in the singing screen counts up as answers arrive. If the live
+path is unavailable or loses a line, the results screen falls back to uploading the whole take.
+
+Measured on CPU, end to end through the endpoint (Daniel's Love Scenario take, 54 lines):
+
+| | Live, per line | Whole take after the song |
+|---|---|---|
+| Time per request | median 1.4 s, max 2.5 s | about 10 s per 35 s of audio |
+| Results ready | about 1-2 s after the song ends | about 1 minute after a 4-minute song |
+| Real singing matched | 45/54 (83%) | 48/54 (89%) |
+| Real hum over the beat matched | 1/6 | 0/6 |
+
+Lines in this song end every 3.9 s on average (the shortest gap is 1.0 s), so the server keeps up. A
+slice gives the model less surrounding audio than the whole take, which costs a few lines. Wider
+slices (1.0 or 1.5 s each side) did not help. Short slices exposed one bug, now fixed: the "is anyone
+singing" noise floor came from the slice's quietest frames, which were singing, so sung lines read as
+`not_sung`. The floor is now capped at -45 dBFS. The production server's CPU may be slower than the
+laptop these timings come from.
+
 ## In the UI (built: results screen, solo only)
 
 After the song the results screen uploads the take once and shows "checking your lyrics…". Each

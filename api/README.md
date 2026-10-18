@@ -153,6 +153,7 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | GET | `/api/history`, `/api/leaderboard?clip_id=` | One row per match: `total` is your own score (null in a local battle; see `players`). Leaderboard: best solo totals of logged-in players on the current clip version |
 | POST | `/api/turns/{attempt_id}/coach` | Coaching blurb for a finished turn: `{status: ok\|unavailable, coach_blurb}`. Generated once, then cached. |
 | POST | `/api/practice` | Multipart: `clip_id`, `phrase_id`, `audio` (WAV/MP3/WebM/Ogg, max 5 MB and 15 s) |
+| POST | `/api/lyric-check/line` | The live path: one lyric line while the song plays. Multipart: `clip_id`, `line_index`, `offset_s` (time in the slice of clip time 0), `audio` (max 1 MB and 30 s). Same answer shape; grades only that line. Waits up to 8 s for the shared model, then 429 `pronunciation_busy`. About 1.4 s per line on CPU. |
 | POST | `/api/lyric-check` | Multipart: `clip_id`, `offset_s` (time in the recording of clip time 0, latency already removed), `audio` (the solo take, max 12 MB and 330 s). Returns `contracts/lyric_check.example.json`: per lyric line `match` / `unclear` / `not_sung` / `not_covered`. Display only, never part of a score; nothing is stored. Shares the practice model and its busy lock (429 `pronunciation_busy`). Takes about 10 s per 35 s of audio on CPU. |
 | POST | `/api/rooms`, `/api/rooms/join` | Create `{clip_id, duet: true}`; join `{code}` |
 | GET | `/api/rooms/{id}` | Snapshot (members only) |

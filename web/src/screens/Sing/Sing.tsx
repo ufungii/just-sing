@@ -18,6 +18,7 @@ import { aggregate, buildTargetTrack, displayNotes, phraseSettlesAt, phraseTotal
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
 import { GuideControl } from '../../ui/GuideControl';
 import { Countdown, Judgement } from './Judgement';
+import { LiveLyricChecker } from './liveLyrics';
 import { Lyrics } from './Lyrics';
 import { PitchLane, useLaneHeight } from './PitchLane';
 import './Sing.css';
@@ -62,6 +63,8 @@ export function Sing({ setup }: { setup: SingSetup }) {
   const laneHeight = useLaneHeight();
   const [guide, setGuide] = useState(loadGuide);
   const [hasGuide, setHasGuide] = useState(false);
+  const [lyricTally, setLyricTally] = useState<{ matched: number; graded: number } | null>(null);
+  const lyricRef = useRef<LiveLyricChecker | null>(null);
 
   const engineRef = useRef<SingEngine | null>(null);
   const ratedRef = useRef(new Map<string, PhraseScore>());
@@ -152,6 +155,8 @@ export function Sing({ setup }: { setup: SingSetup }) {
     rateUpTo(() => true);
     // Solo turns keep the voice for the lyric check on the results screen (uploaded once, never stored).
     const take = !setup.battle && !setup.online ? engineRef.current?.recorder.toWav() ?? null : null;
+    const lyricsLive = lyricRef.current?.finish() ?? null; // the lines checked during the song
+    lyricRef.current = null;
     engineRef.current?.close();
     engineRef.current = null;
     setPhase({ k: 'saving' });
@@ -173,7 +178,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
         }
       }
     }
-    const result = { setup, phrases, local, saved, saveError: saved ? null : saveErrorRef.current, take };
+    const result = { setup, phrases, local, saved, saveError: saved ? null : saveErrorRef.current, take, lyricsLive };
     if (setup.online) {
       const room = { id: setup.online.roomId, slot: setup.online.slot, prefs: { register: setup.register, offset: setup.calibrationOffset } };
       return nav.go({ name: 'online', room, notice: saved ? undefined : (saveErrorRef.current ?? 'Your score was not saved.') });
@@ -205,6 +210,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
         sendLive('progress', { t, running: rated.length ? aggregate(rated, phraseWeights(selected, target!)).total : 0 });
       }
       rateUpTo((settlesAt) => analysed >= settlesAt || t >= settlesAt + 0.5);
+      lyricRef.current?.poll(t);
       if (t >= Math.max(rangeEnd + 0.3, ...selected.map((p) => phraseSettlesAt(p) + 0.1))) {
         void finish();
         return;
@@ -227,6 +233,16 @@ export function Sing({ setup }: { setup: SingSetup }) {
           setSaveWarning("Couldn't reach the server, so this score won't be saved. Keep singing!");
         },
       );
+    }
+    if (song && !setup.battle && !setup.online) {
+      // Check each sung line on the server while the song plays (solo only), so results are ready at the end.
+      const lines = [...new Set(selected.map((p) => p.line_index))].map((index) => ({ index, line: song.lines[index] })).filter((l) => l.line);
+      const checker = new LiveLyricChecker(setup.clipId, lines, engine.recorder, () => {
+        const statuses = [...checker.results.values()].filter((s) => s === 'match' || s === 'unclear');
+        setLyricTally({ matched: statuses.filter((s) => s === 'match').length, graded: statuses.length });
+      });
+      lyricRef.current = checker;
+      setLyricTally(null);
     }
     await engine.start();
     setPhase({ k: 'playing' });
@@ -275,6 +291,11 @@ export function Sing({ setup }: { setup: SingSetup }) {
       right={
         <div className="sing-hud">
           <span className="sing-chip">{REGISTER_LABEL[setup.register]}</span>
+          {lyricTally && lyricTally.graded > 0 && (
+            <span className="sing-chip sing-chip--lyrics" title="Lines whose words sounded like the original singer (checked as you sing)">
+              LYRICS {lyricTally.matched}/{lyricTally.graded}
+            </span>
+          )}
           <span className="sing-chip sing-chip--score" aria-label="Running score">
             {running.toFixed(1)}
           </span>

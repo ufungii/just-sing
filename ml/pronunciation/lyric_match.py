@@ -29,7 +29,7 @@ from typing import Callable
 
 import numpy as np
 
-LYRIC_MATCH_VERSION = "0.1.0"
+LYRIC_MATCH_VERSION = "0.2.0"
 MODEL = "kresnik/wav2vec2-large-xlsr-korean"   # Apache-2.0; the same model as the spoken-practice scorer
 LAYER = 6
 SR = 16_000
@@ -40,8 +40,9 @@ Featurizer = Callable[[np.ndarray], np.ndarray]  # 16 kHz mono audio -> (frames,
 
 @dataclass(frozen=True)
 class LyricMatchConfig:
-    min_gain: float = 0.06       # the line must be this much closer to the original than its own hum
-                                 # (cosine-distance units; placeholder picked on two takes, see LYRIC_MATCH.md)
+    min_gain: float = 0.10       # the line must be this much closer to the original than its own hum
+                                 # (cosine-distance units). 0.06 in 0.1.0 let a real hum pass 3/6 lines;
+                                 # 0.10 rejects it and keeps 48/54 + 8/9 worded lines (LYRIC_MATCH.md)
     match_share: float = 0.8     # ...and closer than this share of the song's other lines
     min_active: float = 0.3      # share of a line's frames with voice; below this the line is "not_sung"
     min_line_s: float = 0.8      # shorter lines are not graded (too little audio to compare)
@@ -162,26 +163,34 @@ def player_hum(y: np.ndarray, take_hz: np.ndarray | None = None) -> np.ndarray:
     return hum(np.asarray(take_hz, dtype=float), rms, len(y))
 
 
+# The noise floor is estimated from the quietest 10% of frames, but never above this level: a short slice
+# around one sung line (the live path) can be all voice, and its "quietest 10%" would then be singing.
+MAX_NOISE_FLOOR_DB = -45.0
+
+
 def _active_frames(y: np.ndarray) -> np.ndarray:
-    """Per 20 ms frame: is there voice? (window RMS more than 10 dB above the take's own noise floor)."""
+    """Per 20 ms frame: is there voice? (window RMS more than 10 dB above the take's noise floor)."""
     hop = int(FRAME_S * SR)
     n = len(y) // hop
     if n == 0:
         return np.zeros(0, bool)
     rms = np.sqrt(np.mean(y[: n * hop].reshape(n, hop).astype(np.float64) ** 2, axis=1))
     db = 20 * np.log10(np.maximum(rms, 1e-9))
-    floor = np.percentile(db, 10)
+    floor = min(np.percentile(db, 10), MAX_NOISE_FLOOR_DB)
     return (db > floor + 10) & (db > -60)
 
 
 def lyric_match(take: np.ndarray, sr: int, fingerprints: dict, *, offset_s: float = 0.0,
                 take_hz: np.ndarray | None = None, featurizer: Featurizer | None = None,
-                cfg: LyricMatchConfig | None = None) -> dict:
+                cfg: LyricMatchConfig | None = None, only: set[int] | None = None) -> dict:
     """Score a player's recording line by line against a song's fingerprints.
 
     offset_s: time in the recording at which the clip's t = 0 falls, after removing the device latency.
               In the app this is known from the audio clock; offline it can come from ml/evals/align_take.py.
     take_hz:  optional pitch track of the take in 20 ms frames (Hz, NaN = unvoiced), used to build the hum.
+    only:     grade only these manifest line indices (the others are left out of the result). The live
+              path sends one short slice per line as soon as it is sung; every line is still compared
+              against ALL of the song's other lines, so the result is the same as in a full-take check.
     Returns {"version", "lines": [...], "summary": {...}}; each line has
       status       "match" | "unclear" | "not_sung" | "not_covered"
       gain         how much closer the line is to the original than its own hum (None when not graded)
@@ -197,6 +206,8 @@ def lyric_match(take: np.ndarray, sr: int, fingerprints: dict, *, offset_s: floa
     refs = [_cmvn(np.asarray(ln["features"], dtype=np.float32)) for ln in lines]
     out = []
     for i, ln in enumerate(lines):
+        if only is not None and ln["index"] not in only:
+            continue
         a, b = int(round((ln["start"] + offset_s) / FRAME_S)), int(round((ln["end"] + offset_s) / FRAME_S))
         row = {"line_index": ln["index"], "status": "not_covered", "gain": None, "share": None}
         if a < 0 or b > min(len(feats), len(hum_feats), len(active)) or b - a < 10:
