@@ -30,6 +30,7 @@ export class SingEngine {
   private readonly guideGain: GainNode;
   private t0 = Infinity;
   private closed = false;
+  private voiceMix: DynamicsCompressorNode | null = null;
 
   private constructor(
     readonly ctx: AudioContext,
@@ -63,14 +64,14 @@ export class SingEngine {
   }
 
   /** Route an open mic stream into the capture worklet (replaces any previous mic). */
-  attachMic(stream: MediaStream) {
+  attachMic(stream: MediaStream, recordTake = true) {
     this.detachMic();
     this.mic = stream;
     this.micNode = this.ctx.createMediaStreamSource(stream);
     this.capture = new AudioWorkletNode(this.ctx, CAPTURE_PROCESSOR, { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1, channelCountMode: 'explicit' });
     this.capture.port.onmessage = (e: MessageEvent<CaptureBatch>) => {
       this.tracker.push(e.data);
-      this.recorder.push(e.data);
+      if (recordTake) this.recorder.push(e.data);
     };
     // The worklet outputs silence; connecting it keeps the browser pulling it every render quantum.
     this.micNode.connect(this.capture).connect(this.ctx.destination);
@@ -79,6 +80,22 @@ export class SingEngine {
   /** True while the mic track is still delivering audio (it ends if unplugged or revoked). */
   get micLive() {
     return this.mic?.getAudioTracks().some((t) => t.readyState === 'live') ?? false;
+  }
+
+  /** Read-only source for a separate voice-sharing graph; never mute/stop these scoring tracks. */
+  get micStream() { return this.mic; }
+
+  /** Online-only mix bus: headroom and a limiter shared by backing, guide and remote voice. */
+  enableVoiceMix(): AudioNode {
+    if (!this.voiceMix) {
+      const mix = this.ctx.createDynamicsCompressor();
+      mix.threshold.value = -6; mix.knee.value = 0; mix.ratio.value = 20;
+      mix.attack.value = 0.003; mix.release.value = 0.1;
+      mix.connect(this.ctx.destination);
+      this.guideGain.disconnect(); this.guideGain.connect(mix);
+      this.voiceMix = mix;
+    }
+    return this.voiceMix;
   }
 
   /**
@@ -103,7 +120,7 @@ export class SingEngine {
     scheduleCountIn(this.ctx, [3, 2, 1].map((n) => at - n));
     this.source = this.ctx.createBufferSource();
     this.source.buffer = this.backing.buffer;
-    this.source.connect(this.ctx.destination);
+    this.source.connect(this.voiceMix ?? this.ctx.destination);
     this.source.start(at, start, end - start);
     if (this.vocals) {
       // Always scheduled (silent while the gain is 0) so the guide can be switched on mid-song, in sync.
@@ -148,6 +165,7 @@ export class SingEngine {
       src?.disconnect();
     }
     this.detachMic();
+    this.voiceMix?.disconnect();
     void this.ctx.close();
   }
 }
