@@ -320,7 +320,7 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
               <p data-testid="duet-current" data-slot={activeSlot} aria-live="polite">
                 {names(activeSlot)} {mySlot === undefined || mySlot === activeSlot ? '· SING' : '· LISTEN'}
               </p>
-              <p data-testid="duet-next">{next ? `Next: ${names(next.slot)} at ${next.start.toFixed(1)} s` : 'Final section'}</p>
+              <p data-testid="duet-next">{next ? `Next: ${names(next.slot)} in ${Math.max(0, Math.ceil(next.start - now))}s` : 'Final section'}</p>
             </div>
           </div>
           {cueOn && (
