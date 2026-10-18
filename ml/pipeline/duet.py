@@ -5,6 +5,57 @@ import hashlib
 from .author_edits import validate_sections
 
 
+def balanced_sections(phrases, plan, weights):
+    """Give both singers contiguous halves of each musical section.
+
+    Weights are voiced, non-excluded seconds per phrase. Keep every phrase of
+    a lyric line together, choose the closest half, then choose which singer
+    starts each section to minimize the whole clip's remaining imbalance.
+    """
+    ordered = sorted(phrases, key=lambda p: (p['start'], p['end'], p['id']))
+    starts = [s['line_index'] for s in plan]
+    blocks = []
+    for index, section in enumerate(plan):
+        members = [p for p in ordered if bisect_right(starts, p['line_index']) - 1 == index]
+        if not members:
+            continue
+        lines = list(dict.fromkeys(p['line_index'] for p in members))
+        total = sum(weights[p['id']] for p in members)
+        if len(lines) > 1:
+            boundary = min(lines[1:], key=lambda line: (
+                abs(2 * sum(weights[p['id']] for p in members if p['line_index'] < line) - total), line))
+            halves = [[p for p in members if (p['line_index'] >= boundary) == bool(i)] for i in range(2)]
+        else:
+            halves = [members]
+        seconds = [sum(weights[p['id']] for p in half) for half in halves]
+        blocks.append((section['id'], halves, seconds))
+    # Millisecond integer states keep the search deterministic and bounded by
+    # clip duration, without a greedy choice trapping later sections.
+    states = {0: ()}
+    for _, halves, seconds in blocks:
+        difference = round(1000 * (seconds[0] - (seconds[1] if len(halves) == 2 else 0)))
+        following = {}
+        for balance, owners in states.items():
+            for first in (0, 1):
+                key = balance + (difference if first == 0 else -difference)
+                following.setdefault(key, owners + (first,))
+        states = following
+    owners = min(states.items(), key=lambda item: (abs(item[0]), item[1]))[1]
+    result, report = [], []
+    for (section_id, halves, seconds), first in zip(blocks, owners):
+        totals = [0., 0.]
+        for i, half in enumerate(halves):
+            slot = (first + i) % 2
+            totals[slot] += seconds[i]
+            result.append({'id': f'{section_id}-half-{i + 1}', 'slot': slot,
+                           'phrase_ids': [p['id'] for p in half]})
+        report.append({'id': section_id, 'scoreable_seconds': totals,
+                       'both_players': len(halves) == 2,
+                       'difference_seconds': abs(totals[0] - totals[1])})
+    validate_sections(phrases, result)
+    return result, report
+
+
 def section_plan(track, override=None):
     """Prefer a saved per-song plan, otherwise use the supplied stanza breaks."""
     count = len(track['lines'])
