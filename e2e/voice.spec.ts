@@ -77,7 +77,7 @@ test('live voice: real peer audio, private count-in, section handoff, mute, sock
     await host.getByRole('button', { name: 'Mute my mic to opponent' }).click();
     await expect.poll(() => rms(guest)).toBeLessThan(0.001);
     // Muting sharing must not stop scoring or request another mic.
-    await expect(host.getByTestId('duet-score-0')).toContainText(/1\//, { timeout: 8000 });
+    await expect(host.getByTestId('duet-score-0')).toHaveAttribute('data-scored', 'true', { timeout: 8000 });
     await host.getByRole('button', { name: 'Mute my mic to opponent' }).click();
     await expect.poll(() => rms(guest)).toBeGreaterThan(0.02);
     // Loss of signaling tears down the peer immediately, and reconnect rebuilds it on the running timeline.
