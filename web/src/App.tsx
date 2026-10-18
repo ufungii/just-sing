@@ -92,7 +92,7 @@ function renderRoute(route: Route, go: (r: Route) => void) {
     case 'results':
       return <Results result={route.result} />;
     case 'practice':
-      return <Practice />;
+      return <Practice start={route.start} />;
     case 'history':
       return <History />;
     case 'battle':

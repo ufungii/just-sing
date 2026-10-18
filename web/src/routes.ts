@@ -67,7 +67,8 @@ export type Route =
   | { name: 'solo' }
   | { name: 'sing'; setup: SingSetup }
   | { name: 'results'; result: SingResult }
-  | { name: 'practice' }
+  /** `start` opens spoken practice on one line (e.g. from a results row whose words were unclear). */
+  | { name: 'practice'; start?: { clipId: string; phraseId: string } }
   | { name: 'history' }
   | { name: 'battle' }
   | { name: 'duet'; setup: DuetSetup }

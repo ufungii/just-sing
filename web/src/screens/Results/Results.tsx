@@ -9,7 +9,7 @@ import { asGuest, rematch } from '../../lib/api';
 import { useNav, type SingResult } from '../../routes';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
 import { CoachPanel } from './CoachPanel';
-import { PhraseChips, ScoreSummary } from './PhraseChips';
+import { PhraseChips, ScoreSummary, type LyricTally } from './PhraseChips';
 import { useLyricCheck, type LyricState } from './useLyricCheck';
 import { useManifest } from './useManifest';
 import './Results.css';
@@ -44,7 +44,7 @@ export function Results({ result }: { result: SingResult }) {
     <ScreenShell title="RESULTS" kao="ヾ(＾∇＾)">
       <div className="results-top">
         <Panel label={song ? `${song.title} / ${song.artist}` : 'YOUR SCORE'} className="results-score">
-          <ScoreSummary total={totals.total} pitch={totals.pitch} timing={totals.timing} guided={saved?.guided} range={saved ? saved.range : setup.range} />
+          <ScoreSummary total={totals.total} pitch={totals.pitch} timing={totals.timing} guided={saved?.guided} range={saved ? saved.range : setup.range} lyrics={lyricTally(lyrics)} />
           {saved ? (
             <Notice tone="ok">saved to your history ♡</Notice>
           ) : (
@@ -60,7 +60,12 @@ export function Results({ result }: { result: SingResult }) {
 
       <Panel label="PHRASES">
         <LyricSummary lyrics={lyrics} />
-        <PhraseChips phrases={phrases} song={song} lyrics={lyrics.state === 'ok' ? lyrics.lines : undefined} />
+        <PhraseChips
+          phrases={phrases}
+          song={song}
+          lyrics={lyrics.state === 'ok' ? lyrics.lines : undefined}
+          onPractice={(phraseId) => nav.go({ name: 'practice', start: { clipId: setup.clipId, phraseId } })}
+        />
       </Panel>
 
       <div className="results-actions">
@@ -80,6 +85,14 @@ export function Results({ result }: { result: SingResult }) {
       </p>
     </ScreenShell>
   );
+}
+
+/** Matched / graded lines for the LYRICS bar; 'unavailable' when the check could not run; null while waiting or not run. */
+function lyricTally(lyrics: LyricState): LyricTally | 'unavailable' | null {
+  if (lyrics.state === 'offline') return 'unavailable';
+  if (lyrics.state !== 'ok') return null;
+  const graded = [...lyrics.lines.values()].filter((s) => s === 'match' || s === 'unclear');
+  return { matched: graded.filter((s) => s === 'match').length, graded: graded.length };
 }
 
 /** One line above the phrase rows: the lyric check's state, plus what it is and isn't. */
