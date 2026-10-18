@@ -115,8 +115,9 @@ export const vocalsUrl = (clipId: string) => `/api/clips/${encodeURIComponent(cl
 // ---------- solo play ----------
 
 /** Solo by default; two player names make a local battle (player 1's attempt comes back, player 2's appears after). */
-export const createMatch = (clipId: string, players?: [string, string]) =>
-  request<NewMatch>('/api/matches', json(players ? { clip_id: clipId, players, duet: true } : { clip_id: clipId }));
+/** Solo match, or with two players a local duet; a duet may share one practice section. */
+export const createMatch = (clipId: string, players?: [string, string], range?: TimeRange | null) =>
+  request<NewMatch>('/api/matches', json(players ? { clip_id: clipId, players, duet: true, ...(range ? { range } : {}) } : { clip_id: clipId }));
 
 export const duetReady = (matchId: string, players: { slot: number; register: Register; calibration_offset: number | null }[]) =>
   request<MatchView>(`/api/matches/${matchId}/duet/ready`, json({ players }));

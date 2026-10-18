@@ -47,7 +47,7 @@ for (const take of ['good', 'wrong', 'silence'] as const) {
     await addPlayer(page, 'PLAYER', NAME);
     await page.getByRole('button', { name: 'TEST MIC' }).click();
     await expect(page.getByText('Mic works!')).toBeVisible({ timeout: 15_000 });
-    await page.getByRole('button', { name: /START ♪/ }).click(); // timing check skipped (optional)
+    await page.getByRole('button', { name: 'JUST SING!', exact: true }).click();
 
     // Sing: start so that clip t=0 meets the WAV's take start (stream time LEAD)
     const start = page.getByRole('button', { name: '▶ START', exact: true });

@@ -65,19 +65,21 @@
   align-items: start;
 }
 
-/* Setup row: the two setup panels side by side, START underneath. */
-.solo-grid--setup {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: none;
-  grid-template-areas: 'side' 'go';
+/* Stage 02 box: the seats (side by side for two players), then the mic check. */
+.solo-seats { display: flex; flex-direction: column; }
+.solo-seats--2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
+.solo-mic {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 3px dashed var(--ink-rose);
 }
-.solo-grid--setup .solo-side {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: stretch;
-}
-.solo-grid--setup .solo-go { flex-direction: row; align-items: center; justify-content: flex-end; }
-.solo-grid--setup .solo-start { min-width: 320px; }
+
+/* Local setup: status and the big JUST SING! button centred under the boxes. */
+.solo-go--center { align-items: center; }
+.solo-go--center .solo-start { min-width: 360px; }
 
 /* ---------- name + range ---------- */
 
@@ -205,15 +207,14 @@
 .solo-start { min-height: 84px; font-size: 30px; }
 
 @media (max-width: 1180px) {
-  /* The songs + side layout (online lobby); the local setup row keeps its own single column. */
-  .solo-grid:not(.solo-grid--setup) { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 24px; }
+  .solo-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 24px; }
   .solo-meter__cell { width: 11px; }
 }
 
 @media (max-width: 860px) {
   .solo-stage__row { grid-template-columns: minmax(0, 1fr); }
-  .solo-grid--setup .solo-side { grid-template-columns: minmax(0, 1fr); }
-  .solo-grid--setup .solo-go { flex-direction: column; align-items: stretch; }
+  .solo-seats--2 { grid-template-columns: minmax(0, 1fr); }
+  .solo-go--center .solo-start { min-width: 0; width: 100%; }
   .solo-grid {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;
@@ -258,7 +259,7 @@
   .solo-grid--stack .range-picker__actions > .ui-key { max-width: 100%; padding: 6px 10px; font-size: 12px; white-space: normal; }
 }
 
-/* Two seats in 2P: a dashed divider between player 1 and player 2. */
+/* Stacked seats in one box (the online lobby): a dashed divider between player 1 and player 2. */
 .solo-you .solo-field + .solo-field {
   margin-top: 16px;
   padding-top: 14px;
@@ -273,3 +274,13 @@
 .room-row__text { flex: 1; min-width: 0; font-size: 22px; }
 .room-row__host { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .room-row__details { display: block; font-size: 16px; overflow-wrap: anywhere; }
+
+/* Local 2P seats side by side: the divider runs down between them (above, when stacked).
+   After the lobby's stacked-seat rule so it wins inside the local setup box. */
+.solo-seats--2 .solo-field + .solo-field { margin-top: 0; padding: 0 0 0 28px; border-top: none; border-left: 3px dashed var(--ink-rose); }
+@media (max-width: 860px) {
+  .solo-seats--2 .solo-field + .solo-field { padding: 14px 0 0; border-left: none; border-top: 3px dashed var(--ink-rose); }
+}
+
+/* Breathing room before the second stage ribbon. */
+.solo-stage + .solo-ribbon { margin-top: 14px; }
