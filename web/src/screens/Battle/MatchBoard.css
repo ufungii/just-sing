@@ -2,10 +2,8 @@
 .match-board__players { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
 .match-board__slot { position: relative; z-index: 1; min-width: 0; }
 .match-board__slot > .ui-panel { margin: 0; }
-/* Each total takes the other player's colour so it stands out on its panel (blue on P1's pink, red on P2's blue);
-   the winner's total is green. */
+/* Each total takes the other player's colour so it stands out on its panel (blue on P1's pink, red on P2's blue). */
 .match-board__slot--p1 { --num-0: var(--p2-sung); --num-1: #1f78c4; --num-2: var(--p2-ink); }
-.match-board__winner { --num-0: #36c46f; --num-1: #249a57; --num-2: #176b3b; }
 .match-board__banner { position: relative; z-index: 2; }
 /* The winner's box shines like the vinyl on the song screen: a slow rotating sunburst behind it. */
 .match-board__winner { z-index: 0; isolation: isolate; }
