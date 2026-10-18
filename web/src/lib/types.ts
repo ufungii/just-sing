@@ -16,6 +16,7 @@ export interface ClipSummary {
   artist: string;
   duration: number;
   synthetic: boolean;
+  reviewed: boolean; // false for drafts: timings and notes not yet checked by ear
 }
 
 export interface Word {
@@ -110,6 +111,7 @@ export interface Practice {
   locale: string;
   provider: string;
   status: 'ok' | 'unavailable' | 'error'; // 'unavailable' is not a score
+  overall?: number | null; // 0-100, automated and not validated by a fluent reviewer; null unless status ok
   words: WordFeedback[];
 }
 
@@ -129,7 +131,9 @@ export interface HistoryItem {
   match_id: string;
   clip_id: string;
   created_at: string;
-  total: number;
+  mode?: string; // solo | local | online
+  total: number | null; // null for local battles: there is no single caller (see players)
+  players?: { slot: number; display_name: string; total: number | null }[];
   guided?: boolean;
 }
 
