@@ -1,5 +1,5 @@
 import { chromium, expect, test, type Browser, type Page } from '@playwright/test';
-import { addPlayer } from './duetHarness';
+import { addPlayer, createFirstPlayer, joinListedRoom } from './duetHarness';
 
 const CLIP = 'russian-roulette';
 const NAME = `E2E-Bot-range-${Date.now().toString(36)}`;
@@ -226,15 +226,15 @@ test('online host section: guest read-only, readiness reset, shared range with d
     const song = await (await host.request.get(`/api/clips/${CLIP}/manifest`)).json();
     const range = { start: song.phrases[1].start, end: song.phrases[3].end };
     await host.getByText('ONLINE', { exact: true }).first().click();
-    await addPlayer(host, 'PLAYER', `${NAME}-host`);
+    await createFirstPlayer(host, `${NAME}-host`);
+    await host.getByRole('button', { name: 'CREATE ROOM', exact: true }).click();
+    await host.getByRole('button', { name: /CREATE ROOM ♪/ }).click();
     await host.getByRole('button').filter({ has: host.getByText(song.title, { exact: true }) }).click();
-    await host.getByRole('button', { name: /CREATE ROOM/ }).click();
-    const code = await host.getByTestId('room-code').innerText();
     await guest.goto('/');
     await guest.getByText('ONLINE', { exact: true }).first().click();
-    await addPlayer(guest, 'PLAYER', `${NAME}-guest`);
-    await guest.getByLabel('Room code').fill(code);
-    await guest.getByRole('button', { name: 'JOIN', exact: true }).click();
+    await createFirstPlayer(guest, `${NAME}-guest`);
+    await guest.getByRole('button', { name: 'JOIN ROOM', exact: true }).click();
+    await guest.getByTestId('room-list').getByRole('listitem').filter({ hasText: `${NAME}-host` }).getByRole('button').first().click();
     await chooseSection(guest, song, true);
     // A failed host edit restores the durable full-clip selection.
     await host.route('**/api/rooms/*/range', (route) => route.fulfill({ status: 503, contentType: 'application/json',
@@ -257,9 +257,7 @@ test('online host section: guest read-only, readiness reset, shared range with d
     await expect(host.getByRole('button', { name: 'START (BOTH MUST BE READY)' })).toBeDisabled();
     // A full reload recovers the host selection from the server (join again with the same cookie).
     await guest.reload();
-    await guest.getByText('ONLINE', { exact: true }).first().click();
-    await guest.getByLabel('Room code').fill(code);
-    await guest.getByRole('button', { name: 'JOIN', exact: true }).click();
+    await joinListedRoom(guest, `${NAME}-host`);
     await expect(guest.getByRole('slider', { name: 'Start of practice section' })).toHaveAttribute('aria-valuenow', String(range.start));
     await mic(guest);
     for (const page of [host, guest]) await page.getByRole('button', { name: 'READY ✓', exact: true }).click();

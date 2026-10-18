@@ -130,7 +130,10 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | POST | `/api/turns/{attempt_id}/coach` | Coaching blurb for a finished turn: `{status: ok\|unavailable, coach_blurb}`. Generated once, then cached. |
 | POST | `/api/practice` | Multipart: `clip_id`, `phrase_id`, `audio` (WAV/MP3/WebM/Ogg, max 5 MB and 15 s) |
 | POST | `/api/lyric-check` | Multipart: `clip_id`, `offset_s` (time in the recording of clip time 0, latency already removed), `audio` (the solo take, max 12 MB and 330 s). Returns `contracts/lyric_check.example.json`: per lyric line `match` / `unclear` / `not_sung` / `not_covered`. Display only, never part of a score; nothing is stored. Shares the practice model and its busy lock (429 `pronunciation_busy`). Takes about 10 s per 35 s of audio on CPU. |
-| POST | `/api/rooms`, `/api/rooms/join` | Create `{clip_id, duet: true}`; join `{code}` |
+| POST | `/api/rooms` | Create `{duet: true, visibility?: "public"\|"private", password?, clip_id?}`. `clip_id` is optional (the host picks the song in the lobby; a default is used until then). A private room needs a 3-16 character `password` (422 `invalid_password` otherwise); only a scrypt hash is stored and it is never returned |
+| GET | `/api/rooms` | Lobby rooms with an open seat, newest first, plus rooms you already sit in (`mine: true`). Query `visibility=public\|private`, `q` (host-name substring). Rows are `{id, visibility, host_name, clip_id, players, created_at, mine}`: no code, no password data |
+| POST | `/api/rooms/{id}/join` | `{password?}`. Private rooms need the password: 403 `wrong_password`; more than 5 wrong guesses a minute per player or per network address gives 429 `too_many_attempts`. Seats the caller in slot 1; joining a room you are already in returns your seat |
+| POST | `/api/rooms/join` | Join by `{code, password?}`; kept for tests and scripts (the UI no longer shows codes). Private rooms need the password here too |
 | GET | `/api/rooms/{id}` | Snapshot (members only) |
 | POST | `/api/rooms/{id}/ready`, `/clip`, `/range`, `/start`, `/rematch`, `/abort` | Lobby and lifecycle (`clip`, `range`, `start`, `rematch`, `abort` are host-only) |
 | WS | `/ws/rooms/{id}` | Presence, snapshots, provisional progress |
