@@ -271,6 +271,23 @@ second are refused. After reconnecting, trust the fresh durable snapshot.
 
 ## Updating the server
 
+### Multiplayer lyric feedback
+
+Local duets and online singers keep a temporary microphone recording and, after saving their pitch/timing
+result, upload it to `POST /api/turns/{attempt_id}/lyric-check` (multipart `audio`, `offset_s`). The API derives
+the clip and eligible lyric lines from that attempt's saved phrases. Online members may upload only their
+own seat's recording; the local match creator may upload both. Both clients receive each singer's separate
+LYRICS bar and line highlights. Totals and winners stay pitch/timing only.
+
+`Score.lyrics` carries `pending`, `ok`, `unavailable` or `error`, the checker version and line statuses.
+Missing fingerprints show a dash; abandoned uploads stop showing as pending after three minutes. Statuses
+are stored under `_lyrics` on the first saved phrase (no migration); raw recordings are deleted. Result
+submission accepts `check_lyrics: true` to show the pending bar while the recording is checked. Busy uploads
+retry independently of saving the score. Finished room snapshots publish updated feedback to both players,
+and the results board polls while feedback is pending to recover missed events.
+
+### Deploying code
+
 The Ubuntu server runs `just-sing.service` (uvicorn as user `app`, from `/home/app/just-sing`) and serves the built
 frontend from `web/dist`. After pushing to `main`:
 

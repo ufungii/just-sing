@@ -4,7 +4,8 @@ The browser uploads the player's mic recording of the turn (placed on the clip c
 removed) plus `offset_s`, the time in the recording at which clip time 0 falls. The checker
 (ml/pronunciation/lyric_match.py) compares each sung line with the original singer's same line using
 per-song fingerprints made offline (ml/data/<song>/lyric_fingerprints.npz). Display only: it never
-changes a score. Raw audio is deleted after the check and nothing is stored.
+changes a score. Raw audio is deleted after the check. Unlinked checks store nothing; multiplayer
+checks keep only the model's line statuses on the saved attempt so both clients can display them.
 
 Same rules as the spoken-practice upload: FFmpeg normalization, blocking work in FastAPI's thread pool,
 one model job at a time (the lock is shared with practice, which uses the same model), and
@@ -13,16 +14,20 @@ one model job at a time (the lock is shared with practice, which uses the same m
 import logging
 import os
 import tempfile
+import uuid
 from pathlib import Path
 from typing import Protocol
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from . import practice
+from . import play, practice
 from .clip_catalog import CATALOG, SONG_DIR
 from .errors import ApiError
-from .models import LyricCheck, LyricLine
+from .models import LyricCheck, LyricLine, TurnLyrics
 from .play import current_guest
+from .tables import RoomMember
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -92,6 +97,60 @@ def attach_checker() -> None:
 def fingerprint_path(clip_id: str) -> Path | None:
     path = SONG_DIR[clip_id] / FINGERPRINTS
     return path if path.is_file() else None
+
+
+def _lyric_turn(s, guest, attempt_id):
+    match, attempt = play.lock_turn(s, attempt_id)
+    play._owned_match(s, guest, match.id)
+    if match.room_id and s.scalar(select(RoomMember.slot).where(
+            RoomMember.room_id == match.room_id, RoomMember.guest_id == guest.id)) != attempt.slot:
+        raise ApiError(403, 'not_your_seat', 'Only the assigned singer can check this recording.')
+    if attempt.state != 'accepted':
+        raise ApiError(409, 'attempt_not_finished', 'Save the singing result before checking its lyrics.')
+    return match, attempt
+
+
+@router.post('/turns/{attempt_id}/lyric-check', response_model=TurnLyrics)
+def check_turn_lyrics(attempt_id: uuid.UUID, offset_s: float = Form(ge=-MAX_SECONDS, le=MAX_SECONDS),
+                      audio: UploadFile = File(), guest=Depends(current_guest),
+                      s: Session = Depends(play.get_db)):
+    """Persist model feedback for both multiplayer clients, restricted to this singer's saved phrases.
+    Audio is temporary. Score totals, ratings and the winner are never modified."""
+    match, attempt = _lyric_turn(s, guest, attempt_id)
+    cached = play._lyrics(attempt)
+    if cached and cached.status == 'ok':
+        return cached
+    song = play._frozen_song(match)
+    phrase_ids = {p['phrase_id'] for p in attempt.phrase_results}
+    only = {p.line_index for p in song.phrases if p.id in phrase_ids}
+    fingerprints = fingerprint_path(song.id)
+    # Inference can take a minute. Release the match/attempt locks before waiting for the model.
+    s.rollback()
+    result = TurnLyrics(status='unavailable')
+    if checker is not None and fingerprints is not None:
+        with tempfile.TemporaryDirectory() as d:
+            wav = practice._normalize(audio, Path(d), MAX_BYTES, MAX_SECONDS)
+            if not practice._busy.acquire(timeout=LINE_WAIT_S):
+                raise ApiError(429, 'pronunciation_busy', 'The speech model is busy. Try again shortly.', True)
+            try:
+                lines = [LyricLine(**r) for r in checker.check(wav, fingerprints, offset_s, only=only)
+                         if r['line_index'] in only]
+                result = TurnLyrics(status='ok', lyric_match_version=checker.version, lines=lines)
+            except Exception:
+                log.exception('multiplayer lyric check failed')
+                result = TurnLyrics(status='error')
+            finally:
+                practice._busy.release()
+    match, attempt = _lyric_turn(s, guest, attempt_id)
+    # Re-read under the lock: a duplicate upload must not overwrite an already successful result.
+    cached = play._lyrics(attempt)
+    if cached and cached.status == 'ok':
+        return cached
+    attempt.phrase_results = [{**p, **({'_lyrics': result.model_dump()} if i == 0 else {})}
+                              for i, p in enumerate(attempt.phrase_results)]
+    s.commit()
+    play.notify(s, match, 'lyrics_checked', attempt)
+    return result
 
 
 @router.post("/lyric-check", response_model=LyricCheck)

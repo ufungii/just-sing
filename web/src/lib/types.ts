@@ -83,6 +83,8 @@ export interface PhraseScore {
 }
 
 export interface Score {
+  /** Server-checked feedback for this singer's assigned lines; separate from totals. */
+  lyrics?: TurnLyrics | null;
   duet?: boolean;
   range?: TimeRange | null;
   mode: 'solo' | 'battle';
@@ -103,6 +105,12 @@ export interface Score {
 export interface WordFeedback {
   text: string;
   score: number;
+}
+
+export interface TurnLyrics {
+  status: 'pending' | 'ok' | 'unavailable' | 'error';
+  lyric_match_version?: string | null;
+  lines: { line_index: number; status: LyricStatus }[];
 }
 
 export interface Practice {
