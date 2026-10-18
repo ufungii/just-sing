@@ -83,6 +83,9 @@
   border-top: 3px dashed var(--ink-rose);
 }
 
+/* Space between the TEST MIC row and the MIC INPUT slider (shared by the local and online setups). */
+.solo-mic > .ui-guide { margin-top: 12px; }
+
 /* Local setup: status and the big JUST SING! button centred under the boxes. */
 .solo-go--center { align-items: center; }
 .solo-go--center .solo-start { min-width: 360px; }

@@ -394,7 +394,7 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
             </Panel>
           </div>
           <div className="solo-go">
-            <PixelButton tone="sky" size="lg" disabled={busy || !micOk} onClick={() => act(() => setReady(room.id, !me?.ready).then(pushSnapshot))}>
+            <PixelButton tone={me?.ready ? 'mint' : 'sky'} size="lg" disabled={busy || !micOk} onClick={() => act(() => setReady(room.id, !me?.ready).then(pushSnapshot))}>
               {!micOk ? 'DO THE MIC CHECK FIRST' : me?.ready ? 'NOT READY' : 'READY ✓'}
             </PixelButton>
             {isHost && (
