@@ -96,7 +96,7 @@ export function SoloSetup({ initialPlayers = 1 }: { initialPlayers?: PlayerCount
     if (!clipId || !trimmed || !trimmed2) return;
     setStart({ kind: 'starting' });
     try {
-      const m = await asGuest(trimmed, () => createMatch(clipId, [trimmed, trimmed2]));
+      const m = await asGuest(trimmed, () => createMatch(clipId, [trimmed, trimmed2], range));
       nav.go({ name: 'duet', setup: { matchId: m.match_id, clipId, registers, calibrationOffset: offset } });
     } catch (e) {
       setStart({ kind: 'failed', message: e instanceof Error ? e.message : String(e) });
@@ -106,7 +106,6 @@ export function SoloSetup({ initialPlayers = 1 }: { initialPlayers?: PlayerCount
   const changeCount = (n: PlayerCount) => {
     setCount(n);
     setStart({ kind: 'idle' });
-    if (n === 2) setRange(null); // a duet always sings the whole clip
   };
 
   /** Player dropdown plus voice range for seat `i`. In 2P the two seats can't pick the same player. */
@@ -138,67 +137,74 @@ export function SoloSetup({ initialPlayers = 1 }: { initialPlayers?: PlayerCount
         </span>
       </div>
 
-      <Panel tone="pink" label="1 · PICK A SONG" className="solo-stage">
+      <Panel className="solo-stage">
         <div className="solo-stage__row">
           <SongJacket entry={chosen} />
           <SongWheel clips={clips} selected={clipId} onSelect={(id) => { setClipId(id); setRange(null); }} onRetry={loadClips} />
         </div>
-        {clipId && count === 1 && <PracticeRangePicker clipId={clipId} range={range} onChange={setRange} disabled={start.kind === 'starting'} />}
+        {clipId && <PracticeRangePicker clipId={clipId} range={range} onChange={setRange} disabled={start.kind === 'starting'} />}
       </Panel>
 
-      <div className="solo-grid solo-grid--setup">
-        <div className="solo-side">
-          <Panel label="2 · WHO'S SINGING" className="solo-you">
-            <Segmented label="Number of players" options={PLAYER_COUNTS} value={count} onChange={changeCount} />
-            {seat(0)}
-            {count === 2 && seat(1)}
-            <p className="solo-hint">
-              {count === 1
-                ? 'Voice range moves the target notes an octave up or down; the music stays in key.'
-                : 'One song, one shared mic. Follow the singer cue: your sections switch automatically without stopping the music.'}
-            </p>
-          </Panel>
+      <div className="solo-ribbon">
+        <span className="solo-ribbon__stage">STAGE 02</span>
+        <span className="solo-ribbon__title">SINGERS, ASSEMBLE!</span>
+        <span lang="ko" className="solo-ribbon__ko">
+          <span className="song-kao" aria-hidden="true">♪</span> 다 모여라! <span className="song-kao" aria-hidden="true">♪</span>
+        </span>
+      </div>
 
-          <Panel tone="sky" label="3 · MIC CHECK">
-            <MicCheck onPassedChange={setMicOk} />
-          </Panel>
+      {/* One box for the singers: how many, who and in what range, then the mic check. */}
+      <Panel className="solo-you">
+        <Segmented label="Number of players" options={PLAYER_COUNTS} value={count} onChange={changeCount} />
+        <div className={`solo-seats solo-seats--${count}`}>
+          {seat(0)}
+          {count === 2 && seat(1)}
         </div>
+        <p className="solo-hint">
+          {count === 1
+            ? 'Voice range moves the target notes an octave up or down; the music stays in key.'
+            : 'One song, one shared mic. Follow the singer cue: your sections switch automatically without stopping the music.'}
+        </p>
+        <div className="solo-mic">
+          <span className="solo-field__label">MIC CHECK</span>
+          <MicCheck onPassedChange={setMicOk} />
+        </div>
+      </Panel>
 
-        {/* After the setup panels in the DOM so Tab reaches START last; CSS places it under the songs. */}
-        <div className="solo-go">
-          {start.kind === 'unsaved' ? (
-            <Notice
-              tone="warn"
-              action={
-                <div className="solo-go__actions">
-                  <PixelButton tone="paper" size="sm" onClick={onStart}>
-                    RETRY
-                  </PixelButton>
-                  <PixelButton tone="hot" size="sm" onClick={() => sing(null)}>
-                    SING ANYWAY ♪
-                  </PixelButton>
-                </div>
-              }
-            >
-              Couldn’t reach the score server ({start.message.replace(/\.$/, '')}). You can still sing, but this score won’t be saved.
-            </Notice>
-          ) : start.kind === 'failed' ? (
-            <Notice tone="error">Couldn’t start the duet: {start.message.replace(/\.$/, '')}. Two players need the score server.</Notice>
-          ) : (
-            <p className="solo-go__status" aria-live="polite">
-              {start.kind === 'starting'
-                ? 'Warming up the stage…'
-                : missing.length
-                  ? `Still need ${missing.join(', ')}.`
-                  : count === 1
-                    ? 'All set! Put your headphones on.'
-                    : 'All set! Both players, get ready.'}
-            </p>
-          )}
-          <PixelButton tone="hot" size="lg" className="solo-start" disabled={!ready} onClick={onStart}>
-            {start.kind === 'starting' ? 'STARTING…' : count === 1 ? 'START ♪' : 'FIGHT ♪'}
-          </PixelButton>
-        </div>
+      {/* Last in the DOM so Tab reaches the start button after the setup. */}
+      <div className="solo-go solo-go--center">
+        {start.kind === 'unsaved' ? (
+          <Notice
+            tone="warn"
+            action={
+              <div className="solo-go__actions">
+                <PixelButton tone="paper" size="sm" onClick={onStart}>
+                  RETRY
+                </PixelButton>
+                <PixelButton tone="hot" size="sm" onClick={() => sing(null)}>
+                  SING ANYWAY ♪
+                </PixelButton>
+              </div>
+            }
+          >
+            Couldn’t reach the score server ({start.message.replace(/\.$/, '')}). You can still sing, but this score won’t be saved.
+          </Notice>
+        ) : start.kind === 'failed' ? (
+          <Notice tone="error">Couldn’t start the duet: {start.message.replace(/\.$/, '')}. Two players need the score server.</Notice>
+        ) : (
+          <p className="solo-go__status" aria-live="polite">
+            {start.kind === 'starting'
+              ? 'Warming up the stage…'
+              : missing.length
+                ? `Still need ${missing.join(', ')}.`
+                : count === 1
+                  ? 'All set! Put your headphones on.'
+                  : 'All set! Both players, get ready.'}
+          </p>
+        )}
+        <PixelButton tone="hot" size="lg" className="solo-start" disabled={!ready} onClick={onStart}>
+          {start.kind === 'starting' ? 'STARTING…' : 'JUST SING!'}
+        </PixelButton>
       </div>
     </ScreenShell>
   );

@@ -16,7 +16,7 @@ test('local duet: one song and microphone session, automatic handoffs, disjoint 
     await page.getByRole('group', { name: 'Player 2 voice range' }).getByRole('button', { name: 'HIGH', exact: true }).click();
     await mic(page);
     const created = page.waitForResponse((r) => r.url().endsWith('/api/matches') && r.request().method() === 'POST' && r.status() === 200);
-    await page.getByRole('button', { name: 'FIGHT ♪', exact: true }).click();
+    await page.getByRole('button', { name: 'JUST SING!', exact: true }).click();
     const mid = (await (await created).json()).match_id;
     // One transient save failure must retry the captured results, never replay the song.
     let failedUrl = '';

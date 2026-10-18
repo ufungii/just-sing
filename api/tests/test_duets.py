@@ -166,3 +166,19 @@ def test_concurrent_loaded_barrier_follows_authored_non_alternating_ownership(wo
         assert response.status_code == 200 and response.json()['range'] is None
         assert [p['phrase_id'] for p in response.json()['phrases']] == ids
     assert c.get(f'/api/matches/{mid}', headers=host).json()['state'] == 'finished'
+
+
+def test_local_duet_keeps_a_practice_section(world):
+    """A local duet created with a range snaps it to whole phrases and only schedules those phrases."""
+    c, guest = world
+    host = guest('local-duet-range')
+    body = {'clip_id': 'duet-demo', 'players': ['A', 'B'], 'duet': True, 'range': {'start': 2.9, 'end': 17.6}}
+    created = c.post('/api/matches', json=body, headers=host)
+    assert created.status_code == 200
+    view = c.get(f"/api/matches/{created.json()['match_id']}", headers=host).json()
+    assert view['duet']['range'] == {'start': 3.0, 'end': 17.5}
+    scheduled = {pid for section in view['duet']['sections'] for pid in section['phrase_ids']}
+    assert scheduled == {'d2', 'd3', 'd4', 'd5', 'd6'}
+    # A range without a duet stays rejected: solo and legacy battles choose their section per turn.
+    solo = c.post('/api/matches', json={'clip_id': 'duet-demo', 'range': {'start': 3.0, 'end': 17.5}}, headers=host)
+    assert solo.json()['error']['code'] == 'invalid_range'
