@@ -185,6 +185,29 @@ not specify silence durations. Corrections require matching text/audio and
 ordered, finite anchors. Neither these imported line anchors nor the intro
 have been manually verified against this karaoke recording.
 
+### Balanced 1v1 section halves
+
+Set `corrections.json`'s `duet.policy` to `balanced_section_halves` to give
+both players a turn inside each saved `duet.section_starts` musical section
+(verse, pre-chorus, chorus, or bridge). The existing text-bound section plan
+still defines the musical boundaries. Rebuild with
+`python -m ml.pipeline.manifest --id <song-id>` and bump the preparation's
+manifest version when publishing a changed arrangement.
+
+The splitter chooses the complete lyric-line boundary nearest half the section's
+voiced, non-excluded reference duration. It keeps all phrases of a line together,
+assigns every phrase once, and chooses starting singers across sections to
+minimize total imbalance. `song.review.json` records each section's measured
+durations and any single-line section that cannot give both singers a turn.
+Equal line counts and exact equal seconds are not guaranteed. Musical section
+labels and existing draft timing still need listening review.
+
+Crops inherit the policy and musical boundaries, then rebalance the retained
+parts using their own scoreable reference. They can therefore assign a line to
+a different player than the full song. Short single-line remnants stay intact.
+Manual author overrides retain precedence. Existing matches freeze their old
+arrangements; install updated manifests and start a new match to use new halves.
+
 ### Lyric fingerprints and handoff
 
 For the selected demo clips, save/rebuild the current `song.json`, then run

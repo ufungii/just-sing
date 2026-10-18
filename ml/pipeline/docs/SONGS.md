@@ -3,19 +3,22 @@
 ## Fixed continuous-1v1 arrangements
 
 All thirteen local songs and demos now have explicit `duet_sections`, replacing
-the legacy three-line fallback. Full-song handoffs use saved stanza/verse,
-pre-chorus and chorus boundaries; short intro/ad-lib blocks are merged where
-appropriate. Each scored line belongs to one singer, with stable ownership
-across replays and practice-range filtering. Short demos confined to one section
-use a saved whole-line midpoint handoff so both singers have scored phrases.
+the legacy three-line fallback. Each saved stanza/verse, pre-chorus, chorus and
+bridge is now split into two contiguous parts near half its scoreable vocal
+duration. Both players sing inside every full-song section. Complete lyric
+lines stay together; exact 50/50 seconds are not always possible. Starting
+singers are chosen to balance total singing time across the song. Each scored
+line belongs to one singer, with stable ownership across replays and range
+filtering. Demos rebalance their retained sections; a single-line cropped
+section cannot itself be shared without splitting that line.
 
 `DUET_HANDOFFS.json` in each preparation lists the exact timed assignments.
-`ml/data/duet-arrangements-2026-10-17/` preserves the prior manifests and plans.
-New manifest versions require refreshed demo fingerprints and a new match;
+`ml/data/handoff/balanced-duets-before-*/` preserves the prior manifests and plans.
+New manifest versions require matching demo fingerprint metadata and a new match;
 existing matches keep their original frozen arrangements. Lyrics, reference
 pitch, audio and scoring math are unchanged by this ownership update. Musical
 section labels and the underlying draft timing still require listening review.
-The local `ml/data/handoff/fixed-1v1-arrangements-2026-10-17.zip` contains all
+The newest local `ml/data/handoff/balanced-1v1-arrangements-*.zip` contains all
 26 current manifests, saved plans and matching demo fingerprints. It updates
 metadata only; preserve each preparation's existing MP3 pair and restart the API.
 

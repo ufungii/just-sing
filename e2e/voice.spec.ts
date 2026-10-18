@@ -1,5 +1,5 @@
 import { chromium, expect, test, type Page } from '@playwright/test';
-import { duetPlayer, expectOwnedScores, openOnlineDuet, schedules } from './duetHarness';
+import { duetPlayer, expectOwnedScores, openOnlineDuet, schedules, joinListedRoom } from './duetHarness';
 
 /** Inspect actual decoded WebRTC audio, separately from the application's listening gain. */
 async function observeVoice(page: Page) {
@@ -77,7 +77,7 @@ test('live voice: real peer audio, private count-in, section handoff, mute, sock
     await host.getByRole('button', { name: 'Mute my mic to opponent' }).click();
     await expect.poll(() => rms(guest)).toBeLessThan(0.001);
     // Muting sharing must not stop scoring or request another mic.
-    await expect(host.getByTestId('duet-score-0')).toContainText(/1\//, { timeout: 8000 });
+    await expect(host.getByTestId('duet-score-0')).toHaveAttribute('data-scored', 'true', { timeout: 8000 });
     await host.getByRole('button', { name: 'Mute my mic to opponent' }).click();
     await expect.poll(() => rms(guest)).toBeGreaterThan(0.02);
     // Loss of signaling tears down the peer immediately, and reconnect rebuilds it on the running timeline.
@@ -109,7 +109,7 @@ test('live voice: mute survives shared restart, rejoin cannot replay, quit relea
     const { page: host, errors: hostErrors } = await duetPlayer(browser, baseURL!);
     const { page: guest, errors: guestErrors } = await duetPlayer(browser, baseURL!);
     for (const page of [host, guest]) await observeVoice(page);
-    const { code } = await openOnlineDuet(host, guest, 'duet-demo');
+    const { hostName } = await openOnlineDuet(host, guest, 'duet-demo');
     for (const page of [host, guest]) await expect(status(page)).toHaveAttribute('data-state', 'connected');
     await host.getByRole('button', { name: 'Mute my mic to opponent' }).click();
     await host.getByRole('button', { name: 'READY TO SING' }).click();
@@ -119,9 +119,7 @@ test('live voice: mute survives shared restart, rejoin cannot replay, quit relea
     await host.waitForFunction((at) => (performance.timeOrigin + performance.now()) / 1000 > at + 1, frozen.duet.start_at);
     await expect.poll(() => rms(guest)).toBeLessThan(0.001);
     await guest.reload();
-    await guest.getByText('ONLINE', { exact: true }).first().click();
-    await guest.getByLabel('Room code').fill(code);
-    await guest.getByRole('button', { name: 'JOIN', exact: true }).click();
+    await joinListedRoom(guest, hostName);
     await guest.getByRole('button', { name: 'READY TO SING' }).click();
     await expect(guest.getByText('The shared start was missed. Restart the whole duet together.')).toBeVisible();
     expect(await schedules(guest)).toHaveLength(0);

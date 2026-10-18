@@ -20,7 +20,7 @@ cp .env.example .env          # then fill in real values; .env is gitignored
 alembic -c api/alembic.ini upgrade head   # create/upgrade tables
 python -m api.seed                        # insert clip metadata (safe to repeat)
 uvicorn api.main:app --reload             # run from the repo root
-pytest api                                # tests; the DB tests need DATABASE_URL
+pytest api                                # tests; DB tests skip unless TEST_DATABASE_URL names a disposable database (name must contain 'test'; run `alembic upgrade head` on it first). They delete rows, so .env's DATABASE_URL is deliberately ignored
 ```
 
 Interactive docs: `http://localhost:8000/docs`. Without `DATABASE_URL`, the catalog endpoints still work and
@@ -155,7 +155,10 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | POST | `/api/practice` | Multipart: `clip_id`, `phrase_id`, `audio` (WAV/MP3/WebM/Ogg, max 5 MB and 15 s) |
 | POST | `/api/lyric-check/line` | The live path: one lyric line while the song plays. Multipart: `clip_id`, `line_index`, `offset_s` (time in the slice of clip time 0), `audio` (max 1 MB and 30 s). Same answer shape; grades only that line. Waits up to 8 s for the shared model, then 429 `pronunciation_busy`. About 1.4 s per line on CPU. |
 | POST | `/api/lyric-check` | Multipart: `clip_id`, `offset_s` (time in the recording of clip time 0, latency already removed), `audio` (the solo take, max 12 MB and 330 s). Returns `contracts/lyric_check.example.json`: per lyric line `match` / `unclear` / `not_sung` / `not_covered`. Display only, never part of a score; nothing is stored. Shares the practice model and its busy lock (429 `pronunciation_busy`). Takes about 10 s per 35 s of audio on CPU. |
-| POST | `/api/rooms`, `/api/rooms/join` | Create `{clip_id, duet: true}`; join `{code}` |
+| POST | `/api/rooms` | Create `{duet: true, visibility?: "public"\|"private", password?, clip_id?}`. `clip_id` is optional (the host picks the song in the lobby; a default is used until then). A private room needs a 3-16 character `password` (422 `invalid_password` otherwise); only a scrypt hash is stored and it is never returned |
+| GET | `/api/rooms` | Lobby rooms with an open seat, newest first, plus rooms you already sit in (`mine: true`). Query `visibility=public\|private`, `q` (host-name substring). Rows are `{id, visibility, host_name, clip_id, players, created_at, mine}`: no code, no password data |
+| POST | `/api/rooms/{id}/join` | `{password?}`. Private rooms need the password: 403 `wrong_password`; more than 5 wrong guesses a minute per player or per network address gives 429 `too_many_attempts`. Seats the caller in slot 1; joining a room you are already in returns your seat |
+| POST | `/api/rooms/join` | Join by `{code, password?}`; kept for tests and scripts (the UI no longer shows codes). Private rooms need the password here too |
 | GET | `/api/rooms/{id}` | Snapshot (members only) |
 | POST | `/api/rooms/{id}/ready`, `/clip`, `/range`, `/start`, `/rematch`, `/abort` | Lobby and lifecycle (`clip`, `range`, `start`, `rematch`, `abort` are host-only) |
 | WS | `/ws/rooms/{id}` | Presence, snapshots, provisional progress |

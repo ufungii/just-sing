@@ -1,5 +1,5 @@
 import { chromium, expect, test } from '@playwright/test';
-import { duetPlayer, expectOnePlayback, expectOwnedScores, openOnlineDuet, schedules } from './duetHarness';
+import { duetPlayer, expectOnePlayback, expectOwnedScores, openOnlineDuet, schedules, joinListedRoom } from './duetHarness';
 
 /** Two contexts with deliberately different wall clocks, one server-scheduled continuous performance. */
 test('online duet: loaded barrier, synchronized handoffs and independent assigned scores', async ({ baseURL }) => {
@@ -45,16 +45,14 @@ test('online duet: reload after shared start never replays one player, explicit 
   try {
     const { page: host, errors: hostErrors } = await duetPlayer(browser, baseURL!);
     const { page: guest, errors: guestErrors } = await duetPlayer(browser, baseURL!);
-    const { code } = await openOnlineDuet(host, guest);
+    const { hostName } = await openOnlineDuet(host, guest);
     await host.getByRole('button', { name: 'READY TO SING' }).click();
     const prepared = guest.waitForResponse((r) => r.url().endsWith('/duet/ready'));
     await guest.getByRole('button', { name: 'READY TO SING' }).click();
     const frozen = await (await prepared).json();
     await guest.waitForFunction((at) => (performance.timeOrigin + performance.now()) / 1000 > at + 0.2, frozen.duet.start_at);
     await guest.reload();
-    await guest.getByText('ONLINE', { exact: true }).first().click();
-    await guest.getByLabel('Room code').fill(code);
-    await guest.getByRole('button', { name: 'JOIN', exact: true }).click();
+    await joinListedRoom(guest, hostName);
     await guest.getByRole('button', { name: 'READY TO SING' }).click();
     await expect(guest.getByText('The shared start was missed. Restart the whole duet together.')).toBeVisible();
     expect(await schedules(guest)).toHaveLength(0);

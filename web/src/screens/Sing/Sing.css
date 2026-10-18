@@ -1,15 +1,5 @@
 /* Singing screen: the lane dominates, lyrics sit underneath, judgements pop over the lane. */
 
-.sing-title {
-  margin: -8px 0 0;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 18px;
-}
-.sing-title span {
-  color: var(--ink-rose);
-}
-
 /* ---------- HUD chips ---------- */
 
 .sing-hud {
@@ -187,8 +177,16 @@
   background: var(--mint);
 }
 
+/* The controls row sits above the lyrics in stacking order, and the lyrics get their own padding and
+   wrap long lines, so tall Korean glyphs (large font, tight line height) can never paint over the
+   guide button or the toggles. */
+.sing-lyrics-head,
+.duet-audio-controls { position: relative; z-index: 2; }
 .sing-lyrics {
-  min-height: 150px;
+  position: relative;
+  min-height: 190px;
+  padding-top: 8px;
+  overflow-wrap: anywhere;
   text-align: center;
 }
 .sing-lyrics p {
@@ -196,19 +194,19 @@
 }
 .sing-lyrics__ko {
   font-family: var(--font-ko);
-  font-size: 44px;
-  line-height: 1.25;
+  font-size: 62px;
+  line-height: 1.2;
 }
 .sing-lyrics__roman {
   margin-top: 6px !important;
   font-family: var(--font-body);
   font-weight: 700;
-  font-size: 22px;
+  font-size: 30px;
 }
 .sing-lyrics__trans {
   margin-top: 4px !important;
   color: var(--ink-soft);
-  font-size: 18px;
+  font-size: 20px;
 }
 .sing-lyrics__rest {
   font-size: 34px;
@@ -231,7 +229,7 @@
   color: var(--ink);
   opacity: 0.45;
   font-family: var(--font-ko);
-  font-size: 22px;
+  font-size: 26px;
 }
 .sing-lyrics__next-tag {
   font-family: var(--font-display);
@@ -241,50 +239,135 @@
 }
 .sing-lyrics__next-roman {
   font-family: var(--font-body);
-  font-size: 16px;
+  font-size: 18px;
 }
+
+/* Player 2's lines are blue: deep blue text that fills bright blue as it is sung. */
+.sing-lyrics--p2 .sing-word {
+  background-image: linear-gradient(90deg, var(--p2-sung) calc(var(--p) * 100%), var(--p2-ink) calc(var(--p) * 100%));
+}
+.sing-lyrics--p2 .sing-lyrics__roman,
+.sing-lyrics--p2 .sing-lyrics__trans,
+.sing-lyrics__next--p2 { color: var(--p2-ink); }
+.sing-lyrics__next--p2 { opacity: 0.6; }
+
+/* Lyric helper toggles: small, so the lyrics stay the focus. */
+.ui-seg:has(> .sing-toggle) { gap: 8px; }
+.ui-key.sing-toggle { min-height: 32px; padding: 0 10px; font-size: 11px; }
 
 @media (max-width: 720px) {
   .sing-pop { font-size: 52px; }
   .sing-pop--count { font-size: 80px; }
-  .sing-lyrics__ko { font-size: 32px; }
+  .sing-lyrics__ko { font-size: 40px; }
 }
 
 
-/* ---------- duet handoff cue: slides in from the lane's right edge ---------- */
+/* ---------- next-singer cue: a big pill in the header plus a glowing lane frame (never over the notes) ---------- */
 
-.duet-cue {
-  position: absolute;
-  top: 44px;
-  right: 10px;
+.duet-pill {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border: var(--border-thin) solid var(--ink);
+  gap: 10px;
+  padding: 8px 14px;
+  border: var(--border) solid var(--ink);
   box-shadow: 4px 5px 0 var(--ink);
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 22px;
   color: var(--ink);
-  pointer-events: none;
-  animation: duet-cue-in 0.4s steps(5) both;
+  white-space: nowrap;
+  animation: cue-pulse 0.8s steps(4) infinite alternate;
 }
-.duet-cue--p1 { background: var(--pink); }
-.duet-cue--p2 { background: var(--sky); }
-.duet-cue b {
-  min-width: 26px;
-  padding: 2px 6px;
+.duet-pill--p1 { background: var(--pink); --cue: var(--hot); }
+.duet-pill--p2 { background: var(--sky); --cue: var(--p2-sung); }
+.duet-pill b {
+  min-width: 34px;
+  padding: 2px 8px;
   text-align: center;
   background: var(--paper);
   border: 3px solid var(--ink);
 }
-@keyframes duet-cue-in {
-  from { transform: translateX(120%); }
-  to { transform: translateX(0); }
+@keyframes cue-pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.06); }
 }
-@media (max-width: 520px) {
-  .duet-cue { font-size: 11px; gap: 5px; padding: 4px 6px; right: 6px; }
+
+/* The lane edge glows in the next singer's colour while the cue is on. */
+.sing-stage--cue-p1 { --cue: var(--hot); }
+.sing-stage--cue-p2 { --cue: var(--p2-sung); }
+.sing-stage--cue-p1,
+.sing-stage--cue-p2 {
+  animation: stage-glow 0.8s steps(4) infinite alternate;
+}
+@keyframes stage-glow {
+  from { box-shadow: 8px 10px 0 var(--ink), 0 0 0 4px var(--cue), 0 0 10px 2px var(--cue); }
+  to { box-shadow: 8px 10px 0 var(--ink), 0 0 0 6px var(--cue), 0 0 28px 8px var(--cue); }
+}
+
+/* ---------- running-score bars (top right) ---------- */
+
+.score-bars { display: flex; flex-direction: column; gap: 6px; min-width: 190px; }
+.score-bar { display: flex; align-items: center; gap: 8px; }
+.score-bar__name {
+  min-width: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+}
+.score-bar__track {
+  position: relative;
+  flex: 1;
+  height: 16px;
+  min-width: 90px;
+  border: var(--border-thin) solid var(--ink);
+  background: var(--paper);
+  box-shadow: 3px 4px 0 var(--ink);
+}
+.score-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--bar, var(--hot));
+  transition: width 0.4s steps(6);
+}
+.score-bar--p1 { --bar: var(--hot); --glow: var(--hot); }
+.score-bar--p2 { --bar: var(--p2-sung); --glow: var(--p2-sung); }
+
+/* Above 50%: brighter fill and a pulsing glow. */
+.score-bar--mid .score-bar__fill,
+.score-bar--hi .score-bar__fill { filter: brightness(1.12) saturate(1.1); }
+.score-bar--mid .score-bar__track,
+.score-bar--hi .score-bar__track { animation: bar-glow 1s steps(4) infinite alternate; }
+@keyframes bar-glow {
+  from { box-shadow: 3px 4px 0 var(--ink), 0 0 4px 0 var(--glow); }
+  to { box-shadow: 3px 4px 0 var(--ink), 0 0 12px 3px var(--glow); }
+}
+/* Above 80%: a stronger glow and a few pixel sparkles. */
+.score-bar--hi .score-bar__track { animation-name: bar-glow-hi; }
+@keyframes bar-glow-hi {
+  from { box-shadow: 3px 4px 0 var(--ink), 0 0 8px 2px var(--glow); }
+  to { box-shadow: 3px 4px 0 var(--ink), 0 0 20px 6px var(--glow); }
+}
+.score-bar__spark { display: none; position: absolute; width: 5px; height: 5px; background: var(--butter); border: 1px solid var(--ink); }
+.score-bar--hi .score-bar__spark { display: block; animation: spark 1.2s steps(3) infinite; }
+.score-bar__spark--a { top: -8px; left: 20%; }
+.score-bar__spark--b { top: -10px; left: 55%; animation-delay: 0.4s; }
+.score-bar__spark--c { bottom: -9px; left: 80%; animation-delay: 0.8s; }
+@keyframes spark {
+  0% { opacity: 0; transform: translateY(2px) scale(0.5); }
+  50% { opacity: 1; transform: translateY(-3px) scale(1); }
+  100% { opacity: 0; transform: translateY(-6px) scale(0.5); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .duet-pill, .sing-stage--cue-p1, .sing-stage--cue-p2, .score-bar__track, .score-bar__spark { animation: none !important; }
+  .sing-stage--cue-p1, .sing-stage--cue-p2 { box-shadow: 8px 10px 0 var(--ink), 0 0 0 5px var(--cue); }
+}
+@media (max-width: 720px) {
+  .score-bars { min-width: 150px; }
+  .duet-pill { font-size: 15px; padding: 5px 8px; }
 }
 
 .sr-only {
@@ -316,7 +399,6 @@
 .duet-bar__who p { margin: 0; }
 .duet-bar__who [data-testid='duet-current'] { font-size: 22px; }
 .duet-bar__who [data-testid='duet-next'] { font-size: 14px; }
-.duet-bar .sing-hud { flex-wrap: wrap; margin: 0; }
 .duet-audio-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; }
 .duet-voice-status { font-size: 12px; line-height: 1.3; margin: 5px 0; }
 
@@ -326,12 +408,12 @@
   .ui-inner:has(.sing-stage) { gap: 8px; }
   .ui-inner:has(.sing-stage) .ui-panel { padding: 10px 16px; }
   .ui-inner:has(.sing-stage) .ui-header { gap: 12px; }
-  .sing-lyrics { min-height: 70px; }
-  .sing-lyrics__ko { font-size: 30px; line-height: 1.15; }
-  .sing-lyrics__roman { margin-top: 2px !important; font-size: 17px; }
-  .sing-lyrics__trans { margin-top: 2px !important; font-size: 14px; }
-  .sing-lyrics__next { margin-top: 6px !important; font-size: 16px; }
-  .sing-lyrics__next-roman { font-size: 13px; }
+  .sing-lyrics { min-height: 100px; padding-top: 6px; }
+  .sing-lyrics__ko { font-size: 46px; line-height: 1.25; }
+  .sing-lyrics__roman { margin-top: 2px !important; font-size: 23px; }
+  .sing-lyrics__trans { margin-top: 2px !important; font-size: 16px; }
+  .sing-lyrics__next { margin-top: 6px !important; font-size: 20px; }
+  .sing-lyrics__next-roman { font-size: 15px; }
   .sing-lyrics__rest { font-size: 24px; padding: 2px 0; }
   .duet-bar { padding: 6px 14px; }
   .duet-bar__who [data-testid='duet-current'] { font-size: 19px; }

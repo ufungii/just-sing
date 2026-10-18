@@ -3,11 +3,15 @@ import { useEffect, useState } from 'react';
 import { ApiError, asGuest, retryTurn } from '../../lib/api';
 import { getPlayer, usePlayers } from '../../lib/players';
 import { PlayerPicker } from '../../components/players/PlayerPicker';
+import { ProfileDialog } from '../../components/players/ProfileDialog';
+import { SongJacket } from '../../components/songs/SongJacket';
+import { SongWheel, useSongEntries } from '../../components/songs/SongWheel';
+import type { Clips } from '../../components/songs/SongWheel';
 import {
-  abortRoom, connectRoom, createRoom, getRoom, joinRoom, leaveRoom, pushSnapshot, rematchRoom, setReady, setRoomClip, setRoomRange, startRoom,
-  useRoomLive,
+  abortRoom, connectRoom, createRoom, filterRooms, getRoom, joinRoomById, leaveRoom, listRooms, PASSWORD_MAX, PASSWORD_MIN, passwordProblem,
+  pushSnapshot, rematchRoom, setReady, setRoomClip, setRoomRange, startRoom, useRoomLive,
 } from '../../lib/rooms';
-import type { RoomSnapshot } from '../../lib/rooms';
+import type { RoomListItem, RoomSnapshot, RoomTab, Visibility } from '../../lib/rooms';
 import type { Register } from '../../lib/types';
 import { useNav } from '../../routes';
 import type { RoomRef } from '../../routes';
@@ -16,8 +20,8 @@ import { MatchBoard } from '../Battle/BattleTurn';
 import { CoachPanel } from '../Results/CoachPanel';
 import { useManifest } from '../Results/useManifest';
 import { MicCheck } from '../Solo/MicCheck';
-import { ClipList, REGISTERS, useClips } from '../Solo/SoloSetup';
-import { TimingCheck, loadCalibration } from '../Solo/TimingCheck';
+import { REGISTERS, useClips } from '../Solo/SoloSetup';
+import { loadCalibration } from '../Solo/TimingCheck';
 import { PracticeRangePicker } from '../../components/timeline/PracticeRangePicker';
 import { rangeLabel } from '../../components/timeline/range';
 import '../Solo/SoloSetup.css';
@@ -27,20 +31,33 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** Online rooms: the create/join form, then the room itself (lobby, turns, results) driven by server snapshots. */
 export function Online({ room, notice }: { room?: RoomRef; notice?: string }) {
-  return room ? <RoomView room={room} notice={notice} /> : <Entry />;
+  return room ? <RoomView room={room} notice={notice} /> : <Entry notice={notice} />;
 }
 
-/** Create a room (pick a clip) or join one by code. The code can arrive in the URL as `?room=CODE`. */
-function Entry() {
+const TABS: { value: RoomTab; label: string }[] = [{ value: 'all', label: 'ALL' }, { value: 'public', label: 'PUBLIC' }, { value: 'private', label: 'PRIVATE' }];
+const VISIBILITY: { value: Visibility; label: string }[] = [{ value: 'public', label: 'PUBLIC' }, { value: 'private', label: 'PRIVATE' }];
+
+/**
+ * The online menu: CREATE ROOM or JOIN ROOM. The song is chosen inside the room, not here. Rooms are found in a
+ * list (public ones join with a tap, private ones need their password); room codes are no longer shown, and an old
+ * `?room=CODE` link just lands here.
+ */
+function Entry({ notice }: { notice?: string }) {
   const nav = useNav();
-  const { clips, loadClips } = useClips();
-  const { lastId } = usePlayers();
+  const { clips } = useClips();
+  const { players, lastId } = usePlayers();
   const [playerId, setPlayerId] = useState<string | null>(lastId);
-  const [clipId, setClipId] = useState<string | null>(null);
-  const [code, setCode] = useState(() => new URLSearchParams(location.search).get('room') ?? '');
+  const [step, setStep] = useState<'menu' | 'create' | 'join'>('menu');
+  const [visibility, setVisibility] = useState<Visibility>('public');
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const who = getPlayer(playerId)?.name ?? '';
+  const needsProfile = players.length === 0;
+
+  useEffect(() => {
+    if (location.search.includes('room=')) history.replaceState(null, '', location.pathname); // old invite links: just the menu
+  }, []);
 
   async function enter(call: () => Promise<RoomSnapshot>) {
     if (nameEasterEgg(nav, who)) return;
@@ -48,7 +65,6 @@ function Entry() {
     setError(null);
     try {
       const snap = await asGuest(who, call);
-      history.replaceState(null, '', location.pathname); // the ?room= link has done its job
       nav.go({ name: 'online', room: { id: snap.id, slot: snap.you ?? 0 } });
     } catch (e) {
       setError(e instanceof ApiError && e.code === 'network' ? 'Can’t reach the server. Check the connection and try again.' : msg(e));
@@ -56,42 +72,125 @@ function Entry() {
     }
   }
 
-  return (
-    <ScreenShell title="ONLINE" kao="(＾▽＾)ﾉ ⇄ ヽ(＾▽＾)">
-      <div className="solo-grid">
-        <Panel tone="pink" label="1 · NEW ROOM: PICK A SONG" className="solo-songs">
-          <ClipList clips={clips} selected={clipId} onSelect={setClipId} onRetry={loadClips} />
+  // Playing online needs a player profile (name + avatar) on this device; make one first.
+  if (needsProfile)
+    return (
+      <ScreenShell title="ONLINE" kao="(＾▽＾)ﾉ">
+        <Panel tone="pink" label="CREATE A PLAYER FIRST">
+          <p className="solo-hint">Pick a name and an avatar. It is only saved on this device.</p>
+          <ProfileDialog open startAdding onClose={() => {}} onAdded={(p) => setPlayerId(p.id)} />
+        </Panel>
+      </ScreenShell>
+    );
+
+  const picker = (
+    <Panel label="WHO'S PLAYING" className="solo-you">
+      <PlayerPicker label="PLAYER" value={playerId} onChange={setPlayerId} />
+    </Panel>
+  );
+  const problem = visibility === 'private' ? passwordProblem(password) : null;
+
+  if (step === 'create')
+    return (
+      <ScreenShell title="CREATE ROOM" kao="(＾▽＾)ﾉ" onBack={() => setStep('menu')} backLabel="BACK">
+        <div className="solo-side">
+          {picker}
+          <Panel tone="pink" label="WHO CAN JOIN?">
+            <Segmented label="Room visibility" options={VISIBILITY} value={visibility} onChange={setVisibility} />
+            {visibility === 'private' ? (
+              <div className="solo-field">
+                <input className="solo-input" aria-label="Room password" type="text" autoComplete="off" value={password}
+                  maxLength={PASSWORD_MAX} placeholder="CHOOSE A PASSWORD" onChange={(e) => setPassword(e.target.value)} />
+                <p className="solo-hint">{password && problem ? problem : `${PASSWORD_MIN} to ${PASSWORD_MAX} characters. Share it with your friend.`}</p>
+              </div>
+            ) : (
+              <p className="solo-hint">Anyone on the app can join from the room list.</p>
+            )}
+          </Panel>
           <div className="solo-go">
-            <PixelButton tone="hot" size="lg" disabled={busy || !who || !clipId} onClick={() => enter(() => createRoom(clipId!))}>
+            <PixelButton tone="hot" size="lg" disabled={busy || !who || !!problem}
+              onClick={() => enter(() => createRoom(visibility, visibility === 'private' ? password : undefined))}>
               {busy ? 'WORKING…' : 'CREATE ROOM ♪'}
             </PixelButton>
           </div>
-        </Panel>
-        <div className="solo-side">
-          <Panel label="WHO'S PLAYING" className="solo-you">
-            <PlayerPicker label="PLAYER" value={playerId} onChange={setPlayerId} />
-          </Panel>
-          <Panel tone="sky" label="2 · JOIN A FRIEND">
-            <div className="solo-field">
-              <input
-                className="solo-input"
-                aria-label="Room code"
-                value={code}
-                maxLength={8}
-                placeholder="ROOM CODE"
-                style={{ textTransform: 'uppercase' }}
-                onChange={(e) => setCode(e.target.value)}
-              />
-              <PixelButton tone="sky" disabled={busy || !who || !code.trim()} onClick={() => enter(() => joinRoom(code.trim()))}>
-                JOIN
-              </PixelButton>
-            </div>
-          </Panel>
-          {!who && <p className="solo-hint">Pick a player first.</p>}
           {error && <Notice tone="error">{error}</Notice>}
         </div>
+      </ScreenShell>
+    );
+
+  if (step === 'join')
+    return (
+      <ScreenShell title="JOIN ROOM" kao="ヽ(＾▽＾)" onBack={() => setStep('menu')} backLabel="BACK">
+        {notice && <Notice tone="warn">{notice}</Notice>}
+        <div className="solo-side">
+          {picker}
+          <RoomList who={who} clips={clips} busy={busy} onJoin={(id, pw) => enter(() => joinRoomById(id, pw))} />
+          {error && <Notice tone="error">{error}</Notice>}
+        </div>
+      </ScreenShell>
+    );
+
+  return (
+    <ScreenShell title="ONLINE" kao="(＾▽＾)ﾉ ⇄ ヽ(＾▽＾)">
+      {notice && <Notice tone="warn">{notice}</Notice>}
+      <div className="solo-side">
+        {picker}
+        <div className="solo-go">
+          <PixelButton tone="hot" size="lg" disabled={!who} onClick={() => setStep('create')}>CREATE ROOM</PixelButton>
+          <PixelButton tone="sky" size="lg" disabled={!who} onClick={() => setStep('join')}>JOIN ROOM</PixelButton>
+        </div>
+        {!who && <p className="solo-hint">Pick a player first.</p>}
       </div>
     </ScreenShell>
+  );
+}
+
+/** Lobby rooms with an open seat (plus your own), refreshed every few seconds, with tabs and a host-name search. */
+function RoomList({ who, clips, busy, onJoin }: { who: string; clips: Clips; busy: boolean; onJoin: (id: string, password?: string) => void }) {
+  const [rooms, setRooms] = useState<RoomListItem[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [tab, setTab] = useState<RoomTab>('all');
+  const [query, setQuery] = useState('');
+  const [asking, setAsking] = useState<string | null>(null); // the private room whose password is being typed
+  const [password, setPassword] = useState('');
+  const entries = useSongEntries(clips);
+  const titleOf = (id: string) => entries.find((e) => e.clip?.id === id)?.title ?? id;
+
+  useEffect(() => {
+    if (!who) return;
+    let live = true;
+    const load = () => asGuest(who, listRooms).then((r) => live && (setRooms(r), setFailed(false)), () => live && setFailed(true));
+    load();
+    const timer = window.setInterval(load, 5000);
+    return () => { live = false; window.clearInterval(timer); };
+  }, [who]);
+
+  const shown = rooms ? filterRooms(rooms, tab, query) : [];
+  return (
+    <Panel tone="sky" label="ROOMS">
+      <Segmented label="Show rooms" options={TABS} value={tab} onChange={setTab} />
+      <input className="solo-input" aria-label="Search by host name" value={query} placeholder="SEARCH BY HOST" onChange={(e) => setQuery(e.target.value)} />
+      {failed && <Notice tone="warn">Can’t load rooms right now. Trying again…</Notice>}
+      {rooms && !shown.length && <p className="solo-hint">{rooms.length ? 'No rooms match.' : 'No open rooms yet. Make one!'}</p>}
+      <ul role="list" style={{ listStyle: 'none', padding: 0, margin: 0 }} data-testid="room-list">
+        {shown.map((r) => (
+          <li key={r.id} style={{ fontSize: 22, margin: '8px 0' }}>
+            <PixelButton tone={r.visibility === 'private' ? 'lav' : 'mint'} size="sm" disabled={busy}
+              onClick={() => (r.visibility === 'private' && !r.mine ? (setAsking(asking === r.id ? null : r.id), setPassword('')) : onJoin(r.id))}>
+              {r.mine ? 'REJOIN' : r.visibility === 'private' ? '🔒 JOIN' : 'JOIN'}
+            </PixelButton>{' '}
+            <strong>{r.host_name}</strong> · {titleOf(r.clip_id)} · {r.players}/2
+            {asking === r.id && (
+              <div className="solo-field">
+                <input className="solo-input" aria-label="Room password" autoFocus value={password} maxLength={PASSWORD_MAX} placeholder="PASSWORD"
+                  onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && password && onJoin(r.id, password)} />
+                <PixelButton tone="hot" size="sm" disabled={busy || !password} onClick={() => onJoin(r.id, password)}>ENTER</PixelButton>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Panel>
   );
 }
 
@@ -101,7 +200,7 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
   const live = useRoomLive();
   const { clips, loadClips } = useClips();
   const [register, setRegister] = useState<Register>(room.prefs?.register ?? 0);
-  const [offset, setOffset] = useState<number | null>(() => (room.prefs ? room.prefs.offset : loadCalibration()));
+  const [offset] = useState<number | null>(() => (room.prefs ? room.prefs.offset : loadCalibration()));
   const [micOk, setMicOk] = useState(!!room.prefs); // coming back from singing: the mic already worked
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,14 +217,24 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
     if (live.conn === 'open') getRoom(room.id).then(pushSnapshot, () => {});
   }, [live.conn, room.id]);
 
+  const snap = live.snapshot;
+  const isHost = room.slot === 0;
+  // The host leaving the lobby closes the room for everyone.
   const leave = () => {
+    if (isHost && snap?.state === 'lobby') abortRoom(room.id).catch(() => {});
     leaveRoom();
     nav.home();
   };
-  const snap = live.snapshot;
-  const isHost = room.slot === 0;
+  // If the host closes the room, the other player lands back on the room list with a notice.
+  useEffect(() => {
+    if (snap?.state === 'aborted' && !isHost) {
+      leaveRoom();
+      nav.go({ name: 'online', notice: 'The host closed the room.' });
+    }
+  }, [snap?.state, isHost, nav]);
   const clip = clips.kind === 'ok' ? clips.clips.find((c) => c.id === snap?.clip_id) : undefined;
   const song = useManifest(snap?.clip_id ?? '');
+  const entries = useSongEntries(clips);
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -177,13 +286,12 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
   const me = snap.members.find((p) => p.slot === room.slot);
   const other = snap.members.find((p) => p.slot !== room.slot);
   const match = snap.match;
-  const link = `${location.origin}/?room=${snap.code}`;
   const notices = (
     <>
       {notice && <Notice tone="error">{notice}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
       {live.conn !== 'open' && <Notice tone="warn">Reconnecting to the room… what you see may be out of date.</Notice>}
-      {other && !other.connected && live.conn === 'open' && <Notice tone="warn">{other.display_name} is disconnected. They can rejoin with the code {snap.code}.</Notice>}
+      {other && !other.connected && live.conn === 'open' && <Notice tone="warn">{other.display_name} is disconnected. They can rejoin from the room list.</Notice>}
     </>
   );
 
@@ -191,22 +299,23 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
   if (snap.state === 'lobby') {
     const both = snap.members.length === 2 && snap.members.every((p) => p.ready);
     return (
-      <ScreenShell title={`ROOM ${snap.code}`} kao="(＾▽＾)ﾉ" onBack={leave} backLabel="LEAVE">
+      <ScreenShell title="ROOM" kao="(＾▽＾)ﾉ" onBack={leave} backLabel="LEAVE">
         {notices}
         <div className="solo-grid">
-          <Panel tone="pink" label="SONG" className="solo-songs">
-            {isHost ? (
-              <ClipList clips={clips} selected={snap.clip_id} onSelect={(id) => id !== snap.clip_id && act(() => setRoomClip(room.id, id).then(pushSnapshot))} onRetry={loadClips} />
-            ) : (
-              <p style={{ fontSize: 22, margin: 0 }}>{clip ? `${clip.title} · ${clip.artist}` : snap.clip_id}. The host picks the song.</p>
-            )}
+          <Panel tone="pink" label={isHost ? 'PICK A SONG' : 'SONG (THE HOST PICKS)'} className="solo-stage">
+            <div className="solo-stage__row">
+              <SongJacket entry={entries.find((e) => e.clip?.id === snap.clip_id) ?? null} />
+              {isHost && (
+                <SongWheel clips={clips} selected={snap.clip_id} onRetry={loadClips}
+                  onSelect={(id) => id !== snap.clip_id && act(() => setRoomClip(room.id, id).then(pushSnapshot))} />
+              )}
+            </div>
             <PracticeRangePicker clipId={snap.clip_id} range={snap.range} disabled={busy}
               onChange={isHost ? (range) => act(() => setRoomRange(room.id, range).then(pushSnapshot)) : undefined} />
           </Panel>
           <div className="solo-side">
             <Panel label="PLAYERS" className="solo-you">
-              <p className="solo-hint">Room code: <strong style={{ fontSize: 28 }} data-testid="room-code">{snap.code}</strong></p>
-              <p className="solo-hint">Or send this link: <a href={link}>{link}</a></p>
+              <p className="solo-hint">{snap.visibility === 'private' ? '🔒 Private room' : 'Public room'}. Use voice chat to agree on a song; the host picks it.</p>
               <ul role="list" style={{ listStyle: 'none', padding: 0 }}>
                 {[0, 1].map((slot) => {
                   const p = snap.members.find((m) => m.slot === slot);
@@ -228,9 +337,6 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
                 {voiceMuted ? 'MY VOICE MUTED' : 'SHARING MY VOICE'}
               </PixelButton>
               <MicCheck onPassedChange={setMicOk} />
-            </Panel>
-            <Panel tone="lav" label="TIMING CHECK (OPTIONAL)">
-              <TimingCheck offset={offset} onChange={setOffset} />
             </Panel>
           </div>
           <div className="solo-go">
@@ -299,7 +405,7 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
   const dur = (snap.range?.end ?? song?.duration ?? clip?.duration ?? 0) - rangeStart;
   const p = live.progress;
   return (
-    <ScreenShell title={`ROOM ${snap.code}`} kao="♪(^▽^)♪" onBack={leave} backLabel="LEAVE">
+    <ScreenShell title="ROOM" kao="♪(^▽^)♪" onBack={leave} backLabel="LEAVE">
       {notices}
       {snap.range && <p className="solo-hint">Practice section · {rangeLabel(snap.range)}</p>}
       {match.state === 'retry_required' ? (

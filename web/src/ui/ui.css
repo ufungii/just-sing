@@ -40,6 +40,20 @@
   gap: 20px;
   flex-wrap: wrap;
 }
+/* Title (plus kaomoji) with an optional subtitle underneath, both left-aligned. */
+.ui-header__titles { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ui-header__title-row { display: flex; align-items: center; gap: 20px; }
+.ui-header__subtitle {
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ui-header__subtitle span { color: var(--ink-rose); }
+
 .ui-header__right {
   margin-left: auto;
   display: flex;
@@ -235,8 +249,6 @@
 
 .ui-guide { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ui-guide__label { font-family: var(--font-display); font-size: 12px; color: var(--ink); }
-.ui-guide__btn { display: inline-flex; align-items: center; gap: 6px; min-width: 76px; justify-content: center; }
-.ui-guide__btn--off { opacity: 0.8; border-style: dashed; }
 
 /* Chunky pixel slider: ink-bordered track, pink fill up to a square thumb. */
 .ui-slider {

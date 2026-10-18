@@ -3,9 +3,9 @@ import { loadBacking, loadVocals } from '../../audio/sources';
 import { getManifest } from '../../lib/api';
 import type { Song, TimeRange } from '../../lib/types';
 import { Notice, PixelButton } from '../../ui';
-import { ClipTimeline } from './ClipTimeline';
+import { ClipRangeBar } from './ClipRangeBar';
 import { CropWorkspace } from './CropWorkspace';
-import { includedPhrases, normalizeRange, rangeLabel } from './range';
+import { normalizeRange } from './range';
 
 type RangeChange = (range: TimeRange | null) => void | Promise<boolean>;
 
@@ -70,7 +70,6 @@ function Picker({ clipId, range: savedRange, onChange, disabled }: { clipId: str
     }
   }
   if (!song) return <Notice action={<PixelButton size="sm" onClick={() => setRetry((n) => n + 1)}>RETRY TIMELINE</PixelButton>}>{error ?? 'Loading timeline…'}</Notice>;
-  const selected = includedPhrases(song.phrases, range);
   async function commit(next: TimeRange | null) {
     const normalized = normalizeRange(song!.phrases, next);
     setRange(normalized);
@@ -85,13 +84,16 @@ function Picker({ clipId, range: savedRange, onChange, disabled }: { clipId: str
   }
   return (
     <section className="range-picker" aria-label="Practice section">
-      <p className="solo-hint">{range ? `Practice section · ${rangeLabel(range)}` : 'Full clip'} · {selected.length} phrases · {((range?.end ?? song.duration) - (range?.start ?? 0)).toFixed(1)} seconds</p>
-      <ClipTimeline duration={song.duration} phrases={song.phrases} lines={song.lines} range={range}
-        onChange={onChange ? setRange : undefined} onCommit={commit} disabled={disabled} playhead={playhead} onSeek={(time) => void play(time)} />
+      <p className="range-picker__title">
+        {range ? 'SINGING A SECTION' : 'SINGING THE WHOLE SONG'}
+        {onChange && <span> · drag the yellow handles, or slide the pink part, to choose what you sing</span>}
+      </p>
+      <ClipRangeBar duration={song.duration} phrases={song.phrases} lines={song.lines} range={range}
+        onChange={onChange ? setRange : undefined} onCommit={(r) => void commit(r)} disabled={disabled} playhead={playhead} />
       <div className="range-picker__actions">
-        <PixelButton size="sm" tone="hot" onClick={() => { stop(); setWorkspace(true); }}>OPEN SECTION EDITOR</PixelButton>
-        <PixelButton size="sm" tone="sky" onClick={() => playing ? stop() : void play()}>{playing ? 'STOP PREVIEW' : 'PLAY PREVIEW ▶'}</PixelButton>
-        {onChange && <PixelButton size="sm" tone="paper" disabled={disabled || !range} onClick={() => commit(null)}>FULL CLIP</PixelButton>}
+        <PixelButton size="sm" tone="sky" onClick={() => playing ? stop() : void play()}>{playing ? 'STOP PREVIEW' : 'PLAY SECTION ▶'}</PixelButton>
+        {onChange && <PixelButton size="sm" tone="paper" disabled={disabled || !range} onClick={() => commit(null)}>WHOLE SONG</PixelButton>}
+        <PixelButton size="sm" tone="paper" className="range-picker__editor" onClick={() => { stop(); setWorkspace(true); }}>ADVANCED EDITOR</PixelButton>
       </div>
       {range && <p className="solo-hint">Only whole phrases inside this section count. Practice sections stay off the leaderboard.</p>}
       {error && <Notice tone="error">{error}</Notice>}
