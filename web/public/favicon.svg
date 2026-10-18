@@ -1,0 +1,9 @@
+<!-- Boombox-kun favicon: the same 14x11 pixel sprite as src/components/pixel/BoomboxKun.tsx, centred on a square. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -1.5 14 14" shape-rendering="crispEdges">
+  <path d="M3 0h8v1h-8z M3 1h1v1h-1z M10 1h1v1h-1z M0 2h14v9h-14z" fill="#3b2340"/>
+  <path d="M1 3h12v7h-12z" fill="#8fd3ff"/>
+  <path d="M1 3h12v1h-12z" fill="#d4eeff"/>
+  <path d="M1 5h3v3h-3z M10 5h3v3h-3z M5 4h1v1h-1z M8 4h1v1h-1z M6 6h2v1h-2z M5 8h4v1h-4z" fill="#3b2340"/>
+  <path d="M2 6h1v1h-1z M11 6h1v1h-1z" fill="#d4eeff"/>
+  <path d="M4 5h1v1h-1z M9 5h1v1h-1z" fill="#ff4f9a"/>
+</svg>
