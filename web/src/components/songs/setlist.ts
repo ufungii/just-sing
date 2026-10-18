@@ -3,8 +3,8 @@
  * come from the prepared catalog (/api/clips), which the ML pipeline fills per machine.
  *
  * A planned song becomes playable as soon as a prepared clip with the same title shows up in the
- * catalog; until then the song wheel shows it as "coming soon". No album art is used: the jacket
- * is drawn pixel art, so nothing copyrighted lands in this public repo.
+ * catalog; until then the song wheel shows it as "coming soon". Album covers are local-only files
+ * (see coverUrl), so nothing copyrighted lands in this public repo.
  */
 import type { ClipSummary } from '../../lib/types';
 
@@ -26,6 +26,12 @@ export const SETLIST: PlannedSong[] = [
   { title: 'Russian Roulette', artist: 'Red Velvet' },
   { title: 'Soda Pop', artist: 'Saja Boys' },
 ];
+
+/**
+ * Album cover for a prepared clip: web/public/covers/<clip id>.png. That folder is gitignored (covers
+ * are copyrighted and the repo is public); when a cover is missing the jacket shows pixel art.
+ */
+export const coverUrl = (clipId: string) => `/covers/${encodeURIComponent(clipId)}.png`;
 
 const TONES: SongTone[] = ['pink', 'sky', 'mint', 'lav', 'butter'];
 
