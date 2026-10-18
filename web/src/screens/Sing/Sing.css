@@ -504,18 +504,18 @@
   .sing-lyrics__rest { font-size: clamp(18px, 3.2vh, 34px); padding: 2px 0; }
 }
 
-/* Singer-switch callouts (who sings, who is next, the NEXT pill) lie over the top centre of the lane,
+/* Singer-switch callouts (who sings, who is next, the NEXT pill) lie over the lane, vertically centred and 20 px from its right edge,
    so they never take layout space and nothing moves when they change or appear. */
 .duet-callouts {
   position: absolute;
-  top: 10px;
-  left: 50%;
+  top: 50%;
+  right: 20px;
   z-index: 4;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  transform: translateX(-50%);
+  transform: translateY(-50%);
   pointer-events: none;
 }
 .duet-callouts .duet-bar { margin: 0; opacity: 0.93; }
