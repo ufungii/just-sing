@@ -25,14 +25,14 @@ pytest api                                # tests; the DB tests need DATABASE_UR
 
 Interactive docs: `http://localhost:8000/docs`. Without `DATABASE_URL`, the catalog endpoints still work and
 the database tests are skipped. Without Auth0 values, guests still work and bearer tokens get `auth_unavailable`.
-Without a pronunciation scorer (the default), `/api/practice` answers `status: "unavailable"`.
+Without a pronunciation scorer (the default), `/api/practice` and `/api/lyric-check` answer `status: "unavailable"`.
 
 ## Environment
 
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | `postgresql+psycopg://...` (SQLAlchemy needs that scheme, not `postgres://`). Server-side only. |
-| `PRONUNCIATION_SCORER` | `1` loads `ml.pronunciation.api_scorer.PronunciationScorer` at startup and warms it (about 30 s, needs the speech environment). Anything else: practice is `unavailable`. If loading fails, the error is logged and practice stays `unavailable`. |
+| `PRONUNCIATION_SCORER` | `1` loads `ml.pronunciation.api_scorer.PronunciationScorer` at startup and warms it (about 30 s, needs the speech environment). Anything else: practice is `unavailable`. If loading fails, the error is logged and practice stays `unavailable`. The same flag starts the lyric check (same model, loaded once); it also needs `ml/data/<clip>/lyric_fingerprints.npz` for each clip, made by ML A's pipeline step, and answers `unavailable` for clips without one. |
 | `AUTH0_DOMAIN` | Tenant domain, no `https://`. |
 | `AUTH0_AUDIENCE` | The Auth0 API identifier. Login requests must pass the same `audience`, or Auth0 issues an opaque token we cannot verify. |
 | `COOKIE_SECURE` | `1` on public HTTPS so the guest cookie is Secure. Leave `0` on `http://localhost`. |
@@ -129,6 +129,7 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | GET | `/api/history`, `/api/leaderboard?clip_id=` | One row per match: `total` is your own score (null in a local battle; see `players`). Leaderboard: best solo totals of logged-in players on the current clip version |
 | POST | `/api/turns/{attempt_id}/coach` | Coaching blurb for a finished turn: `{status: ok\|unavailable, coach_blurb}`. Generated once, then cached. |
 | POST | `/api/practice` | Multipart: `clip_id`, `phrase_id`, `audio` (WAV/MP3/WebM/Ogg, max 5 MB and 15 s) |
+| POST | `/api/lyric-check` | Multipart: `clip_id`, `offset_s` (time in the recording of clip time 0, latency already removed), `audio` (the solo take, max 12 MB and 330 s). Returns `contracts/lyric_check.example.json`: per lyric line `match` / `unclear` / `not_sung` / `not_covered`. Display only, never part of a score; nothing is stored. Shares the practice model and its busy lock (429 `pronunciation_busy`). Takes about 10 s per 35 s of audio on CPU. |
 | POST | `/api/rooms`, `/api/rooms/join` | Create `{clip_id, duet: true}`; join `{code}` |
 | GET | `/api/rooms/{id}` | Snapshot (members only) |
 | POST | `/api/rooms/{id}/ready`, `/clip`, `/range`, `/start`, `/rematch`, `/abort` | Lobby and lifecycle (`clip`, `range`, `start`, `rematch`, `abort` are host-only) |
@@ -240,6 +241,31 @@ second are refused. After reconnecting, trust the fresh durable snapshot.
 | `clip_catalog.py`, `catalog/<id>/song.json` | Song loading and validation; the synthetic fixture lives in `catalog/` |
 | `migrations/` | Alembic migrations (committed) |
 
+## Updating the server
+
+The Ubuntu server runs `just-sing.service` (uvicorn as user `app`, from `/home/app/just-sing`) and serves the built
+frontend from `web/dist`. After pushing to `main`:
+
+```bash
+ssh app@just-sing.ink
+cd ~/just-sing && git pull
+.venv/bin/pip install -r api/requirements.txt            # only if requirements changed
+.venv/bin/alembic -c api/alembic.ini upgrade head        # only if there is a new migration
+(cd web && npm ci && npm run build)                      # only if web/ changed
+.venv/bin/python -m api.seed                             # after adding or changing songs
+sudo systemctl restart just-sing                         # Python changes and new songs
+```
+
+Song audio and `menu-bgm.mp3` are not in git. Copy them from your machine with rsync:
+
+```bash
+rsync -a --exclude='*.png' "<song folder>/" app@just-sing.ink:just-sing/ml/data/<song_id>/
+rsync -a menu-bgm.mp3 app@just-sing.ink:just-sing/web/public/audio/   # and web/dist/audio/ to skip a rebuild
+```
+
+`api/scripts/fetch_drive_audio.sh` downloads the shared Drive folder into `ml/data/downloads/`; each song's id is the
+`id` in its `song.json`, not the Drive folder name. A frontend-only change needs no restart.
+
 ## Songs from the ML pipeline
 
 `python -m ml.pipeline.run` writes `ml/data/<id>/song.json` (the `contracts/song.example.json` shape) with its audio
@@ -302,3 +328,22 @@ audio and provisional scoring. The home screen's SOLO SING button opens it.
 It can also run separately with `uvicorn api.local_demo:app`.
 See [LOCAL_DEMO.md](LOCAL_DEMO.md) for the local song picker, vocal guide and
 lyric-timing workflow. This entry point does not replace the backend above.
+
+### Player names
+
+`contracts/player-name-policy.json` is shared with the browser. New guest names,
+local-battle names, and names used to create/join online rooms are checked against
+it. The custom joke list uses exact names after Unicode/case/whitespace
+normalization. The English language filter matches configured words/phrases,
+including tested punctuation, repeated-letter, leetspeak, zero-width and common
+lookalike substitutions. Whole-word matching keeps ordinary longer names from
+being blocked just because they contain a short term. This curated list is not
+exhaustive multilingual moderation and may need additions as evasions are found.
+
+Blocked names are rejected before creating new matches/room memberships; existing
+history and profiles are not deleted. Selecting/renaming a profile in the browser
+opens either the joke screen or a neutral name-blocked screen; offensive input
+is never repeated on the latter. This is name validation, not an account ban.
+If an old guest cookie carries a now-blocked name, choosing an allowed profile
+lets the browser create a fresh guest session and retry once. Account-authenticated
+requests keep their existing bearer identity.

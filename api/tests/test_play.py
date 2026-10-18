@@ -167,12 +167,12 @@ def test_engine_scoring_null_timing_and_server_side_ratings(guests):
     m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
     url = f"/api/turns/{m['attempt_id']}"
     c.post(f"{url}/begin", json={})
-    cheat = {"phrases": [{"phrase_id": "p1", "rating": "perfect", "score": 100, "pitch": 40, "timing": None, "coverage": 0.9}]}
+    cheat = {"phrases": [{"phrase_id": "p1", "rating": "perfect", "score": 100, "pitch": 35, "timing": None, "coverage": 0.9}]}
     r = c.post(f"{url}/result", json=cheat, headers={"Idempotency-Key": "n"})
     assert r.status_code == 200
     ph = r.json()["phrases"][0]
-    assert ph == {"phrase_id": "p1", "pitch": 40.0, "timing": None, "score": 40.0, "coverage": 0.9, "rating": "bad"}
-    assert r.json()["total"] == 40.0
+    assert ph == {"phrase_id": "p1", "pitch": 35.0, "timing": None, "score": 35.0, "coverage": 0.9, "rating": "bad"}  # 35 is below the okay band (40)
+    assert r.json()["total"] == 35.0
     assert c.get(f"/api/matches/{m['match_id']}").json()["attempts"][0]["score"]["phrases"][0]["timing"] is None
 
 
