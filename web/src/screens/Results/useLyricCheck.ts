@@ -10,10 +10,12 @@ export type LyricState =
   | { state: 'none' } // no take (battle, online, or an old route)
   | { state: 'loading' }
   | { state: 'ok'; lines: Map<number, LyricStatus> }
-  | { state: 'offline' }; // checker or fingerprints missing, busy, or failed: no result, not a bad one
+  | { state: 'offline'; reason: 'unavailable' | 'busy' | 'network' | 'failed' };
+
+type LyricOutcome = Extract<LyricState, { state: 'ok' | 'offline' }>;
 
 // One upload per take, even if React runs the effect twice or the screen re-mounts.
-const pending = new WeakMap<Blob, Promise<Map<number, LyricStatus> | null>>();
+const pending = new WeakMap<Blob, Promise<LyricOutcome>>();
 
 function run(clipId: string, wav: Blob, offsetS: number) {
   let p = pending.get(wav);
@@ -27,11 +29,26 @@ function run(clipId: string, wav: Blob, offsetS: number) {
         await wait(4000);
         return attempt();
       })
-      .then((r) => (r.status === 'ok' ? new Map(r.lines.map((l) => [l.line_index, l.status])) : null))
-      .catch(() => null);
+      .then((r): LyricOutcome => r.status === 'ok'
+        ? { state: 'ok', lines: new Map(r.lines.map((l) => [l.line_index, l.status])) }
+        : { state: 'offline', reason: r.status === 'unavailable' ? 'unavailable' : 'failed' })
+      .catch((e): LyricOutcome => ({ state: 'offline', reason:
+        e instanceof ApiError && e.code === 'pronunciation_busy' ? 'busy'
+          : e instanceof ApiError && e.code === 'network' ? 'network' : 'failed' }));
     pending.set(wav, p);
   }
   return p;
+}
+
+/** Keep real failure reasons instead of describing every failed check as offline. */
+export async function resolveLyricCheck(
+  clipId: string,
+  take: { wav: Blob; offsetS: number } | null | undefined,
+  live?: Promise<Map<number, LyricStatus> | null> | null,
+): Promise<LyricOutcome> {
+  const lines = live ? await live.catch(() => null) : null;
+  if (lines) return { state: 'ok', lines };
+  return take ? run(clipId, take.wav, take.offsetS) : { state: 'offline', reason: 'failed' };
 }
 
 /**
@@ -48,9 +65,8 @@ export function useLyricCheck(
     if (!take && !live) return;
     let alive = true;
     (async () => {
-      const fromLive = live ? await live : null;
-      const lines = fromLive ?? (take ? await run(clipId, take.wav, take.offsetS) : null);
-      if (alive) setSt(lines ? { state: 'ok', lines } : { state: 'offline' });
+      const result = await resolveLyricCheck(clipId, take, live);
+      if (alive) setSt(result);
     })();
     return () => {
       alive = false;

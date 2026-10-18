@@ -454,4 +454,3 @@
 }
 .sing-lyrics__last.is-unclear .sing-lyrics__last-tag { background: var(--hot-light); }
 .sing-lyrics__last.is-not_sung { opacity: 0.5; }
-.sing-lyrics__last.is-checking { opacity: 0.55; }
