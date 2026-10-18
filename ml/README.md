@@ -127,12 +127,13 @@ Speech recognisers fail on sung Korean (right vs wrong lyrics AUC 0.62-0.65, `re
 
 | | Love Scenario (54 lines) | Last Christmas (9 lines) |
 |---|---|---|
-| real take | 96% match | 89% |
+| real take | 89% match | 89% |
 | player's melody as "aah" | 0% | 0% |
+| a real hum, sung with the music | 0% (6 lines) | not recorded |
 | real take, wrong place in the song | 8% | 0% |
 | quiet | 0% (not sung) | 0% |
 
-Without the hum test, "aah" passed 76% of lines: the tune alone was doing the work. The 0.06 hum margin was chosen on these two takes, and "same tune, wrong words" sung for real is not yet tested. Line level only; word-level flags are not reliable yet (`results/no_rerecord_controls_*.md`).
+Without the hum test, "aah" passed 76% of lines: the tune alone was doing the work. A real hum still passed half its lines at a 0.06 margin, so version 0.2.0 uses 0.10; both margins were chosen on these recordings, and "same tune, wrong words" sung for real is not yet tested. Line level only; word-level flags are not reliable yet (`results/no_rerecord_controls_*.md`).
 
 ### Pitch time tolerance (`tolerance_eval.py` → `results/tolerance.md`)
 Strict frame-by-frame pitch scoring counts lateness twice (pitch and timing). `PitchConfig.time_tolerance_s` (**default 0.1 s since scoring version 0.2.0**) lets the player's pitch track shift by up to that much, **once per phrase**; the timing score still measures the lateness. Synthetic melody: a take 0.1 s late goes from 87.9 to 100, 0.2 s late from 69.1 to 81.2, while a 100-cent-detuned take stays at 73.3. With the real Pitchy at the recommended tracker settings (48 kHz, 2048-sample window, clarity 0.65, gate 0.005), mean of the three real clips:

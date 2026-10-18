@@ -29,7 +29,7 @@ from typing import Callable
 
 import numpy as np
 
-LYRIC_MATCH_VERSION = "0.1.0"
+LYRIC_MATCH_VERSION = "0.2.0"
 MODEL = "kresnik/wav2vec2-large-xlsr-korean"   # Apache-2.0; the same model as the spoken-practice scorer
 LAYER = 6
 SR = 16_000
@@ -40,8 +40,9 @@ Featurizer = Callable[[np.ndarray], np.ndarray]  # 16 kHz mono audio -> (frames,
 
 @dataclass(frozen=True)
 class LyricMatchConfig:
-    min_gain: float = 0.06       # the line must be this much closer to the original than its own hum
-                                 # (cosine-distance units; placeholder picked on two takes, see LYRIC_MATCH.md)
+    min_gain: float = 0.10       # the line must be this much closer to the original than its own hum
+                                 # (cosine-distance units). 0.06 in 0.1.0 let a real hum pass 3/6 lines;
+                                 # 0.10 rejects it and keeps 48/54 + 8/9 worded lines (LYRIC_MATCH.md)
     match_share: float = 0.8     # ...and closer than this share of the song's other lines
     min_active: float = 0.3      # share of a line's frames with voice; below this the line is "not_sung"
     min_line_s: float = 0.8      # shorter lines are not graded (too little audio to compare)
