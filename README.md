@@ -122,18 +122,19 @@ to 15–22.
 
 | | Love Scenario (54 lines) | Last Christmas (9 lines) |
 |---|---|---|
-| Real take: lines marked "match" | **96%** | **89%** |
+| Real take: lines marked "match" | **89%** | **89%** |
+| A teammate **humming** the song along with the music, no words | **0%** (6 lines) | – |
 | Same take, words replaced by a synthetic "aah" on the same melody | 0% | 0% |
-| Real take compared against the wrong part of the song | 8% | 0% |
+| Real take compared against the wrong part of the song | 4% | 0% |
 | Quiet | 0% (all "not sung") | 0% |
 
 Draft lyric timings off by up to 1 s barely matter (96% → 93–96%).
 
-**Honest correction:** a *real* hum is harder to reject than our synthetic one. With a teammate
-humming with no words, and the check allowed to pick the best timing for every line, 32 of 54
-lines still passed (against 44 of 54 for his real lyrics). The fair test, humming along with the
-instrumental, is in progress. Until it's done we don't claim humming can't fool it.
-**TODO: update with that result.**
+**How we got there (honestly):** our synthetic "aah" made the check look perfect, but a *real*
+hum is harder to reject. Hummed along with the music, it still passed 3 of 6 lines at our first
+margin, with gains of +0.04 to +0.09 against +0.19 to +0.36 for the same lines sung with words.
+Raising the margin to 0.10 rejects the hum on every line and keeps 89% of real lines. We picked
+that margin on these same few recordings, so more singers (and more hums) are the next test.
 
 ### Spoken pronunciation (SAY IT RIGHT)
 
@@ -193,8 +194,8 @@ a real take loses ~7 points. At our recommended setting (clarity 0.65, RMS gate 
 - Our first rating cutoffs came from synthetic voices and were impossible for real ones, even
   for the original artist.
 - Our first lyric-check rule passed a wordless "aah" on 76% of lines: the tune was doing all the
-  work. The hum control fixed that. Then a real human hum turned out to be harder to reject than
-  our synthetic one.
+  work. The hum control fixed that. Then a real human hum still passed half its lines, so we
+  raised the margin until it failed every line.
 - Whisper's transcripts looked perfect while silently hiding the mistakes we wanted to find.
 - Tempo drift is punished hard (5% slower costs ~30 points). That's the price of not warping
   time.
