@@ -15,6 +15,7 @@ import { Lyrics } from '../Sing/Lyrics';
 import { PitchLane, useLaneHeight } from '../Sing/PitchLane';
 import { Countdown, Judgement } from '../Sing/Judgement';
 import { bestClock, sectionAt, serverNow, type ClockSample } from './timeline';
+import { SongThumb } from '../../components/songs/SongJacket';
 import '../Sing/Sing.css';
 
 type Phase = 'loading' | 'ready' | 'waiting' | 'playing' | 'saving' | 'saved' | 'error';
@@ -29,6 +30,9 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
 }) {
   const nav = useNav();
   const [song, setSong] = useState<Song | null>(null);
+  // Lyric helpers, same defaults as solo: romanization on, English off.
+  const [showRoman, setShowRoman] = useState(true);
+  const [showTrans, setShowTrans] = useState(false);
   const [match, setMatch] = useState<MatchView | null>(null);
   const [phase, setPhase] = useState<Phase>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -237,8 +241,8 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
     </ScreenShell>
   );
   return (
-    <ScreenShell title="DUET" kao="♪(^▽^)♪" onBack={() => void leave()} backLabel="QUIT">
-      {song && <p className="sing-title">{song.title} <span>· {song.artist}</span></p>}
+    <ScreenShell title="DUET" kao="♪(^▽^)♪" onBack={() => void leave()} backLabel="QUIT"
+      lead={<SongThumb clipId={setup.clipId} />} subtitle={song && <>{song.title} <span>· {song.artist}</span></>}>
       {plan?.range && <p className="solo-hint">Practice section · {rangeLabel(plan.range)}</p>}
       {error && <Notice tone="error">{error}</Notice>}
       <div className={`duet-bar duet-bar--p${activeSlot + 1}`} title="One song. Follow the singer cue; the music keeps playing through each switch.">
@@ -282,6 +286,10 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
       {phase === 'error' && <PixelButton onClick={() => void restart()}>{setup.online ? 'STOP DUET FOR RESTART' : 'RESTART TOGETHER'}</PixelButton>}
       <Panel>
         <div className="duet-audio-controls">
+        <div className="ui-seg" role="group" aria-label="Lyric helpers">
+          <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showRoman} onClick={() => setShowRoman((v) => !v)}>ROMANIZATION</PixelButton>
+          <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showTrans} onClick={() => setShowTrans((v) => !v)}>ENGLISH</PixelButton>
+        </div>
         {engine.current?.vocals && <GuideControl on={guide} volume={guideVolume} onToggle={() => setGuide((v) => !v)} onVolume={setGuideVolume} />}
         {setup.online &&
           <div className="ui-guide" title="Hear the other singer live during their sections. Headphones required.">
@@ -306,7 +314,8 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
             {voiceStatus.bufferMs !== undefined && ` Receive buffer ${Math.round(voiceStatus.bufferMs)} ms (not total voice delay).`}
           </p>
         </>}
-        {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman showTrans />}
+        {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman={showRoman} showTrans={showTrans}
+          singerAt={(time) => sections[sectionAt(sections, time)]?.slot ?? 0} />}
       </Panel>
     </ScreenShell>
   );

@@ -57,6 +57,15 @@ export function SongCover({ clipId, className, fallback }: { clipId: string | nu
   return <img className={className} src={coverUrl(clipId)} alt="" draggable={false} onError={() => setMissing(clipId)} />;
 }
 
+/** Small square album cover for a screen header (the singing screens), pixel heart when missing. */
+export function SongThumb({ clipId }: { clipId: string }) {
+  return (
+    <span className="song-thumb" aria-hidden="true">
+      <SongCover clipId={clipId} className="song-thumb__img" fallback={<PixelHeartFace size={44} />} />
+    </span>
+  );
+}
+
 /**
  * The big "album jacket" for the chosen song: its cover (or drawn pixel art when there is none),
  * a disc peeking out behind it, a slow sunburst, and the title in the layered pixel display font.
