@@ -13,7 +13,7 @@ def signal(mid='match', kind='ready', **extra):
 
 
 @pytest.mark.parametrize('data', [None, [], {}, signal(kind='raw_audio'),
-    signal(destination='other-room'), signal(kind='offer', peer='receiver', sdp=42),
+    signal(destination='other-room'), signal(0), signal(''), {k: v for k, v in signal().items() if k != 'match_id'}, signal(kind='offer', peer='receiver', sdp=42),
     signal(kind='ice', peer='receiver', candidate={'candidate': 'x', 'audio': 'forbidden'}),
     signal(kind='ice', peer='receiver', candidate={'candidate': 'x', 'sdpMLineIndex': -1}),
     signal(kind='ice', peer='receiver', candidate={'candidate': 'x', 'sdpMid': []}),
@@ -22,7 +22,7 @@ def test_invalid_signal(data):
     assert not _valid_voice_signal(data)
 
 
-@pytest.mark.parametrize('data', [signal(), signal(kind='offer', peer='receiver', sdp='v=0'),
+@pytest.mark.parametrize('data', [signal(), signal(None), signal(kind='offer', peer='receiver', sdp='v=0'),
     signal(kind='answer', peer='receiver', sdp='v=0'),
     signal(kind='ice', peer='receiver', candidate={'candidate': 'x', 'sdpMid': '0', 'sdpMLineIndex': 0})])
 def test_valid_signal(data):
@@ -39,7 +39,10 @@ def test_voice_only_reaches_opposite_seat_in_current_live_duet(world):
             c.websocket_connect(f'/ws/rooms/{rid}', headers=rival) as rws, \
             c.websocket_connect(f'/ws/rooms/{rid}', headers=host) as other_tab:
         until(hws, 'room_snapshot', lambda e: all(m['connected'] for m in e['members']))
-        # Lobby mic checks cannot be shared.
+        # Lobby signaling uses an explicit null match; server still owns the sender identity.
+        hws.send_json({'type': 'voice_signal', 'slot': 1, 'data': signal(None)})
+        ev = until(rws, 'voice_signal')
+        assert ev['slot'] == 0 and ev['data'] == signal(None)
         hws.send_json({'type': 'voice_signal', 'data': signal()})
         assert until(hws, 'error')['code'] == 'voice_unavailable'
         mid = start(c, room, host, rival)
@@ -57,7 +60,7 @@ def test_voice_only_reaches_opposite_seat_in_current_live_duet(world):
         assert until(rws, 'voice_signal')['data'] == offer
         hws.send_json({'type': 'progress', 'data': {'x': 'x' * 3000}})
         assert until(hws, 'error')['code'] == 'rate_limited'
-        for data, code in [(signal('old-match'), 'voice_unavailable'), (signal(mid, destination='elsewhere'), 'bad_message')]:
+        for data, code in [(signal(None), 'voice_unavailable'), (signal('old-match'), 'voice_unavailable'), (signal(mid, destination='elsewhere'), 'bad_message')]:
             hws.send_json({'type': 'voice_signal', 'data': data})
             assert until(hws, 'error')['code'] == code
         # Room auth and Origin checks are shared with all existing socket events.
@@ -66,3 +69,25 @@ def test_voice_only_reaches_opposite_seat_in_current_live_duet(world):
         until(hws, 'room_snapshot', lambda e: e['match']['state'] == 'retry_required')
         hws.send_json({'type': 'voice_signal', 'data': signal(mid)})
         assert until(hws, 'error')['code'] == 'voice_unavailable'
+
+
+@pytest.mark.skipif(not os.getenv('DATABASE_URL'), reason='needs disposable DATABASE_URL')
+def test_lobby_voice_requires_both_connected_and_stops_on_abort(world):
+    c, guest = world
+    host, rival = guest('lobby-voice-host'), guest('lobby-voice-rival')
+    room = online(c, host, rival)
+    rid = room['id']
+    with c.websocket_connect(f'/ws/rooms/{rid}', headers=host) as hws:
+        until(hws, 'room_snapshot')
+        hws.send_json({'type': 'voice_signal', 'data': signal(None)})
+        assert until(hws, 'error')['code'] == 'voice_unavailable'
+        with c.websocket_connect(f'/ws/rooms/{rid}', headers=rival) as rws:
+            until(hws, 'room_snapshot', lambda e: all(m['connected'] for m in e['members']))
+            offer = signal(None, 'offer', peer='receiver', sdp='v=0')
+            hws.send_json({'type': 'voice_signal', 'data': offer})
+            assert until(rws, 'voice_signal')['data'] == offer
+            assert c.post(f'/api/rooms/{rid}/abort', headers=host).status_code == 200
+            until(hws, 'room_snapshot', lambda e: e['state'] == 'aborted')
+            for context in (None, 'old-match'):
+                hws.send_json({'type': 'voice_signal', 'data': signal(context)})
+                assert until(hws, 'error')['code'] == 'voice_unavailable'
