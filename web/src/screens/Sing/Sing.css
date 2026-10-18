@@ -325,6 +325,8 @@
 .duet-bar__who [data-testid='duet-current'] { font-size: 22px; }
 .duet-bar__who [data-testid='duet-next'] { font-size: 14px; }
 .duet-bar .sing-hud { flex-wrap: wrap; margin: 0; }
+.duet-audio-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; }
+.duet-voice-status { font-size: 12px; line-height: 1.3; margin: 5px 0; }
 
 /* Short screens (16:9 at 720-800 px tall, 16:10 laptops): tighten the lyrics and panels so the lane,
    the singer bar and the lyrics are all on screen at once. */
