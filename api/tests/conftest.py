@@ -33,3 +33,14 @@ def pytest_report_header(config):
     if _test_url:
         return f"database tests: running against {make_url(_test_url).render_as_string(hide_password=True)}"
     return "database tests: SKIPPED (set TEST_DATABASE_URL to a disposable database with 'test' in its name)"
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits():
+    """The in-memory limiters count per network address, and every test client shares one address, so without
+    this the guest-creation limit (20/min) is used up part-way through a full run."""
+    from api import play, rooms
+    play._hits.clear()
+    rooms._join_log.clear()
+    rooms._wrong_password_log.clear()
+    yield

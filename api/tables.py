@@ -121,6 +121,8 @@ class Room(Base):
     state_version: Mapped[int] = mapped_column(Integer, default=1)  # bumped on every durable change
     created_at: Mapped[datetime] = _now()
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    visibility: Mapped[str] = mapped_column(String(8), default="public", server_default="public")  # public | private
+    password_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)  # private rooms only; never sent out
     __table_args__ = (ForeignKeyConstraint(["clip_id", "clip_version"], ["clip.id", "clip.version"]),)
 
 

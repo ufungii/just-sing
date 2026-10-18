@@ -2,6 +2,8 @@
 the WebSocket carries presence, snapshots and provisional progress/ratings. State lives in Postgres,
 so a restarted server or a reconnecting client recovers from a fresh snapshot."""
 import asyncio
+import hashlib
+import hmac
 import json
 import os
 import secrets
@@ -15,7 +17,7 @@ import logging
 from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -24,6 +26,7 @@ from .auth import verify_bearer
 from .db import get_engine
 from .errors import ApiError
 from .models import TimeRange
+from .clip_catalog import CATALOG
 from .play import current_guest, get_db, match_view
 from .tables import GuestSession, Match, MatchPlayer, Room, RoomMember, TurnAttempt
 
@@ -37,6 +40,9 @@ MAX_VOICE_MESSAGE_BYTES = 16384  # SDP can exceed the small progress-message bud
 MAX_MESSAGES_PER_SECOND = 30
 HEARTBEAT_TIMEOUT = 45  # seconds of silence before a socket is dropped
 JOINS_PER_MINUTE = 10
+PASSWORD_MIN, PASSWORD_MAX = 3, 16
+WRONG_PASSWORDS_PER_MINUTE = 5
+LIST_LIMIT = 50
 
 
 # ---- realtime hub: sockets and presence only, never durable state ----------------------------
@@ -117,7 +123,7 @@ def snapshot(s: Session, room: Room) -> dict:
     match = _latest_match(s, room)
     here = hub.present(room.id)
     return {"id": room.id, "code": room.code, "state": room.state, "state_version": room.state_version,
-            "clip_id": room.clip_id, "host_slot": 0,
+            "visibility": room.visibility, "clip_id": room.clip_id, "host_slot": 0,
             "range": play._match_range(s, match) if match else None,
             "members": [{"slot": m.slot, "display_name": m.display_name, "ready": m.ready,
                          "connected": m.slot in here} for m in members],
@@ -164,8 +170,41 @@ class RoomIn(BaseModel):
     duet: bool = False
 
 
+class CreateIn(BaseModel):
+    """clip_id is optional: the host picks the song inside the room, so a default is used until then."""
+    clip_id: str | None = None
+    duet: bool = False
+    visibility: str = Field(default="public", pattern="^(public|private)$")
+    password: str | None = Field(default=None, max_length=PASSWORD_MAX)
+
+
 class JoinIn(BaseModel):
     code: str = Field(min_length=1, max_length=8)
+    password: str | None = Field(default=None, max_length=PASSWORD_MAX)
+
+
+class JoinByIdIn(BaseModel):
+    password: str | None = Field(default=None, max_length=PASSWORD_MAX)
+
+
+def default_clip_id() -> str:
+    """First real song (not a test fixture), else the first of anything; the host changes it in the lobby."""
+    ids = sorted(CATALOG)
+    return next((i for i in ids if not i.startswith(("synthetic", "duet-demo"))), ids[0])
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    return f"scrypt${salt.hex()}${hashlib.scrypt(password.encode(), salt=salt, n=2**14, r=8, p=1, dklen=32).hex()}"
+
+
+def check_password(password: str, stored: str) -> bool:
+    try:
+        _, salt, digest = stored.split("$")
+        got = hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), n=2**14, r=8, p=1, dklen=32)
+    except ValueError:
+        return False
+    return hmac.compare_digest(got, bytes.fromhex(digest))
 
 
 class ReadyIn(BaseModel):
@@ -189,12 +228,16 @@ def _draft(s: Session, room: Room, guest: GuestSession) -> Match:
 
 
 @router.post("/api/rooms")
-def create_room(body: RoomIn, guest=Depends(current_guest), s: Session = Depends(get_db)):
+def create_room(body: CreateIn, guest=Depends(current_guest), s: Session = Depends(get_db)):
     play.require_player_name(guest.display_name)
-    song = play.require_clip(s, body.clip_id)
+    song = play.require_clip(s, body.clip_id or default_clip_id())
+    if body.visibility == "private" and not PASSWORD_MIN <= len(body.password or "") <= PASSWORD_MAX:
+        raise ApiError(422, "invalid_password", f"A private room needs a password of {PASSWORD_MIN} to {PASSWORD_MAX} characters.")
+    password_hash = hash_password(body.password) if body.visibility == "private" else None
     for _ in range(5):  # a code collision is rare; retry
         room = Room(code="".join(secrets.choice(CODE_ALPHABET) for _ in range(5)), host_guest_id=guest.id,
-                    clip_id=song.id, clip_version=song.version, expires_at=datetime.now(timezone.utc) + ROOM_TTL)
+                    clip_id=song.id, clip_version=song.version, expires_at=datetime.now(timezone.utc) + ROOM_TTL,
+                    visibility=body.visibility, password_hash=password_hash)
         s.add(room)
         try:
             s.flush()
@@ -212,6 +255,13 @@ def create_room(body: RoomIn, guest=Depends(current_guest), s: Session = Depends
 
 
 _join_log: dict[uuid.UUID, deque] = defaultdict(deque)
+_wrong_password_log: dict[str, deque] = defaultdict(deque)
+
+
+def _within_limit(log_: deque, limit: int, now: float) -> bool:
+    while log_ and now - log_[0] > 60:
+        log_.popleft()
+    return len(log_) < limit
 
 
 def limit_joins_per_ip(request: Request):
@@ -220,24 +270,22 @@ def limit_joins_per_ip(request: Request):
         raise ApiError(429, "too_many_joins", "Too many join attempts. Wait a minute.", True)
 
 
-@router.post("/api/rooms/join", dependencies=[Depends(limit_joins_per_ip)])
-def join_room(body: JoinIn, guest=Depends(current_guest), s: Session = Depends(get_db)):
-    play.require_player_name(guest.display_name)
-    now = time.monotonic()  # ponytail: in-memory limiter, fine for one worker
-    joins = _join_log[guest.id]
-    while joins and now - joins[0] > 60:
-        joins.popleft()
-    if len(joins) >= JOINS_PER_MINUTE:
-        raise ApiError(429, "too_many_joins", "Too many join attempts. Wait a minute.", True)
-    joins.append(now)
-
-    room = s.scalar(select(Room).where(Room.code == body.code.strip().upper()).with_for_update())  # serializes racing joins
-    if not room:
-        raise ApiError(404, "room_not_found", "No room with that code.")
+def _join(s: Session, room: Room, guest: GuestSession, password: str | None, client: str) -> dict:
+    """Seat `guest` in a locked, loaded `room`. Private rooms need the password; wrong guesses are rate limited
+    per player and per network address so a fresh cookie does not reset the budget."""
     if room.expires_at < datetime.now(timezone.utc):
         raise ApiError(410, "room_expired", "That room has expired.")
     mine = s.scalar(select(RoomMember.slot).where(RoomMember.room_id == room.id, RoomMember.guest_id == guest.id))
     if mine is None:
+        if room.visibility == "private":
+            now = time.monotonic()  # ponytail: in-memory limiter, fine for one worker
+            keys = (f"g:{guest.id}", f"ip:{client}")
+            if not all(_within_limit(_wrong_password_log[k], WRONG_PASSWORDS_PER_MINUTE, now) for k in keys):
+                raise ApiError(429, "too_many_attempts", "Too many wrong passwords. Wait a minute.", True)
+            if not (password and room.password_hash and check_password(password, room.password_hash)):
+                for k in keys:
+                    _wrong_password_log[k].append(now)
+                raise ApiError(403, "wrong_password", "That password is not right.")
         if room.state != "lobby":
             raise ApiError(409, "room_started", "That room already started.")
         taken = s.scalars(select(RoomMember.slot).where(RoomMember.room_id == room.id)).all()
@@ -249,6 +297,64 @@ def join_room(body: JoinIn, guest=Depends(current_guest), s: Session = Depends(g
         publish(s, room)
         mine = 1
     return {**snapshot(s, room), "you": mine}
+
+
+def _count_join(guest: GuestSession):
+    if not _within_limit(_join_log[guest.id], JOINS_PER_MINUTE, time.monotonic()):
+        raise ApiError(429, "too_many_joins", "Too many join attempts. Wait a minute.", True)
+    _join_log[guest.id].append(time.monotonic())
+
+
+@router.post("/api/rooms/join", dependencies=[Depends(limit_joins_per_ip)])
+def join_room(body: JoinIn, guest=Depends(current_guest), s: Session = Depends(get_db), request: Request = None):
+    play.require_player_name(guest.display_name)
+    _count_join(guest)
+    room = s.scalar(select(Room).where(Room.code == body.code.strip().upper()).with_for_update())  # serializes racing joins
+    if not room:
+        raise ApiError(404, "room_not_found", "No room with that code.")
+    return _join(s, room, guest, body.password, request.client.host if request and request.client else "?")
+
+
+@router.post("/api/rooms/{room_id}/join", dependencies=[Depends(limit_joins_per_ip)])
+def join_room_by_id(room_id: uuid.UUID, body: JoinByIdIn, guest=Depends(current_guest), s: Session = Depends(get_db),
+                    request: Request = None):
+    play.require_player_name(guest.display_name)
+    _count_join(guest)
+    room = s.get(Room, room_id, with_for_update=True)
+    if not room:
+        raise ApiError(404, "room_not_found", "No such room.")
+    return _join(s, room, guest, body.password, request.client.host if request and request.client else "?")
+
+
+@router.get("/api/rooms")
+def list_rooms(visibility: str | None = None, q: str | None = None, guest=Depends(current_guest),
+               s: Session = Depends(get_db)):
+    """Lobby rooms with an open seat, newest first. No codes and no password data: just enough to pick one.
+    `visibility` = public | private narrows the list; `q` matches the host's name (case-insensitive)."""
+    stmt = (select(Room, RoomMember.display_name, RoomMember.room_id)
+            .join(RoomMember, (RoomMember.room_id == Room.id) & (RoomMember.slot == 0))
+            .where(Room.state == "lobby", Room.expires_at > datetime.now(timezone.utc))
+            .order_by(Room.created_at.desc()).limit(LIST_LIMIT))
+    if visibility in ("public", "private"):
+        stmt = stmt.where(Room.visibility == visibility)
+    if q and q.strip():
+        stmt = stmt.where(RoomMember.display_name.ilike("%" + q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%", escape="\\"))
+    rows = s.execute(stmt).all()
+    counts = dict(s.execute(select(RoomMember.room_id, func.count()).where(RoomMember.room_id.in_([r.id for r, *_ in rows]))
+                            .group_by(RoomMember.room_id)).all()) if rows else {}
+    items = [{"id": r.id, "visibility": r.visibility, "host_name": host, "clip_id": r.clip_id, "players": counts.get(r.id, 1),
+              "created_at": r.created_at, "mine": False} for r, host, _ in rows if counts.get(r.id, 1) < 2]
+    # Rooms you already sit in come first, even when full or started, so a dropped player can find the way back
+    # now that codes are not shown. Joining one of these again just returns your seat.
+    seen = {i["id"] for i in items}
+    for r in s.scalars(select(Room).join(RoomMember, RoomMember.room_id == Room.id)
+                       .where(RoomMember.guest_id == guest.id, Room.state.in_(("lobby", "playing")),
+                              Room.expires_at > datetime.now(timezone.utc))).all():
+        names = s.scalars(select(RoomMember.display_name).where(RoomMember.room_id == r.id).order_by(RoomMember.slot)).all()
+        mine = {"id": r.id, "visibility": r.visibility, "host_name": names[0], "clip_id": r.clip_id, "players": len(names),
+                "created_at": r.created_at, "mine": True}
+        items = [mine] + [i for i in items if i["id"] != r.id] if r.id in seen else [mine] + items
+    return items
 
 
 @router.get("/api/rooms/{room_id}")
