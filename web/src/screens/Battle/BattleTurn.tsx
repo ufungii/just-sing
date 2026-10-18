@@ -6,6 +6,7 @@ import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
 import { PhraseChips, ScoreSummary } from '../Results/PhraseChips';
 import { useManifest } from '../Results/useManifest';
 import { buildTargetTrack, phraseWeights, pronunciationScore } from '../../scoring';
+import './MatchBoard.css';
 
 /** The battle screen after a turn: the hand-off after player 1, the final results after player 2. */
 export function BattleTurn({ result }: { result: SingResult }) {
@@ -170,6 +171,7 @@ export function MatchBoard({ match, song }: { match: MatchView; song: ReturnType
       <Panel tone="mint" label="WINNER">
         <p className="battle-headline" style={{ fontSize: 40, margin: 0 }} aria-live="polite">{headline}</p>
       </Panel>
+      <div className="match-board__players">
       {view.players.map((p) => {
         const score = view.attempts.find((a) => a.slot === p.slot && a.state === 'accepted')?.score;
         const feedback = score?.lyrics;
@@ -187,7 +189,7 @@ export function MatchBoard({ match, song }: { match: MatchView; song: ReturnType
         const lyrics = feedback?.status === 'pending' ? 'checking' as const : lines
           ? { matched: graded.filter((s) => s === 'match').length, graded: graded.length, score: pronunciation } : 'unavailable' as const;
         return (
-          <Panel key={p.slot} tone={p.slot === 0 ? 'pink' : 'sky'} label={`P${p.slot + 1} · ${p.display_name.toUpperCase()}`}>
+          <Panel key={p.slot} className={view.state === 'finished' && view.winner_slot === p.slot ? 'match-board__winner' : undefined} tone={p.slot === 0 ? 'pink' : 'sky'} label={`P${p.slot + 1} · ${p.display_name.toUpperCase()}`}>
             {score ? (
               <>
                 <ScoreSummary total={score.total} pitch={score.pitch} timing={score.timing} guided={score.guided} range={score.range} lyrics={lyrics} />
@@ -199,6 +201,7 @@ export function MatchBoard({ match, song }: { match: MatchView; song: ReturnType
           </Panel>
         );
       })}
+      </div>
     </>
   );
 }

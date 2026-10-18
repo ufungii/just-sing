@@ -1,0 +1,5 @@
+/* Both singers' saved scores side by side; stacks on narrow windows. */
+.match-board__players { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.match-board__players > .ui-panel { min-width: 0; margin: 0; }
+.match-board__winner { outline: 4px solid currentColor; outline-offset: 2px; }
+@media (max-width: 720px) { .match-board__players { grid-template-columns: 1fr; } }
