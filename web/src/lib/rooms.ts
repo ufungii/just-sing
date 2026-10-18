@@ -13,6 +13,7 @@ export interface RoomSnapshot {
   code: string;
   state: 'lobby' | 'playing' | 'finished' | 'aborted';
   state_version: number;
+  visibility: Visibility;
   clip_id: string;
   range: TimeRange | null;
   members: { slot: number; display_name: string; ready: boolean; connected: boolean }[];
@@ -21,11 +22,44 @@ export interface RoomSnapshot {
   you?: number;
 }
 
+export type Visibility = 'public' | 'private';
+
+/** One row of the room list: no code, no password data. */
+export interface RoomListItem {
+  id: string;
+  visibility: Visibility;
+  host_name: string;
+  clip_id: string;
+  players: number;
+  created_at: string;
+  /** You already sit in this room (rejoin without a password). */
+  mine?: boolean;
+}
+
+export const PASSWORD_MIN = 3;
+export const PASSWORD_MAX = 16;
+
+/** Why a private-room password is not acceptable, or null when it is fine (the server checks the same rule). */
+export const passwordProblem = (pw: string): string | null =>
+  pw.length < PASSWORD_MIN || pw.length > PASSWORD_MAX ? `Use ${PASSWORD_MIN} to ${PASSWORD_MAX} characters.` : null;
+
+export type RoomTab = 'all' | Visibility;
+
+/** The list as the join screen shows it: the tab, then a case-insensitive match on the host's name. */
+export function filterRooms(rooms: RoomListItem[], tab: RoomTab, query: string): RoomListItem[] {
+  const q = query.trim().toLowerCase();
+  return rooms.filter((r) => (tab === 'all' || r.visibility === tab) && (!q || r.host_name.toLowerCase().includes(q)));
+}
+
 const call = <T>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST') =>
   request<T>(path, { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
 
-export const createRoom = (clipId: string) => call<RoomSnapshot>('/api/rooms', { clip_id: clipId, duet: true });
-export const joinRoom = (code: string) => call<RoomSnapshot>('/api/rooms/join', { code });
+/** The song is picked inside the room, so a new room starts on the server's default clip. */
+export const createRoom = (visibility: Visibility = 'public', password?: string) =>
+  call<RoomSnapshot>('/api/rooms', { duet: true, visibility, ...(visibility === 'private' ? { password } : {}) });
+export const listRooms = () => call<RoomListItem[]>('/api/rooms');
+export const joinRoom = (code: string, password?: string) => call<RoomSnapshot>('/api/rooms/join', { code, password });
+export const joinRoomById = (id: string, password?: string) => call<RoomSnapshot>(`/api/rooms/${id}/join`, { password });
 export const getRoom = (id: string) => call<RoomSnapshot>(`/api/rooms/${id}`);
 export const setReady = (id: string, ready: boolean) => call<RoomSnapshot>(`/api/rooms/${id}/ready`, { ready });
 export const setRoomClip = (id: string, clipId: string) => call<RoomSnapshot>(`/api/rooms/${id}/clip`, { clip_id: clipId });
