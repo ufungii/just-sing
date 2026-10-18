@@ -5,9 +5,10 @@
  *
  *   instrumental/click  -> destination
  *   guide vocals (optional) -> guide gain -> destination
- *   mic -> capture worklet -> (silent) destination      batches -> PitchTracker (Pitchy, hop grid)
+ *   mic -> manual input gain -> capture worklet -> (silent) destination      batches -> PitchTracker (Pitchy, hop grid)
  *                                                               -> TakeRecorder (16 kHz copy for the lyric check)
  */
+import { createMicGain } from './micGain';
 import type { TimeRange } from '../lib/types';
 import { SCORING_CONFIG } from '../scoring/config';
 import { CAPTURE_PROCESSOR, loadCaptureWorklet, type CaptureBatch } from './captureWorklet';
@@ -24,6 +25,7 @@ export class SingEngine {
   readonly recorder: TakeRecorder;
   private mic: MediaStream | null = null;
   private micNode: MediaStreamAudioSourceNode | null = null;
+  private micGain: ReturnType<typeof createMicGain> | null = null;
   private capture: AudioWorkletNode | null = null;
   private source: AudioBufferSourceNode | null = null;
   private guideSource: AudioBufferSourceNode | null = null;
@@ -75,7 +77,8 @@ export class SingEngine {
       if (recordTake) this.recorder.push(e.data);
     };
     // The worklet outputs silence; connecting it keeps the browser pulling it every render quantum.
-    this.micNode.connect(this.capture).connect(this.ctx.destination);
+    this.micGain = createMicGain(this.ctx);
+    this.micNode.connect(this.micGain.node).connect(this.capture).connect(this.ctx.destination);
   }
 
   /** True while the mic track is still delivering audio (it ends if unplugged or revoked). */
@@ -149,6 +152,7 @@ export class SingEngine {
     this.capture?.port.close();
     this.capture?.disconnect();
     this.micNode?.disconnect();
+    this.micGain?.close(); this.micGain = null;
     stopStream(this.mic);
     this.mic = this.micNode = this.capture = null;
   }

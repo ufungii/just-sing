@@ -377,7 +377,7 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
               <Segmented label="Voice range" options={REGISTERS} value={register} onChange={setRegister} />
             </Panel>
             <Panel tone="sky" label="MIC CHECK">
-              <p className="solo-hint">Headphones required to prevent echo. After the mic check, both players can talk here. During the song, sharing opens only in your sections; count-in is silent. Voice is not recorded. Muting sharing keeps local scoring active.</p>
+              <p className="solo-hint">Headphones required to prevent echo. After the mic check, both players can talk here. During the song, sharing opens only in your sections; count-in is silent. The mic test recording stays on your device. Muting sharing keeps local scoring active.</p>
               <PixelButton size="sm" aria-label="Mute my mic to opponent" aria-pressed={!micOk || voiceMuted}
                 tone={!micOk || voiceMuted ? 'paper' : 'hot'} disabled={!micOk} onClick={() => setVoiceMuted((v) => !v)}>
                 {!micOk || voiceMuted ? 'MY VOICE MUTED' : 'SHARING MY VOICE'}

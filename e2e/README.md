@@ -82,3 +82,7 @@ E2E_CHROMIUM=/usr/bin/chromium npx playwright test --config players-easter-egg.c
 ```
 
 The test runner starts a temporary Vite server on port 5189 and stops it afterward.
+
+## Live pitch, score bars, and microphone input
+
+From `e2e/`, run `npx playwright test online.spec.ts -g 'remote score|short local clip|recording errors'` against a disposable database and a built frontend. These three cases use the built-in `duet-demo`, so no copyrighted song assets are needed. They check different octave settings, original timestamped pitch delivery, matching live score-bar fills, local three-second recording playback, measured 3x amplitude at 300% input, and capture cleanup/retry on recorder errors. Use `npx playwright test voice.spec.ts` to check the existing voice gates, mute, capture reuse, reconnects, and teardown.
