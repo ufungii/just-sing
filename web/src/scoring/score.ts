@@ -23,7 +23,12 @@ export const isVoiced = (v: number | null | undefined): v is number => typeof v 
 
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 /** Output rounding, half-even like Python's round() in ml/scoring/score.py (1.25 -> 1.2, not 1.3). */
-export const round = (x: number, dp: number) => roundHalfEven(x * 10 ** dp) / 10 ** dp;
+export function round(x: number, dp: number): number {
+  // Python rounds the exact binary value. Multiplying first can create a fake .5 (0.15 * 10 = 1.5), so only a
+  // dyadic x (a multiple of 2^-(dp+1), where x * 10^dp is exact) can be a real tie, and gets half-even; any
+  // other x is rounded by toFixed, which rounds the exact value.
+  return Number.isInteger(x * 2 ** (dp + 1)) ? roundHalfEven(x * 10 ** dp) / 10 ** dp : Number(x.toFixed(dp));
+}
 
 /** Soft pitch credit in [0, 1] for one frame. */
 export function pitchCredit(cents: number, cfg: ScoringConfig = SCORING_CONFIG): number {
@@ -208,3 +213,36 @@ export function aggregate(phrases: PhraseScore[], weights: Map<string, number>) 
 
 /** Phrase score for display; the engine already computed it. */
 export const phraseTotal = (p: PhraseScore) => p.score;
+
+/**
+ * Lyric score 0-100 from the lyric check's per-line statuses, weighted by each line's scoreable frames
+ * (ml/scoring/score.py pronunciation_score). Null when nothing was checked: the caller keeps the
+ * pitch/timing total, because an unavailable check is never a low score.
+ */
+export function pronunciationScore(statuses: Map<number, string>, weights: Map<number, number>, cfg: ScoringConfig = SCORING_CONFIG): number | null {
+  let sum = 0;
+  let w = 0;
+  for (const [line, status] of statuses) {
+    const weight = weights.get(line) ?? 0;
+    if (!Object.hasOwn(cfg.lyricCredit, status) || !(weight > 0)) continue; // unknown status or NaN/zero weight: skipped, as in Python
+    const credit = cfg.lyricCredit[status];
+    sum += credit * weight;
+    w += weight;
+  }
+  return w ? round(sum / w, 1) : null;
+}
+
+/** Final turn total with the lyric score blended in and the humming guard applied (score.py apply_pronunciation). */
+export function totalWithPronunciation(
+  t: { total: number; pitch: number; timing: number },
+  pronunciation: number | null,
+  opts: { hasTiming?: boolean } = {},
+  cfg: ScoringConfig = SCORING_CONFIG,
+): number {
+  if (pronunciation === null) return t.total;
+  if (!Number.isFinite(pronunciation) || pronunciation < 0 || pronunciation > 100) throw new RangeError('pronunciation must be a finite number in [0, 100]');
+  const timing = opts.hasTiming === false ? t.pitch : t.timing; // no onsets anywhere: pitch stands in for timing
+  const blend = cfg.totalPitchWeight * t.pitch + cfg.totalTimingWeight * timing + cfg.totalPronunciationWeight * pronunciation;
+  // Same operation order as Python (apply_pronunciation) so the two agree to the last bit.
+  return round(blend * (cfg.pronunciationFloor + ((1 - cfg.pronunciationFloor) * pronunciation) / 100), 1);
+}

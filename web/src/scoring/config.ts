@@ -1,13 +1,13 @@
 /**
  * Every threshold the live scorer uses, in one place (CLAUDE.md: "thresholds live in config, not code").
  *
- * The scoring values below mirror ml/scoring/config.py (SCORING_VERSION 0.3.0) and ml/scoring/SPEC.md.
+ * The scoring values below mirror ml/scoring/config.py (SCORING_VERSION 0.4.0) and ml/scoring/SPEC.md.
  * `npm test` runs this port against contracts/fixtures; never change the math or these numbers in only
  * one language.
  */
 
 /** Must match ml/scoring/config.py SCORING_VERSION, which the server stores with every result. */
-export const SCORING_VERSION = '0.3.0';
+export const SCORING_VERSION = '0.4.0';
 
 export const SCORING_CONFIG = {
   // ---------- live pitch capture (what counts as a voiced user frame) ----------
@@ -53,6 +53,16 @@ export const SCORING_CONFIG = {
   okay: 40,
   /** Below this share of scoreable frames sung, a phrase is a miss (never for a mic failure). */
   minCoverage: 0.25,
+
+  // ---------- turn total with the lyric check (ml/scoring/config.py PronunciationConfig) ----------
+  /** Starting defaults, not validated. total = (wp*pitch + wt*timing + wr*pronunciation) * guard. */
+  totalPitchWeight: 0.7,
+  totalTimingWeight: 0.1,
+  totalPronunciationWeight: 0.2,
+  /** Humming guard: guard = floor + (1 - floor) * pronunciation / 100. */
+  pronunciationFloor: 0.5,
+  /** Per-line credit by lyric-check status; "not_covered" lines are left out. "unclear" earns nothing: humming is graded unclear. */
+  lyricCredit: { match: 100, unclear: 0, not_sung: 0 } as Record<string, number>,
 
   // ---------- display only ----------
   /** Notes are derived from the contour (when the manifest has none) as runs within this many cents. */
