@@ -40,6 +40,20 @@
   gap: 20px;
   flex-wrap: wrap;
 }
+/* Title (plus kaomoji) with an optional subtitle underneath, both left-aligned. */
+.ui-header__titles { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ui-header__title-row { display: flex; align-items: center; gap: 20px; }
+.ui-header__subtitle {
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ui-header__subtitle span { color: var(--ink-rose); }
+
 .ui-header__right {
   margin-left: auto;
   display: flex;

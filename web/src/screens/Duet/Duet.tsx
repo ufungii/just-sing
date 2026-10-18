@@ -15,6 +15,7 @@ import { Lyrics } from '../Sing/Lyrics';
 import { PitchLane, useLaneHeight } from '../Sing/PitchLane';
 import { Countdown, Judgement } from '../Sing/Judgement';
 import { bestClock, sectionAt, serverNow, type ClockSample } from './timeline';
+import { SongThumb } from '../../components/songs/SongJacket';
 import '../Sing/Sing.css';
 
 type Phase = 'loading' | 'ready' | 'waiting' | 'playing' | 'saving' | 'saved' | 'error';
@@ -237,8 +238,8 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
     </ScreenShell>
   );
   return (
-    <ScreenShell title="DUET" kao="♪(^▽^)♪" onBack={() => void leave()} backLabel="QUIT">
-      {song && <p className="sing-title">{song.title} <span>· {song.artist}</span></p>}
+    <ScreenShell title="DUET" kao="♪(^▽^)♪" onBack={() => void leave()} backLabel="QUIT"
+      lead={<SongThumb clipId={setup.clipId} />} subtitle={song && <>{song.title} <span>· {song.artist}</span></>}>
       {plan?.range && <p className="solo-hint">Practice section · {rangeLabel(plan.range)}</p>}
       {error && <Notice tone="error">{error}</Notice>}
       <div className={`duet-bar duet-bar--p${activeSlot + 1}`} title="One song. Follow the singer cue; the music keeps playing through each switch.">

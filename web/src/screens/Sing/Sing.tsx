@@ -20,6 +20,7 @@ import { GuideControl } from '../../ui/GuideControl';
 import { Countdown, Judgement } from './Judgement';
 import { Lyrics } from './Lyrics';
 import { PitchLane, useLaneHeight } from './PitchLane';
+import { SongThumb } from '../../components/songs/SongJacket';
 import './Sing.css';
 
 type Phase =
@@ -272,6 +273,8 @@ export function Sing({ setup }: { setup: SingSetup }) {
       kao="♪(^▽^)♪"
       onBack={quit}
       backLabel="QUIT"
+      lead={<SongThumb clipId={setup.clipId} />}
+      subtitle={song && <>{setup.battle && <>P{setup.battle.turn + 1} {setup.playerName.toUpperCase()} · </>}{song.title} <span>· {song.artist}</span></>}
       right={
         <div className="sing-hud">
           <span className="sing-chip">{REGISTER_LABEL[setup.register]}</span>
@@ -281,8 +284,6 @@ export function Sing({ setup }: { setup: SingSetup }) {
         </div>
       }
     >
-      {song && <p className="sing-title">{setup.battle && <>P{setup.battle.turn + 1} {setup.playerName.toUpperCase()} · </>}{song.title} <span>· {song.artist}</span></p>}
-
       {setup.range && <p className="solo-hint">Practice section · {rangeLabel(setup.range)}</p>}
       {isClick && <Notice tone="warn">No instrumental installed, so you are singing to a click track.</Notice>}
       {saveWarning && <Notice tone="warn">{saveWarning}</Notice>}
