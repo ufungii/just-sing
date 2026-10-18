@@ -8,7 +8,8 @@ test('local duet: one song and microphone session, automatic handoffs, disjoint 
     const { page, errors } = await duetPlayer(browser, baseURL!);
     await page.goto('/');
     const song = await manifest(page);
-    await page.getByText('1P VS 2P', { exact: true }).first().click();
+    await page.getByText('LOCAL', { exact: true }).first().click();
+    await page.getByRole('button', { name: '2 PLAYERS', exact: true }).click();
     await page.getByRole('button').filter({ has: page.getByText(song.title, { exact: true }) }).click();
     await addPlayer(page, 'PLAYER 1', 'E2E-Bot-duet-local');
     await addPlayer(page, 'PLAYER 2', 'E2E-Rival-duet-local');

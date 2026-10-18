@@ -17,12 +17,12 @@ type CardDef = Pick<KeyCardProps, 'title' | 'sub' | 'kao' | 'icon' | 'color'> & 
 
 // Kaomoji here use only characters the bundled DotGothic16 subset contains (no ω, ◕, ✧, ⋆, ₊),
 // otherwise the browser falls back to another font for single glyphs and they look broken.
-// Solo karaoke and pronunciation practice come first, per CLAUDE.md.
+// Local karaoke (one singer, or 1P vs 2P on one laptop) and pronunciation practice come first, per CLAUDE.md.
 const CARDS: CardDef[] = [
   {
     to: 'solo',
-    title: 'SOLO SING',
-    sub: 'pick a clip, sing along, get rated every phrase',
+    title: 'LOCAL',
+    sub: 'sing solo or 1P vs 2P on this laptop, rated every phrase',
     kao: '(ﾉ≧▽≦)ﾉ*:･˚☆',
     icon: 'mic',
     color: 'pink',
@@ -36,20 +36,12 @@ const CARDS: CardDef[] = [
     color: 'mint',
   },
   {
-    to: 'battle',
-    title: '1P VS 2P',
-    sub: 'take turns on one laptop, same clip, same rules',
-    kao: '(｀∀´)ﾉ☆ヽ(＾▽＾)',
-    icon: 'versus',
-    color: 'sky',
-  },
-  {
     to: 'online',
     title: 'ONLINE',
     sub: 'make a room, send the code, sing against a friend',
     kao: '(＾▽＾)ﾉ ⇄ ヽ(＾▽＾)',
     icon: 'versus',
-    color: 'lav',
+    color: 'sky',
   },
 ];
 
@@ -69,7 +61,7 @@ function columnCount(grid: HTMLElement | null): number {
   return Math.max(1, getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length);
 }
 
-/** Title menu: logo, mascots, four keycap cards, and the players / history / settings corner. */
+/** Title menu: logo, mascots, three keycap cards, and the players / history / settings corner. */
 export function Home({ onNavigate }: { onNavigate: (screen: Screen) => void }) {
   const account = useAccount();
   const [dialog, setDialog] = useState<'players' | 'settings' | null>(null);

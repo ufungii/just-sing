@@ -170,7 +170,7 @@
 
 .home-menu {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 28px;
   margin-top: 26px;
 }
@@ -242,12 +242,12 @@
 .home-key__sub { font-weight: 500; font-size: 16px; }
 .home-key__kao { margin-top: auto; font-family: var(--font-kao); font-size: 16px; }
 
-/* ---------- narrower windows (~1024): 2x2 cards, tighter hero ---------- */
+/* ---------- narrower windows (~1024): short wide cards, tighter hero ---------- */
 
 @media (max-width: 1180px) {
   .home { padding: 36px 40px; }
-  .home-menu { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 32px; margin-top: 30px; }
-  /* Wide 2x2 keycaps: icon in its own column so each card is short. */
+  .home-menu { gap: 28px 24px; margin-top: 30px; }
+  /* Wide keycaps: icon in its own column so each card is short. */
   .home-key {
     display: grid;
     grid-template-columns: 56px minmax(0, 1fr);

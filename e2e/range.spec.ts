@@ -111,7 +111,7 @@ test('solo middle section: snapped handles, preview, offset audio, saved subset 
     expect(manifest.status(), 'local russian-roulette manifest is required').toBe(200);
     const song = await manifest.json();
     const range = { start: song.phrases[1].start, end: song.phrases[1].end };
-    await page.getByText('SOLO SING', { exact: true }).first().click();
+    await page.getByText('LOCAL', { exact: true }).first().click();
     await page.getByRole('button').filter({ has: page.getByText(song.title, { exact: true }) }).click();
     await chooseSection(page, song);
     await page.getByRole('button', { name: 'FULL CLIP', exact: true }).click();
@@ -166,7 +166,7 @@ test('full-screen practice workspace applies precise phrase-snapped boundaries a
     const page=await player(browser,baseURL!);
     await page.goto('/');
     const song=await (await page.request.get(`/api/clips/${CLIP}/manifest`)).json();
-    await page.getByText('SOLO SING',{exact:true}).first().click();
+    await page.getByText('LOCAL',{exact:true}).first().click();
     await page.getByRole('button').filter({has:page.getByText(song.title,{exact:true})}).click();
     await page.getByRole('button',{name:'OPEN SECTION EDITOR',exact:true}).click();
     const dialog=page.getByRole('dialog',{name:'Choose a practice section'});

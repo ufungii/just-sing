@@ -38,7 +38,7 @@ for (const take of ['good', 'wrong', 'silence'] as const) {
 
     // Home (guest) -> Solo setup
     await page.goto('/');
-    await page.getByText('SOLO SING', { exact: true }).first().click();
+    await page.getByText('LOCAL', { exact: true }).first().click();
     const clips = await (await page.request.get('/api/clips')).json();
     const title = clips.find((c: any) => c.id === CLIP).title;
     await page.getByRole('button', { name: new RegExp(title.replace(/[()]/g, '.')) }).click();
