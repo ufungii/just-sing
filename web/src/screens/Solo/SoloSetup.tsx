@@ -96,7 +96,7 @@ export function SoloSetup({ initialPlayers = 1 }: { initialPlayers?: PlayerCount
     if (!clipId || !trimmed || !trimmed2) return;
     setStart({ kind: 'starting' });
     try {
-      const m = await asGuest(trimmed, () => createMatch(clipId, [trimmed, trimmed2]));
+      const m = await asGuest(trimmed, () => createMatch(clipId, [trimmed, trimmed2], range));
       nav.go({ name: 'duet', setup: { matchId: m.match_id, clipId, registers, calibrationOffset: offset } });
     } catch (e) {
       setStart({ kind: 'failed', message: e instanceof Error ? e.message : String(e) });
@@ -106,7 +106,6 @@ export function SoloSetup({ initialPlayers = 1 }: { initialPlayers?: PlayerCount
   const changeCount = (n: PlayerCount) => {
     setCount(n);
     setStart({ kind: 'idle' });
-    if (n === 2) setRange(null); // a duet always sings the whole clip
   };
 
   /** Player dropdown plus voice range for seat `i`. In 2P the two seats can't pick the same player. */
@@ -143,7 +142,7 @@ export function SoloSetup({ initialPlayers = 1 }: { initialPlayers?: PlayerCount
           <SongJacket entry={chosen} />
           <SongWheel clips={clips} selected={clipId} onSelect={(id) => { setClipId(id); setRange(null); }} onRetry={loadClips} />
         </div>
-        {clipId && count === 1 && <PracticeRangePicker clipId={clipId} range={range} onChange={setRange} disabled={start.kind === 'starting'} />}
+        {clipId && <PracticeRangePicker clipId={clipId} range={range} onChange={setRange} disabled={start.kind === 'starting'} />}
       </Panel>
 
       <div className="solo-grid solo-grid--setup">
