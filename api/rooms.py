@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 import logging
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -214,7 +214,13 @@ def create_room(body: RoomIn, guest=Depends(current_guest), s: Session = Depends
 _join_log: dict[uuid.UUID, deque] = defaultdict(deque)
 
 
-@router.post("/api/rooms/join")
+def limit_joins_per_ip(request: Request):
+    """Per network address as well as per guest, so a fresh guest cookie does not reset the limit."""
+    if play.too_many("joins", play.client_ip(request), JOINS_PER_MINUTE * 3):
+        raise ApiError(429, "too_many_joins", "Too many join attempts. Wait a minute.", True)
+
+
+@router.post("/api/rooms/join", dependencies=[Depends(limit_joins_per_ip)])
 def join_room(body: JoinIn, guest=Depends(current_guest), s: Session = Depends(get_db)):
     play.require_player_name(guest.display_name)
     now = time.monotonic()  # ponytail: in-memory limiter, fine for one worker
