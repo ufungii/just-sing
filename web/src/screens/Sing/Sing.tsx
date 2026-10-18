@@ -68,7 +68,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
   const [guide, setGuide] = useState(loadGuide);
   const [hasGuide, setHasGuide] = useState(false);
   const [lyricTally, setLyricTally] = useState<{ matched: number; graded: number } | null>(null);
-  const [lyricResults, setLyricResults] = useState<{ sent: Set<number>; done: Map<number, LyricStatus> }>(() => ({ sent: new Set(), done: new Map() }));
+  const [lyricResults, setLyricResults] = useState<Map<number, LyricStatus>>(() => new Map());
   const lyricRef = useRef<LiveLyricChecker | null>(null);
 
   const engineRef = useRef<SingEngine | null>(null);
@@ -247,11 +247,11 @@ export function Sing({ setup }: { setup: SingSetup }) {
       const checker = new LiveLyricChecker(setup.clipId, lines, engine.recorder, () => {
         const statuses = [...checker.results.values()].filter((s) => s === 'match' || s === 'unclear');
         setLyricTally({ matched: statuses.filter((s) => s === 'match').length, graded: statuses.length });
-        setLyricResults({ sent: new Set(checker.sent), done: new Map(checker.results) });
-      }, (index) => setLyricResults((r) => ({ sent: new Set(r.sent).add(index), done: r.done })));
+        setLyricResults(new Map(checker.results));
+      });
       lyricRef.current = checker;
       setLyricTally(null);
-      setLyricResults({ sent: new Set(), done: new Map() });
+      setLyricResults(new Map());
     }
     await engine.start();
     setPhase({ k: 'playing' });
@@ -276,12 +276,11 @@ export function Sing({ setup }: { setup: SingSetup }) {
   }, [rangeStart]);
 
   // ---------- render ----------
-  // Live lyric check per manifest line, keyed by Line for the lyrics panel ("checking…" once sent).
+  // Only completed lyric checks appear; pending requests stay out of the lyrics panel.
   const verdicts = useMemo<LineVerdicts>(() => {
     const out: LineVerdicts = new Map();
     if (!song) return out;
-    for (const i of lyricResults.sent) out.set(song.lines[i], lyricResults.done.get(i) ?? 'checking');
-    for (const [i, s] of lyricResults.done) out.set(song.lines[i], s);
+    for (const [i, s] of lyricResults) out.set(song.lines[i], s);
     return out;
   }, [song, lyricResults]);
 

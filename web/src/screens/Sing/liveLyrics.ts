@@ -29,8 +29,6 @@ export class LiveLyricChecker {
     private readonly recorder: TakeRecorder,
     /** Called whenever a line's status arrives (for the live chip and lyric highlights). */
     private readonly onResult: () => void = () => {},
-    /** Called when a line's audio is sent, so the lyrics can show "checking…". */
-    private readonly onSent: (index: number) => void = () => {},
   ) {
     this.pending = [...lines].sort((a, b) => a.line.end - b.line.end);
   }
@@ -41,7 +39,6 @@ export class LiveLyricChecker {
       const { index, line } = this.pending.shift()!;
       const { wav, offsetS } = this.recorder.slice(line.start - LINE_PRE_S, line.end + LINE_POST_S);
       this.sent.add(index);
-      this.onSent(index);
       this.chain = this.chain.then(() => this.send(index, wav, offsetS));
     }
   }
@@ -64,13 +61,14 @@ export class LiveLyricChecker {
   }
 
   /**
-   * After the song: send any lines not yet sent, wait for all answers (up to `timeoutMs`), and return
-   * the statuses, or null if the live check was unavailable or incomplete (then check the whole take).
+   * After the song: send any lines not yet sent and wait for the existing queue. Each HTTP request
+   * has its own timeout. A slow queue must not trigger a second whole-take upload while it is still
+   * using the shared server model. Return null on a real failure so results can use the fallback.
    */
-  async finish(timeoutMs = 15_000): Promise<Map<number, LyricStatus> | null> {
+  async finish(): Promise<Map<number, LyricStatus> | null> {
     this.poll(Number.POSITIVE_INFINITY);
-    const done = await Promise.race([this.chain.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), timeoutMs))]);
-    if (!done || this.stopped || this.failed) return null;
+    await this.chain;
+    if (this.stopped || this.failed) return null;
     return new Map(this.results);
   }
 }

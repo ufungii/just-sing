@@ -8,14 +8,13 @@
 import type { CSSProperties } from 'react';
 import type { Line, LyricStatus, Word } from '../../lib/types';
 
-/** Line verdicts from the live lyric check, keyed by the Line object; 'checking' while the server works on it. */
-export type LineVerdicts = Map<Line, LyricStatus | 'checking'>;
+/** Completed line verdicts from the live lyric check, keyed by the Line object. */
+export type LineVerdicts = Map<Line, LyricStatus>;
 
-const VERDICT_TAG: Partial<Record<LyricStatus | 'checking', string>> = {
+const VERDICT_TAG: Partial<Record<LyricStatus, string>> = {
   match: 'LYRICS ✓',
   unclear: 'words?',
   not_sung: 'not sung',
-  checking: 'checking…',
 };
 
 /** The most recent line that has finished by time t, or -1. */

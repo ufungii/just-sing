@@ -114,7 +114,15 @@ function summariseLyrics(lyrics: LyricState, song: Song | null, register: SingRe
 function LyricSummary({ lyrics }: { lyrics: LyricState }) {
   if (lyrics.state === 'none') return null;
   if (lyrics.state === 'loading') return <p className="results-lyrics" aria-live="polite">checking your lyrics against the original singer… (・_・;)</p>;
-  if (lyrics.state === 'offline') return <p className="results-lyrics">lyric check is offline right now ♪ your scores are all here, though!</p>;
+  if (lyrics.state === 'offline') {
+    const message = {
+      unavailable: 'Lyric checking is unavailable for this song right now.',
+      busy: 'The lyric checker is busy. This take could not be checked.',
+      network: 'Could not reach the lyric checker. This take could not be checked.',
+      failed: 'The lyric check failed. This take could not be checked.',
+    }[lyrics.reason];
+    return <p className="results-lyrics">{message} Your pitch and timing scores are ready.</p>;
+  }
   const graded = [...lyrics.lines.values()].filter((s) => s === 'match' || s === 'unclear');
   const matched = graded.filter((s) => s === 'match').length;
   return (
