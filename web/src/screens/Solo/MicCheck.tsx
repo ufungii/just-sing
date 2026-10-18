@@ -49,6 +49,7 @@ export function MicCheck({ onPassedChange, onStreamReady }: {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [recordingPreview, setRecordingPreview] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(3);
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
   const stopRef = useRef<() => void>(() => {});
 
@@ -60,7 +61,7 @@ export function MicCheck({ onPassedChange, onStreamReady }: {
   async function start(recordPreview = false) {
     stopRef.current();
     setLevel(0);
-    setClipping(false); setPreviewError(null); setPreviewUrl(null);
+    setClipping(false); setPreviewError(null); setPreviewUrl(null); setSecondsLeft(3);
     if (recordPreview && typeof MediaRecorder === 'undefined') {
       setPreviewError('Recording playback is unavailable in this browser. You can still use TEST MIC.');
       return;
@@ -156,6 +157,7 @@ export function MicCheck({ onPassedChange, onStreamReady }: {
     };
     setStatus({ kind: 'listening' });
     const tick = (now: number) => {
+      if (recordPreview) setSecondsLeft(Math.max(0, Math.ceil(3 - (now - started) / 1000)));
       analyser.getFloatTimeDomainData(buf);
       let sum = 0;
       let peak = 0;
@@ -209,10 +211,26 @@ export function MicCheck({ onPassedChange, onStreamReady }: {
       <MicInputControl />
       <p className="solo-hint">Raise MIC INPUT for a quiet microphone. Lower it if your voice sounds distorted.</p>
       {clipping && <Notice tone="warn">Microphone is too loud. Lower MIC INPUT to avoid distortion.</Notice>}
-      <PixelButton tone="paper" size="sm" onClick={() => void start(true)} disabled={busy}>RECORD 3-SECOND TEST</PixelButton>
-      {recordingPreview && <p className="solo-hint">Recording 3 seconds… sing a short line, then play it back below.</p>}
-      {previewUrl && <audio controls style={{ maxWidth: '100%' }} src={previewUrl} aria-label="Microphone test recording" />}
-      <p className="solo-hint">Test recordings stay on this device. Use headphones for playback.</p>
+      <section className={`mic-preview${recordingPreview ? ' mic-preview--recording' : ''}`} aria-label="Microphone recording test">
+        <div className="mic-preview__heading">
+          <span>HEAR YOUR MIC</span>
+          <span className="mic-preview__badge">3 SEC</span>
+        </div>
+        <div className="mic-preview__actions">
+          <PixelButton tone="hot" className="mic-preview__record" aria-label="RECORD 3-SECOND TEST" onClick={() => void start(true)} disabled={busy}>
+            <span className="mic-preview__dot" aria-hidden="true" />
+            {recordingPreview ? 'RECORDING…' : previewUrl ? 'RECORD AGAIN' : 'RECORD TEST'}
+          </PixelButton>
+          <div className="mic-preview__countdown" aria-hidden="true">
+            {[3, 2, 1].map((second) => <span key={second} className={recordingPreview && secondsLeft === second ? 'is-active' : ''}>{second}</span>)}
+          </div>
+        </div>
+        <p className="mic-preview__hint" role="status">
+          {recordingPreview ? `Recording · ${secondsLeft} seconds left. Sing a short line!` : previewUrl ? 'Ready! Play it back and check your volume.' : 'Sing a short line, then listen to your mic level.'}
+        </p>
+        {previewUrl && <audio className="mic-preview__audio" controls src={previewUrl} aria-label="Microphone test recording" />}
+        <p className="mic-preview__privacy">Headphones on · saved only on this device</p>
+      </section>
       {previewError && <Notice tone="warn">{previewError}</Notice>}
       <MicMessage status={status} />
     </div>
