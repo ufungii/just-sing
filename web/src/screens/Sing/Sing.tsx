@@ -12,7 +12,7 @@ import { COUNT_IN, SingEngine } from '../../audio/engine';
 import { MicError, openMic, stopStream } from '../../audio/sources';
 import { ApiError, beginTurn, getManifest, submitResult } from '../../lib/api';
 import { sendLive } from '../../lib/rooms';
-import type { PhraseScore, Register, Song } from '../../lib/types';
+import type { PhraseScore, Song } from '../../lib/types';
 import { useNav, type SingSetup } from '../../routes';
 import { aggregate, buildTargetTrack, displayNotes, phraseSettlesAt, phraseTotal, phraseWeights, registerRatio, scorePhrase, SCORING_CONFIG } from '../../scoring';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
@@ -35,7 +35,6 @@ type Phase =
   | { k: 'playing' }
   | { k: 'saving' };
 
-const REGISTER_LABEL: Record<Register, string> = { [-12]: '-1 OCTAVE', 0: 'ORIGINAL', 12: '+1 OCTAVE' };
 const NO_FRAMES: (number | null)[] = [];
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -310,7 +309,6 @@ export function Sing({ setup }: { setup: SingSetup }) {
       subtitle={song && <>{setup.battle && <>P{setup.battle.turn + 1} {setup.playerName.toUpperCase()} · </>}{song.title} <span>· {song.artist}</span></>}
       right={
         <div className="sing-hud">
-          <span className="sing-chip">{REGISTER_LABEL[setup.register]}</span>
           {lyricTally && lyricTally.graded > 0 && (
             <span className="sing-chip sing-chip--lyrics" title="Lines whose words sounded like the original singer (checked as you sing)">
               LYRICS {lyricTally.matched}/{lyricTally.graded}
