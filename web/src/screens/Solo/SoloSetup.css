@@ -291,6 +291,7 @@
 }
 
 /* ---------- online room list ---------- */
+.room-visibility > .ui-seg { margin-bottom: 18px; }
 .room-search { margin: 18px 0 14px; }
 .room-row { margin: 12px 0; }
 .room-row__main { display: flex; align-items: center; gap: 20px; }

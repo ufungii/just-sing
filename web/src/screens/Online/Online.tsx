@@ -96,7 +96,7 @@ function Entry({ notice }: { notice?: string }) {
       <ScreenShell title="CREATE ROOM" kao="(＾▽＾)ﾉ" onBack={() => setStep('menu')} backLabel="BACK">
         <div className="solo-side">
           {picker}
-          <Panel tone="pink" label="WHO CAN JOIN?">
+          <Panel tone="pink" label="WHO CAN JOIN?" className="room-visibility">
             <Segmented label="Room visibility" options={VISIBILITY} value={visibility} onChange={setVisibility} />
             {visibility === 'private' ? (
               <div className="solo-field">
