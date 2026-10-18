@@ -16,6 +16,7 @@ import type { PhraseScore, Song } from '../../lib/types';
 import { useNav, type SingSetup } from '../../routes';
 import { aggregate, buildTargetTrack, displayNotes, phraseSettlesAt, phraseTotal, phraseWeights, registerRatio, scorePhrase, SCORING_CONFIG } from '../../scoring';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
+import { MicInputControl } from '../../ui/MicInputControl';
 import { GuideControl } from '../../ui/GuideControl';
 import { ScoreBars } from './ScoreBars';
 import { Countdown, Judgement } from './Judgement';
@@ -369,6 +370,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
               ENGLISH
             </PixelButton>
           </div>
+          <MicInputControl />
           {hasGuide && (
             <GuideControl on={guide.on} volume={guide.vol} onToggle={() => setGuide((g) => ({ ...g, on: !g.on }))} onVolume={(vol) => setGuide({ on: true, vol })} />
           )}

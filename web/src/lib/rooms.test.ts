@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 vi.mock('./api', () => ({ bearerToken: vi.fn(async () => null), request: vi.fn() }));
-import { connectRoom, leaveRoom, pushSnapshot, roomLive, sendVoice, subscribeVoice, type RoomSnapshot } from './rooms';
+import { connectRoom, leaveRoom, pushSnapshot, roomLive, sendVoice, subscribeVoice, subscribeDuetProgress, type RoomSnapshot } from './rooms';
 
 afterEach(() => { leaveRoom(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -67,4 +67,27 @@ it('ignores delayed callbacks and HTTP snapshots from a room we left without can
   leaveRoom();
   pushSnapshot(current);
   expect(roomLive().snapshot).toBeNull();
+});
+
+it('routes live duet scores and pitch only for the current match and server-owned seat', async () => {
+  let socket: any;
+  class Socket {
+    readyState = 1; onmessage = (_: any) => {}; close() {};
+    constructor() { socket = this; }
+  }
+  vi.stubGlobal('WebSocket', Socket);
+  vi.stubGlobal('location', { protocol: 'http:', host: 'localhost' });
+  connectRoom('room'); await Promise.resolve();
+  pushSnapshot({ id: 'room', state_version: 1, match: { id: 'current' } } as RoomSnapshot);
+  const receive = vi.fn(); const unsubscribe = subscribeDuetProgress(receive);
+  const data = { match_id: 'current', t: 2, running: 0, pitch: { start: 90, hz: [220, null] } };
+  const emit = (slot: number, value: any) => socket.onmessage({ data: JSON.stringify({ type: 'turn_progress', slot, data: value }) });
+  emit(1, data);
+  expect(receive).toHaveBeenCalledExactlyOnceWith(1, data);
+  emit(1, { ...data, match_id: 'old' }); emit(99, data);
+  emit(1, { ...data, pitch: { start: -1, hz: [220] } });
+  expect(receive).toHaveBeenCalledTimes(1);
+  expect(roomLive().progress).toBeNull();
+  unsubscribe(); emit(1, data);
+  expect(receive).toHaveBeenCalledTimes(1);
 });

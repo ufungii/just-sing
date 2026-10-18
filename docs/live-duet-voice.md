@@ -2,11 +2,23 @@
 
 Online rooms support open voice chat in the lobby after each player passes the mic check. Before passing, the voice button says **MY VOICE MUTED** and is disabled; microphone testing itself is never sent to the other player. Wear wired headphones: echo cancellation is disabled, so speakers cause echo. **Mute my mic to opponent** is available in the lobby and during the song. Muting sharing leaves local pitch scoring active. **Other singer volume** changes only the received voice during the song.
 
-The room owns the successful mic check's microphone stream and AudioContext. It transfers capture only after the check passes, then opens the lobby send and receive gates. Starting the song closes both gates synchronously on the playing room snapshot. Duet scoring uses a cloned track from that same capture and the same AudioContext, without requesting the microphone again; a connected lobby peer is retained. Its outgoing gain opens only for its own authored sections, scheduled against the instrumental's AudioContext clock. A separate mute gain can silence it immediately. The receiver also gates listening to the opposite singer's sections, including practice ranges. Count-in, gaps between sections and post-song audio remain silent. Remote audio never enters scoring. Duets collect pitch tracks but do not record microphone takes or the incoming voice.
+The room owns the successful mic check's microphone stream and AudioContext. It transfers capture only after the check passes, then opens the lobby send and receive gates. Starting the song closes both gates synchronously on the playing room snapshot. Duet scoring uses a cloned track from that same capture and the same AudioContext, without requesting the microphone again; a connected lobby peer is retained. Its outgoing gain opens only for its own authored sections, scheduled against the instrumental's AudioContext clock. A separate mute gain can silence it immediately. The receiver also gates listening to the opposite singer's sections, including practice ranges. Count-in, gaps between sections and post-song audio remain silent. Remote audio never enters scoring. Each singer can capture their own take for the lyric check; the incoming voice never enters that recording.
 
 A muted media element keeps Chromium's remote decoder pulling audio; all audible output still passes through WebAudio's receive gate and volume control. This works around the browser's [silent remote-stream issue](https://issues.chromium.org/issues/40094084). It is paused and detached whenever the peer is replaced or closed.
 
 The online mix uses a shared compressor for instrumental, guide and received voice to reduce clipping. Solo and local duet playback retain their existing output route.
+
+## Microphone level and playback check
+
+**MIC INPUT** is a manual 25–400% input slider, remembered on the current browser. It applies the same gain once to microphone testing, pitch/lyric capture, and outgoing voice. It does not change the instrumental or the other singer's listening volume. Automatic gain control remains disabled. Raise it for a quiet mic; lower it if the check reports clipping or playback sounds distorted. It is available in setup and during singing.
+
+**RECORD 3-SECOND TEST** in the mic check records a short sample at the selected gain. The audio controls let the player hear it before starting. The sample stays in browser memory and is released on retest or leaving the screen. A recording failure releases capture and allows another test. Wear headphones during playback.
+
+## Live pitch and score display
+
+Online duet clients send bounded batches of already-tracked pitch frames and their provisional running score over the existing room WebSocket, at most ten updates per second. Batches carry the match ID and original clip-frame indices; they are not shifted to packet arrival time or estimated from received audio. Both screens draw each section using its singer's selected register and microphone frames. A client never substitutes its own microphone for the opposite seat's trace. Incoming data only updates the display; saved results still use each singer's local assigned-phrase scoring.
+
+The score bars update after scored phrases, including a valid zero score. Messages from another match, malformed/oversized batches, and writes outside the sender's sections are ignored by the display. Disconnects leave missing pitch history; later updates resume on the same timeline without restarting the song. This uses the existing room progress relay and needs no migration or speech model.
 
 ## Transport and recovery
 
