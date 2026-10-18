@@ -59,7 +59,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
   const [judge, setJudge] = useState<PhraseScore | null>(null);
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
   const [showRoman, setShowRoman] = useState(true);
-  const [showTrans, setShowTrans] = useState(true);
+  const [showTrans, setShowTrans] = useState(false);
   const laneHeight = useLaneHeight();
   const [guide, setGuide] = useState(loadGuide);
   const [hasGuide, setHasGuide] = useState(false);
@@ -328,10 +328,10 @@ export function Sing({ setup }: { setup: SingSetup }) {
       <Panel className="sing-lyrics-panel">
         <div className="sing-lyrics-head">
           <div className="ui-seg" role="group" aria-label="Lyric helpers">
-            <PixelButton size="sm" tone="paper" aria-pressed={showRoman} onClick={() => setShowRoman((v) => !v)}>
+            <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showRoman} onClick={() => setShowRoman((v) => !v)}>
               ROMANIZATION
             </PixelButton>
-            <PixelButton size="sm" tone="paper" aria-pressed={showTrans} onClick={() => setShowTrans((v) => !v)}>
+            <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showTrans} onClick={() => setShowTrans((v) => !v)}>
               ENGLISH
             </PixelButton>
           </div>
@@ -345,7 +345,8 @@ export function Sing({ setup }: { setup: SingSetup }) {
             </span>
           </div>
         </div>
-        {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman={showRoman} showTrans={showTrans} />}
+        {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman={showRoman} showTrans={showTrans}
+          singerAt={setup.battle?.turn === 1 ? () => 1 : undefined} />}
       </Panel>
     </ScreenShell>
   );

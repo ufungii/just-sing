@@ -30,6 +30,9 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
 }) {
   const nav = useNav();
   const [song, setSong] = useState<Song | null>(null);
+  // Lyric helpers, same defaults as solo: romanization on, English off.
+  const [showRoman, setShowRoman] = useState(true);
+  const [showTrans, setShowTrans] = useState(false);
   const [match, setMatch] = useState<MatchView | null>(null);
   const [phase, setPhase] = useState<Phase>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -283,6 +286,10 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
       {phase === 'error' && <PixelButton onClick={() => void restart()}>{setup.online ? 'STOP DUET FOR RESTART' : 'RESTART TOGETHER'}</PixelButton>}
       <Panel>
         <div className="duet-audio-controls">
+        <div className="ui-seg" role="group" aria-label="Lyric helpers">
+          <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showRoman} onClick={() => setShowRoman((v) => !v)}>ROMANIZATION</PixelButton>
+          <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showTrans} onClick={() => setShowTrans((v) => !v)}>ENGLISH</PixelButton>
+        </div>
         {engine.current?.vocals && <GuideControl on={guide} volume={guideVolume} onToggle={() => setGuide((v) => !v)} onVolume={setGuideVolume} />}
         {setup.online &&
           <div className="ui-guide" title="Hear the other singer live during their sections. Headphones required.">
@@ -307,7 +314,8 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
             {voiceStatus.bufferMs !== undefined && ` Receive buffer ${Math.round(voiceStatus.bufferMs)} ms (not total voice delay).`}
           </p>
         </>}
-        {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman showTrans />}
+        {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman={showRoman} showTrans={showTrans}
+          singerAt={(time) => sections[sectionAt(sections, time)]?.slot ?? 0} />}
       </Panel>
     </ScreenShell>
   );
