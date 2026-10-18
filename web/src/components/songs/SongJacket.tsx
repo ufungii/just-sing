@@ -1,4 +1,6 @@
-import { formatDuration } from './setlist';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
+import { coverUrl, formatDuration } from './setlist';
 import type { SongEntry } from './setlist';
 import './songs.css';
 
@@ -46,8 +48,18 @@ export function PixelHeartFace({ size }: { size: number }) {
 }
 
 /**
- * The big "album jacket" for the chosen song: drawn pixel art (never real album covers), a disc
- * peeking out behind it, a slow sunburst, and the title in the layered pixel display font.
+ * Album cover for a prepared song, or `fallback` when there is none. Covers are local-only files
+ * (web/public/covers/<clip id>.png, gitignored), so a fresh clone shows the drawn pixel art instead.
+ */
+export function SongCover({ clipId, className, fallback }: { clipId: string | null; className: string; fallback: ReactNode }) {
+  const [missing, setMissing] = useState<string | null>(null);
+  if (!clipId || missing === clipId) return <>{fallback}</>;
+  return <img className={className} src={coverUrl(clipId)} alt="" draggable={false} onError={() => setMissing(clipId)} />;
+}
+
+/**
+ * The big "album jacket" for the chosen song: its cover (or drawn pixel art when there is none),
+ * a disc peeking out behind it, a slow sunburst, and the title in the layered pixel display font.
  */
 export function SongJacket({ entry }: { entry: SongEntry | null }) {
   const tone = entry && entry.kind !== 'soon' ? entry.tone : 'pink';
@@ -57,8 +69,12 @@ export function SongJacket({ entry }: { entry: SongEntry | null }) {
         <div className="song-jacket__rays" />
         <div className="song-jacket__disc" />
         <div className="song-jacket__art">
-          <PixelHeartFace size={132} />
-          <span className="song-jacket__art-label">{entry ? 'NOW PLAYING' : 'PICK A SONG'}</span>
+          <SongCover
+            clipId={entry?.clip?.id ?? null}
+            className="song-jacket__cover"
+            fallback={<PixelHeartFace size={132} />}
+          />
+          <span className="song-jacket__art-label">{entry ? 'NOW PLAYING ♪' : 'PICK A SONG'}</span>
         </div>
       </div>
 

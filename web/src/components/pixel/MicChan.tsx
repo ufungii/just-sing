@@ -7,9 +7,9 @@ const LINES = ['sing w/ me! ♡', '(,,>﹏<,,) eek!', 'la la la~ ♪', 'ヾ(≧�
 /** Mic-chan: the pink mic mascot with a bow and headphones. Hops with squash-and-stretch; poke her to talk. */
 export function MicChan({ className }: { className?: string }) {
   return (
-    <MascotButton label="Poke Mic-chan" lines={LINES} className={className} marginBottom={4}>
-      <svg className="px-svg px-hop" viewBox="0 0 120 160" width="120" height="160" aria-hidden="true">
-        <g transform="scale(10)">
+    <MascotButton label="Poke Mic-chan" lines={LINES} className={className}>
+      <svg className="px-svg px-hop" viewBox="0 0 108 144" width="108" height="144" aria-hidden="true">
+        <g transform="scale(9)">
           {/* bow */}
           <Px d="M4 0h1v1h-1z M7 0h1v1h-1z M3 1h3v1h-3z M6 1h3v1h-3z M4 2h4v1h-4z" fill="var(--hot)" />
           {/* head outline */}
@@ -27,7 +27,7 @@ export function MicChan({ className }: { className?: string }) {
         </g>
       </svg>
       {/* shadow shrinks while she is mid-air */}
-      <span className="px-ground-shadow px-hop-shadow" aria-hidden="true" style={{ width: 84, height: 10, margin: '0 auto', opacity: 0.25 }} />
+      <span className="px-ground-shadow px-hop-shadow" aria-hidden="true" style={{ width: 80, height: 10, margin: '0 auto', opacity: 0.25 }} />
     </MascotButton>
   );
 }

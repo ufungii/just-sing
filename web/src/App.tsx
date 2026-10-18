@@ -9,7 +9,6 @@ import { Sing } from './screens/Sing/Sing';
 import { Results } from './screens/Results/Results';
 import { Practice } from './screens/Practice/Practice';
 import { History } from './screens/History/History';
-import { BattleSetup } from './screens/Battle/BattleSetup';
 import { Online } from './screens/Online/Online';
 import { BattleTurn } from './screens/Battle/BattleTurn';
 import { Duet } from './screens/Duet/Duet';
@@ -86,7 +85,7 @@ function renderRoute(route: Route, go: (r: Route) => void) {
     case 'home':
       return <Home onNavigate={(screen) => go({ name: screen })} />;
     case 'solo':
-      return <SoloSetup />;
+      return <SoloSetup key="1p" />;
     case 'sing':
       // key: a new run (rematch, new song) always starts a fresh singing screen
       return <Sing key={route.setup.runId} setup={route.setup} />;
@@ -97,7 +96,8 @@ function renderRoute(route: Route, go: (r: Route) => void) {
     case 'history':
       return <History />;
     case 'battle':
-      return <BattleSetup />;
+      // 1P vs 2P lives on the local setup screen; this route opens it in two-player mode.
+      return <SoloSetup key="2p" initialPlayers={2} />;
     case 'duet':
       return <Duet key={route.setup.matchId} setup={route.setup} onLeave={() => go({ name: 'home' })} />;
     case 'online':

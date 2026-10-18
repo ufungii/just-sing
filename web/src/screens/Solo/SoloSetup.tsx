@@ -24,21 +24,31 @@ export const REGISTERS: { value: Register; label: string }[] = [
   { value: -12, label: 'LOW' },
 ];
 
-type Start = { kind: 'idle' } | { kind: 'starting' } | { kind: 'unsaved'; message: string };
+type Start = { kind: 'idle' } | { kind: 'starting' } | { kind: 'unsaved'; message: string } | { kind: 'failed'; message: string };
+
+export type PlayerCount = 1 | 2;
+const PLAYER_COUNTS: { value: PlayerCount; label: string }[] = [
+  { value: 1, label: '1 PLAYER' },
+  { value: 2, label: '2 PLAYERS' },
+];
 
 /**
- * Solo setup: pick a clip, a name and a voice range, check the mic, optionally measure the
- * device's timing offset, then create a server match and hand everything to the singing screen.
- * If the match can't be created the player can still sing; the score just isn't saved.
+ * Local setup, for one or two singers on this laptop: pick a clip, the player(s) and voice
+ * range(s), check the mic, optionally measure the device's timing offset, then create a server
+ * match. One player goes to the singing screen; if the match can't be created they can still sing,
+ * unsaved. Two players take turns in a duet, which needs the server to decide the winner, so there
+ * is no "sing anyway" path for them.
  */
-export function SoloSetup() {
+export function SoloSetup({ initialPlayers = 1 }: { initialPlayers?: PlayerCount }) {
   const nav = useNav();
+  const [count, setCount] = useState<PlayerCount>(initialPlayers);
   const [clipId, setClipId] = useState<string | null>(null);
   const [range, setRange] = useState<TimeRange | null>(null);
   const { lastId } = usePlayers();
-  const [playerId, setPlayerId] = useState<string | null>(lastId);
-  const player = getPlayer(playerId);
-  const [register, setRegister] = useState<Register>(0);
+  const [ids, setIds] = useState<[string | null, string | null]>([lastId, null]);
+  const [registers, setRegisters] = useState<[Register, Register]>([0, 0]);
+  const player = getPlayer(ids[0]);
+  const player2 = getPlayer(ids[1]);
   const [micOk, setMicOk] = useState(false);
   const [offset, setOffset] = useState<number | null>(loadCalibration);
   const [start, setStart] = useState<Start>({ kind: 'idle' });
@@ -53,7 +63,9 @@ export function SoloSetup() {
   const chosen = entries.find((e) => e.clip?.id === clipId) ?? null;
 
   const trimmed = player?.name ?? '';
-  const missing = [!clipId && 'a song', !player && 'a player', !micOk && 'a mic check'].filter(Boolean) as string[];
+  const trimmed2 = player2?.name ?? '';
+  const playersMissing = count === 1 ? !player && 'a player' : (!player || !player2) && 'two players';
+  const missing = [!clipId && 'a song', playersMissing, !micOk && 'a mic check'].filter(Boolean) as string[];
   const ready = missing.length === 0 && start.kind !== 'starting';
 
   function sing(match: SingSetup['match']) {
@@ -61,11 +73,12 @@ export function SoloSetup() {
     if (!clipId) return;
     nav.go({
       name: 'sing',
-      setup: { runId: crypto.randomUUID(), clipId, range, register, calibrationOffset: offset, playerName: trimmed, match },
+      setup: { runId: crypto.randomUUID(), clipId, range, register: registers[0], calibrationOffset: offset, playerName: trimmed, match },
     });
   }
 
   async function onStart() {
+    if (count === 2) return onStartDuet();
     if (nameEasterEgg(nav, trimmed)) return;
     if (!clipId || !trimmed) return;
     setStart({ kind: 'starting' });
@@ -77,14 +90,54 @@ export function SoloSetup() {
     }
   }
 
+  async function onStartDuet() {
+    if (nameEasterEgg(nav, trimmed, trimmed2)) return;
+    if (!clipId || !trimmed || !trimmed2) return;
+    setStart({ kind: 'starting' });
+    try {
+      const m = await asGuest(trimmed, () => createMatch(clipId, [trimmed, trimmed2]));
+      nav.go({ name: 'duet', setup: { matchId: m.match_id, clipId, registers, calibrationOffset: offset } });
+    } catch (e) {
+      setStart({ kind: 'failed', message: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  const changeCount = (n: PlayerCount) => {
+    setCount(n);
+    setStart({ kind: 'idle' });
+    if (n === 2) setRange(null); // a duet always sings the whole clip
+  };
+
+  /** Player dropdown plus voice range for seat `i`. In 2P the two seats can't pick the same player. */
+  const seat = (i: 0 | 1) => (
+    <div className="solo-field">
+      <PlayerPicker
+        label={count === 1 ? 'PLAYER' : `PLAYER ${i + 1}`}
+        value={ids[i]}
+        disabledId={count === 2 ? ids[i ? 0 : 1] : undefined}
+        onChange={(id) => setIds((v) => (i ? [v[0], id] : [id, v[1]]))}
+      />
+      <span className="solo-field__label">VOICE RANGE</span>
+      <Segmented
+        label={count === 1 ? 'Voice range' : `Player ${i + 1} voice range`}
+        options={REGISTERS}
+        value={registers[i]}
+        onChange={(r) => setRegisters((v) => (i ? [v[0], r] : [r, v[1]]))}
+      />
+    </div>
+  );
+
   return (
-    <ScreenShell title="SOLO SING" kao="(ﾉ≧▽≦)ﾉ">
-      <div className="solo-ribbon">
+    <ScreenShell title="LOCAL" kao={count === 1 ? '(ﾉ≧▽≦)ﾉ' : '(｀∀´)ﾉ☆ヽ(＾▽＾)'}>
+      <div className="solo-top">
+        <div className="solo-ribbon">
         <span className="solo-ribbon__stage">STAGE 01</span>
         <span className="solo-ribbon__title">SELECT MUSIC</span>
         <span lang="ko" className="solo-ribbon__ko">
           <span className="song-kao" aria-hidden="true">♪</span> 곡을 골라요! <span className="song-kao" aria-hidden="true">♪</span>
         </span>
+        </div>
+        <Segmented label="Number of players" options={PLAYER_COUNTS} value={count} onChange={changeCount} />
       </div>
 
       <Panel tone="pink" label="1 · PICK A SONG" className="solo-stage">
@@ -92,18 +145,19 @@ export function SoloSetup() {
           <SongJacket entry={chosen} />
           <SongWheel clips={clips} selected={clipId} onSelect={(id) => { setClipId(id); setRange(null); }} onRetry={loadClips} />
         </div>
-        {clipId && <PracticeRangePicker clipId={clipId} range={range} onChange={setRange} disabled={start.kind === 'starting'} />}
+        {clipId && count === 1 && <PracticeRangePicker clipId={clipId} range={range} onChange={setRange} disabled={start.kind === 'starting'} />}
       </Panel>
 
       <div className="solo-grid solo-grid--setup">
         <div className="solo-side">
           <Panel label="2 · WHO'S SINGING" className="solo-you">
-            <PlayerPicker label="PLAYER" value={playerId} onChange={setPlayerId} />
-            <div className="solo-field">
-              <span className="solo-field__label">VOICE RANGE</span>
-              <Segmented label="Voice range" options={REGISTERS} value={register} onChange={setRegister} />
-              <p className="solo-hint">Moves the target notes an octave up or down; the music stays in key.</p>
-            </div>
+            {seat(0)}
+            {count === 2 && seat(1)}
+            <p className="solo-hint">
+              {count === 1
+                ? 'Voice range moves the target notes an octave up or down; the music stays in key.'
+                : 'One song, one shared mic. Follow the singer cue: your sections switch automatically without stopping the music.'}
+            </p>
           </Panel>
 
           <Panel tone="sky" label="3 · MIC CHECK">
@@ -133,17 +187,21 @@ export function SoloSetup() {
             >
               Couldn’t reach the score server ({start.message.replace(/\.$/, '')}). You can still sing, but this score won’t be saved.
             </Notice>
+          ) : start.kind === 'failed' ? (
+            <Notice tone="error">Couldn’t start the duet: {start.message.replace(/\.$/, '')}. Two players need the score server.</Notice>
           ) : (
             <p className="solo-go__status" aria-live="polite">
               {start.kind === 'starting'
                 ? 'Warming up the stage…'
                 : missing.length
                   ? `Still need ${missing.join(', ')}.`
-                  : 'All set! Put your headphones on.'}
+                  : count === 1
+                    ? 'All set! Put your headphones on.'
+                    : 'All set! Both players, get ready.'}
             </p>
           )}
           <PixelButton tone="hot" size="lg" className="solo-start" disabled={!ready} onClick={onStart}>
-            {start.kind === 'starting' ? 'STARTING…' : 'START ♪'}
+            {start.kind === 'starting' ? 'STARTING…' : count === 1 ? 'START ♪' : 'FIGHT ♪'}
           </PixelButton>
         </div>
       </div>
@@ -151,7 +209,7 @@ export function SoloSetup() {
   );
 }
 
-/** Loads the clip catalog (shared with battle setup). */
+/** Loads the clip catalog (shared with the online lobby). */
 export function useClips() {
   const [clips, setClips] = useState<Clips>({ kind: 'loading' });
   const loadClips = useCallback(() => {
@@ -166,5 +224,5 @@ export function useClips() {
   return { clips, loadClips };
 }
 
-/** The song picker used by battle setup and the online lobby: the same wheel, without the jacket. */
+/** The song picker used by the online lobby: the same wheel, without the jacket. */
 export const ClipList = SongWheel;

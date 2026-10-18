@@ -21,6 +21,8 @@ for (const take of ['good', 'wrong', 'silence'] as const) {
       args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', `--use-file-for-fake-audio-capture=${wav}`, '--autoplay-policy=no-user-gesture-required'],
     });
     const page = await (await browser.newContext({ baseURL })).newPage();
+    // The synthetic clip is hidden from the song wheel unless this flag is set.
+    await page.addInitScript(() => localStorage.setItem('just-sing.showTestClips', '1'));
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     if (process.env.E2E_DEBUG) page.on('console', (m) => console.log('[page]', m.type(), m.text()));
@@ -38,7 +40,7 @@ for (const take of ['good', 'wrong', 'silence'] as const) {
 
     // Home (guest) -> Solo setup
     await page.goto('/');
-    await page.getByText('SOLO SING', { exact: true }).first().click();
+    await page.getByText('LOCAL', { exact: true }).first().click();
     const clips = await (await page.request.get('/api/clips')).json();
     const title = clips.find((c: any) => c.id === CLIP).title;
     await page.getByRole('button', { name: new RegExp(title.replace(/[()]/g, '.')) }).click();
