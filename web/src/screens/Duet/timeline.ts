@@ -10,3 +10,6 @@ export function sectionAt(sections: TimedDuetSection[], time: number): number {
   return index;
 }
 export const assignedIds = (sections: TimedDuetSection[], slot: number) => new Set(sections.filter((s) => s.slot === slot).flatMap((s) => s.phrase_ids));
+
+/** Seconds until a switch for display: whole seconds (rounded up), then tenths once under 3 s. */
+export const countdownLabel = (seconds: number) => (seconds <= 0 ? '0' : seconds < 3 ? seconds.toFixed(1) : String(Math.ceil(seconds)));

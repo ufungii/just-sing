@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { assignedIds, bestClock, sectionAt, serverNow } from './timeline';
+import { assignedIds, bestClock, countdownLabel, sectionAt, serverNow } from './timeline';
 const sections = [
   { id: 'a', slot: 1 as const, start: 1, end: 4, phrase_ids: ['p1'] },
   { id: 'b', slot: 1 as const, start: 5, end: 8, phrase_ids: ['p2'] },
@@ -20,4 +20,7 @@ it('estimates server time from the fastest round trip independent of client wall
   expect(serverNow(chosen, 3010)).toBe(5003);
   const otherBrowser = { sent: 100_000, received: 100_020, serverTime: 5001 };
   expect(serverNow(otherBrowser, 102_010)).toBe(5003);
+});
+it('counts down in whole seconds, then tenths under 3 seconds', () => {
+  expect([8.2, 3.4, 3, 2.96, 1.04, 0.2, 0, -1].map(countdownLabel)).toEqual(['9', '4', '3', '3.0', '1.0', '0.2', '0', '0']);
 });

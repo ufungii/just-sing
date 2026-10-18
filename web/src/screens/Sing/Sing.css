@@ -271,13 +271,13 @@
 .duet-pill {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
+  gap: 6px;
+  padding: 4px 10px;
   border: var(--border) solid var(--ink);
-  box-shadow: 4px 5px 0 var(--ink);
+  box-shadow: 3px 4px 0 var(--ink);
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 22px;
+  font-size: 15px;
   color: var(--ink);
   white-space: nowrap;
   animation: cue-pulse 0.8s steps(4) infinite alternate;
@@ -285,11 +285,11 @@
 .duet-pill--p1 { background: var(--pink); --cue: var(--hot); }
 .duet-pill--p2 { background: var(--sky); --cue: var(--p2-sung); }
 .duet-pill b {
-  min-width: 34px;
-  padding: 2px 8px;
+  min-width: 30px;
+  padding: 0 6px;
   text-align: center;
   background: var(--paper);
-  border: 3px solid var(--ink);
+  border: 2px solid var(--ink);
 }
 @keyframes cue-pulse {
   from { transform: scale(1); }
