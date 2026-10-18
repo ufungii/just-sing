@@ -220,6 +220,15 @@
     grid-template-areas: 'songs' 'side' 'go';
   }
 }
+/* Online lobby: everything in one column, the song on top and players, voice range and mic check below it.
+   After the media queries above so it wins at every width. */
+.solo-grid.solo-grid--stack {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: none;
+  grid-template-areas: 'songs' 'side' 'go';
+}
+.solo-grid--stack > .solo-stage { grid-area: songs; }
+
 /* Two seats in 2P: a dashed divider between player 1 and player 2. */
 .solo-you .solo-field + .solo-field {
   margin-top: 16px;

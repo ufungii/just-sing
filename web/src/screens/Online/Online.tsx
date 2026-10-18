@@ -301,7 +301,7 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
     return (
       <ScreenShell title="ROOM" kao="(＾▽＾)ﾉ" onBack={leave} backLabel="LEAVE">
         {notices}
-        <div className="solo-grid">
+        <div className="solo-grid solo-grid--stack">
           <Panel tone="pink" label={isHost ? 'PICK A SONG' : 'SONG (THE HOST PICKS)'} className="solo-stage">
             <div className="solo-stage__row">
               <SongJacket entry={entries.find((e) => e.clip?.id === snap.clip_id) ?? null} />
