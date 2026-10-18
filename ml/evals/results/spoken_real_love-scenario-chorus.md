@@ -11,6 +11,6 @@
 | One word swapped: median score drop of that word | 76 points |
 
 Word scores against the right text: 82, 100, 100, 100, 94, 100, 73, 52, 66, 79, 0, 98, 67, 71, 0, 100.
-Correct words scoring under 20 (would be highlighted falsely): 2/16.
+Words scoring under 20: 2/16 (on a correct reading these are false highlights; on a deliberately mispronounced one they are the point, and the swap test above says little because most words are already low).
 
 One speaker; a swapped word is easier to catch than a subtle mispronunciation. Not validated by a fluent speaker.
