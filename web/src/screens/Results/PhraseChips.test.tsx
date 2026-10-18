@@ -1,10 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
 import type { PhraseScore, Song } from '../../lib/types';
-import { PhraseChips } from './PhraseChips';
+import { PhraseChips, ScoreSummary } from './PhraseChips';
 
 const song = {
-  lines: [{ text: '첫 줄', romanized: 'cheot jul' }, { text: '둘째 줄', romanized: 'duljjae jul' }, { text: '셋째', romanized: 'setjjae' }],
+  lines: [
+    { text: '첫 줄', romanized: 'cheot jul', practice_text: '첫 줄' },
+    { text: '둘째 줄', romanized: 'duljjae jul', practice_text: '둘째 줄' },
+    { text: 'baby 셋째', romanized: 'baby setjjae', practice_text: 'baby 셋째' }, // mixed: no spoken practice
+  ],
   phrases: [{ id: 'p1', line_index: 0 }, { id: 'p2', line_index: 1 }, { id: 'p3', line_index: 2 }],
 } as unknown as Song;
 const phrase = (id: string): PhraseScore => ({ phrase_id: id, pitch: 70, timing: 60, coverage: 0.9, rating: 'great' } as PhraseScore);
@@ -23,4 +27,22 @@ it('marks each lyric line by its lyric-check status without touching the rating'
 it('shows plain lyrics when there is no lyric check', () => {
   const html = renderToStaticMarkup(<PhraseChips phrases={phrases} song={song} />);
   expect(html).not.toContain('results-lyric');
+});
+
+it('offers spoken practice only on unclear lines that can be practised', () => {
+  const noop = () => {};
+  const lyrics = new Map([[0, 'match'], [1, 'unclear'], [2, 'unclear']] as const);
+  const html = renderToStaticMarkup(<PhraseChips phrases={phrases} song={song} lyrics={new Map(lyrics)} onPractice={noop} />);
+  expect(html.match(/class="results-say"/g)).toHaveLength(1); // line 1 only: line 0 matched, line 2 mixes English
+  expect(renderToStaticMarkup(<PhraseChips phrases={phrases} song={song} lyrics={new Map(lyrics)} />)).not.toContain('results-say');
+});
+
+it('shows a LYRICS bar beside pitch and timing, or a dash when lyrics were not checked', () => {
+  const html = renderToStaticMarkup(<ScoreSummary total={61} pitch={64} timing={50} lyrics={{ matched: 9, graded: 12 }} />);
+  expect(html).toContain('LYRICS');
+  expect(html).toContain('9/12');
+  expect(html).toContain('Total score 61 out of 100');
+  expect(html).toContain('not validated by a fluent speaker');
+  expect(renderToStaticMarkup(<ScoreSummary total={61} pitch={64} timing={50} />)).not.toContain('LYRICS');
+  expect(renderToStaticMarkup(<ScoreSummary total={61} pitch={64} timing={50} lyrics="unavailable" />)).toContain('Lyrics not checked');
 });

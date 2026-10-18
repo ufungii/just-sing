@@ -5,6 +5,7 @@
  */
 import type { LyricStatus, PhraseScore, Rating, Song, TimeRange } from '../../lib/types';
 import { rangeLabel } from '../../components/timeline/range';
+import { practicePhrases } from '../../lib/practicePhrases';
 import './PhraseChips.css';
 
 export const RATING_LABEL: Record<Rating, string> = {
@@ -35,8 +36,8 @@ export function BigScore({ total }: { total: number }) {
   );
 }
 
-/** A chunky segmented bar: 20 pixel blocks, each worth 5 points. */
-export function ScoreBar({ label, value, tone }: { label: string; value: number; tone: 'sky' | 'mint' }) {
+/** A chunky segmented bar: 20 pixel blocks, each worth 5 points. `shown` replaces the number at the end. */
+export function ScoreBar({ label, value, tone, shown }: { label: string; value: number; tone: 'sky' | 'mint' | 'lav'; shown?: string }) {
   const v = whole(value);
   const lit = Math.round(v / 5);
   return (
@@ -47,13 +48,23 @@ export function ScoreBar({ label, value, tone }: { label: string; value: number;
           <span key={i} className={i < lit ? 'results-bar__px is-lit' : 'results-bar__px'} />
         ))}
       </span>
-      <span className="results-bar__num">{v}</span>
+      <span className="results-bar__num">{shown ?? v}</span>
     </div>
   );
 }
 
-/** Total plus pitch and timing bars, as one block. */
-export function ScoreSummary({ total, pitch, timing, guided, range }: { total: number; pitch: number; timing: number; guided?: boolean; range?: TimeRange | null }) {
+/** Lines whose words matched the original singer, out of the lines the lyric check could grade. */
+export interface LyricTally {
+  matched: number;
+  graded: number;
+}
+
+/**
+ * Total plus pitch and timing bars, as one block. `lyrics` adds a LYRICS bar from the lyric check
+ * (matched / graded lines), or "—" when the check could not run. Display only: the total shown is
+ * whatever the caller passes in; it is never derived here.
+ */
+export function ScoreSummary({ total, pitch, timing, guided, range, lyrics }: { total: number; pitch: number; timing: number; guided?: boolean; range?: TimeRange | null; lyrics?: LyricTally | 'unavailable' | null }) {
   return (
     <div className="results-summary">
       {range && <p className="solo-hint">Practice section · {rangeLabel(range)} · kept off the leaderboard.</p>}
@@ -62,6 +73,18 @@ export function ScoreSummary({ total, pitch, timing, guided, range }: { total: n
       <div className="results-summary__bars">
         <ScoreBar label="PITCH" value={pitch} tone="sky" />
         <ScoreBar label="TIMING" value={timing} tone="mint" />
+        {lyrics === 'unavailable' && (
+          <>
+            <ScoreBar label="LYRICS" value={0} tone="lav" shown="—" />
+            <p className="results-bar__note">Lyrics not checked this time.</p>
+          </>
+        )}
+        {lyrics && lyrics !== 'unavailable' && lyrics.graded > 0 && (
+          <>
+            <ScoreBar label="LYRICS" value={(100 * lyrics.matched) / lyrics.graded} tone="lav" shown={`${lyrics.matched}/${lyrics.graded}`} />
+            <p className="results-bar__note">Automated lyric check, not validated by a fluent speaker.</p>
+          </>
+        )}
       </div>
     </div>
   );
@@ -79,7 +102,14 @@ const LYRIC_TAG: Partial<Record<LyricStatus, { label: string; title: string }>> 
  * failed) rows fall back to the phrase number so the scores are still readable. `lyrics` (optional)
  * is the lyric check by manifest line index; it only decorates the lyric and never touches the score.
  */
-export function PhraseChips({ phrases, song, lyrics }: { phrases: PhraseScore[]; song: Song | null; lyrics?: Map<number, LyricStatus> }) {
+export function PhraseChips({ phrases, song, lyrics, onPractice }: {
+  phrases: PhraseScore[];
+  song: Song | null;
+  lyrics?: Map<number, LyricStatus>;
+  /** When set, lines whose words were unclear get a button to practise them out loud. */
+  onPractice?: (phraseId: string) => void;
+}) {
+  const speakable = new Set(song ? practicePhrases(song).map((p) => p.id) : []);
   if (phrases.length === 0) return <p className="results-empty">No phrases were rated in this turn.</p>;
   return (
     <ol className="results-phrases">
@@ -97,6 +127,11 @@ export function PhraseChips({ phrases, song, lyrics }: { phrases: PhraseScore[];
                   <span className="results-phrase__ko-row">
                     <span className={lyric ? `results-phrase__ko results-lyric--${lyric}` : 'results-phrase__ko'} lang="ko">{line.text}</span>
                     {tag && <span className={`results-lyric-tag results-lyric-tag--${lyric}`} title={tag.title}>{tag.label}</span>}
+                    {lyric === 'unclear' && onPractice && speakable.has(p.phrase_id) && (
+                      <button type="button" className="results-say" onClick={() => onPractice(p.phrase_id)} title="Practise saying this line out loud in SAY IT RIGHT">
+                        SAY IT ▶
+                      </button>
+                    )}
                   </span>
                   <span className="results-phrase__rom">{line.romanized}</span>
                 </>
