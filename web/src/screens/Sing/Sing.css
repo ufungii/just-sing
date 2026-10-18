@@ -336,3 +336,6 @@
   .duet-bar { padding: 6px 14px; }
   .duet-bar__who [data-testid='duet-current'] { font-size: 19px; }
 }
+
+/* Live lyric tally: lines whose words matched, as the server checks them during the song. */
+.sing-chip--lyrics { background: var(--lav); }

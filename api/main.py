@@ -128,7 +128,8 @@ from . import lyric_check  # noqa: E402
 app.include_router(lyric_check.router)
 
 # Upload size caps checked from Content-Length before the body is read.
-UPLOAD_LIMITS = {"/api/practice": practice.MAX_BYTES, "/api/lyric-check": lyric_check.MAX_BYTES}
+UPLOAD_LIMITS = {"/api/practice": practice.MAX_BYTES, "/api/lyric-check": lyric_check.MAX_BYTES,
+                 "/api/lyric-check/line": lyric_check.LINE_MAX_BYTES}
 
 
 @app.middleware("http")

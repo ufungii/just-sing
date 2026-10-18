@@ -21,7 +21,7 @@ export function Results({ result }: { result: SingResult }) {
   const phrases = saved?.phrases ?? result.phrases;
 
   const song = useManifest(setup.clipId);
-  const lyrics = useLyricCheck(setup.clipId, result.take);
+  const lyrics = useLyricCheck(setup.clipId, result.take, result.lyricsLive);
   const [starting, setStarting] = useState(false);
 
   /** Rematch on the server when we can, so the next take saves too; otherwise sing unsaved. */

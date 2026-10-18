@@ -59,6 +59,8 @@ export interface SingResult {
   saveError: string | null;
   /** Solo only: the singer's voice for the lyric check (offsetS = time in the WAV of clip time 0). */
   take?: { wav: Blob; offsetS: number } | null;
+  /** Solo only: the lyric statuses checked line by line during the song (null: fall back to `take`). */
+  lyricsLive?: Promise<Map<number, import('./lib/types').LyricStatus> | null> | null;
 }
 
 export type Route =
