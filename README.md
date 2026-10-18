@@ -18,9 +18,9 @@ Built in 36 hours at **SwampHacks XII** by a team of four, none of us fluent in 
 
 | Mode | What happens |
 |---|---|
-| **SOLO SING** ♪(^▽^)♪ | Pick a clip and a register (original, an octave down, or an octave up), then sing. Your pitch traces over the target notes, and each phrase is rated live, in the browser, with no waiting on a server. Afterwards each lyric line is marked by whether it sounded like the right words. |
+| **SING** ♪(^▽^)♪ | Pick a clip and a register (original, an octave down, or an octave up), then sing. Your pitch traces over the target notes, and each phrase is rated live, in the browser, with no waiting on a server. As you go, each lyric line you just sang lights up mint if the words came through, or gets a wavy underline if they didn't. Solo, or **1P vs 2P** on one laptop (player 2's lines in blue), with the same scoring rules for both. |
+| **ONLINE** (＾▽＾)ﾉ ⇄ ヽ(＾▽＾) | Make a room, send the code to a friend, and sing against each other from two computers. |
 | **SAY IT RIGHT** (・ω・) | Read one lyric line out loud at speaking pace, then see which words came through and which ones to practise. Separate from singing; it never touches your score. |
-| **1P VS 2P / DUET** (｀∀´)ﾉ☆ヽ(＾▽＾) | Two singers, one clip, the same scoring rules. *(Stretch goal: built in the backend, but solo and practice come first.)* |
 
 It runs in the browser or as a desktop app (Electron), both talking to the same server.
 
@@ -65,7 +65,13 @@ reviewer, so training or fine-tuning would have produced numbers nobody could ch
   singing (we measured it), so we don't transcribe. Each sung line is compared with *the original
   singer's recording of the same line*, using speech-model features (wav2vec2) aligned by DTW.
   It also has to sound clearly more like the original than a wordless hum of the player's own
-  melody does, so getting the tune right is not enough to pass.
+  melody does, so getting the tune right is not enough to pass. It runs **line by line while you
+  sing**: each line goes to the server as soon as it's sung (about 1.4 s per line on a CPU), so the
+  lyrics light up during the song and the results are ready a second or two after it ends.
+- **Your score vs your pronunciation:** the total is **pitch and timing only**. Pronunciation is
+  reported right next to it: a LYRICS bar (0–100) with a plain verdict (**CLEAR / MIXED /
+  UNCLEAR**), a mark on every lyric line, and a **SAY IT ▶** button on unclear lines that opens
+  spoken practice for exactly that line.
 - **Spoken pronunciation** (`ml/pronunciation/`): the expected Korean text is force-aligned to
   your speech with a Korean wav2vec2 CTC model, and the weakest words in the phrase are
   highlighted.
@@ -128,6 +134,16 @@ to 15–22.
 | Real take compared against the wrong part of the song | 4% | 0% |
 | Quiet | 0% (all "not sung") | 0% |
 
+That table checks the whole recording at once. The game checks **one line at a time** during
+the song, which hears less audio around each line:
+
+| Line by line, during the song | Result |
+|---|---|
+| Real take: lines marked "match" | 45/54 (83%) and 7/9 |
+| The real hum | 1 of 6 lines |
+| Time per line on a CPU, end to end | median 1.4 s, slowest 2.5 s (lines end every ~3.9 s) |
+| Results ready | 1–2 s after the song ends (whole-song check afterwards: about a minute) |
+
 Draft lyric timings off by up to 1 s barely matter (96% → 93–96%).
 
 **How we got there (honestly):** our synthetic "aah" made the check look perfect, but a *real*
@@ -150,7 +166,19 @@ Whisper "autocorrects": on 25 of 39 clips where we changed one sound, its transc
 the *correct* word anyway. That's why we ship forced alignment, which scores the expected text
 against your audio and can't autocorrect. Raw word scores aren't grades (correct speech has a
 median score of ~48), so the screen highlights your *weakest* words instead of passing or failing
-each one. **TODO: real-voice results.**
+each one.
+
+**On a real voice** (a teammate reading the Love Scenario chorus aloud, 16 words):
+
+| Reading | Overall score |
+|---|---|
+| Medium-bad pronunciation | **78** |
+| Deliberately mangled pronunciation | **14** |
+| Scored against completely different lyrics | 5–6 |
+
+With one word swapped in the expected text (as if the speaker had said a different word), the
+swapped word came out as the lowest-scoring word in **14 of 16** cases (guessing: 1 in 16). We
+don't have a genuinely *good* reading yet, so we can't say what "correct" scores. One speaker.
 
 ### Browser tracker vs reference tracker
 
@@ -188,6 +216,13 @@ a real take loses ~7 points. At our recommended setting (clarity 0.65, RMS gate 
 - **Spoken practice is separate from singing, and the lyric check compares sound with sound.**
   Recognisers can't read sung Korean (they told right from wrong lyrics at AUC 0.62–0.65, barely
   above chance), so we stopped asking them to.
+- **Pronunciation is reported next to the score, not inside it.** We built and tested a rule that
+  folds the lyric check into the total as a "humming guard" (it's in both scoring engines, with
+  shared test cases), but we left it switched off. It rests on one or two singers, and an honest
+  take with one uncertain line could lose a big chunk of its total.
+- **Check each line during the song, not the whole take afterwards.** Same comparison, but the
+  results are ready right when the song ends instead of a minute later. The price is a few lines
+  (89% → 83% matched), because a short slice gives the model less to listen to.
 
 ## ✦ What failed or surprised us (；へ；)
 
@@ -218,9 +253,12 @@ a real take loses ~7 points. At our recommended setting (clarity 0.65, RMS gate 
 
 ## ✦ Next
 
-1. Finish the humming-with-music test and the real-voice pronunciation clips.
-2. More singers, to recalibrate the cutoffs and the lyric-check margin on people other than us.
-3. Extract the reference melody with the browser's own tracker, to close the remaining tracker
+1. More singers and more hums, to recalibrate the cutoffs and the lyric-check margin on people
+   other than us. Then decide whether the humming guard should count toward the total.
+2. A good spoken reading (and more speakers) for SAY IT RIGHT, to learn what "correct" scores.
+3. Word-level highlights while singing: today the verdict is per line, because per-word evidence
+   on singing isn't reliable yet.
+4. Extract the reference melody with the browser's own tracker, to close the remaining tracker
    gap.
 
 ---
