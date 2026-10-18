@@ -50,7 +50,7 @@ def test_bad_tokens_rejected():
         assert r.status_code == 401 and r.json()["error"]["code"] == "invalid_token"
 
 
-def test_login_claim_and_leaderboard():
+def test_login_and_claim():
     c = TestClient(app)
     c.post("/api/guests", json={"display_name": "claimme"})
     m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
@@ -61,7 +61,6 @@ def test_login_claim_and_leaderboard():
     assert c.get("/api/history", headers=auth_h).json() == []  # new account starts empty
     assert c.post("/api/auth/claim", headers=auth_h).json()["claimed_guest_history"] is True
     assert c.get("/api/history", headers=auth_h).json()[0]["match_id"] == m["match_id"]
-    assert [r["total"] for r in c.get("/api/leaderboard?clip_id=synthetic-demo").json()][:1] == [pytest.approx(76)]
 
 
 def test_claim_moves_rooms_so_cleanup_keeps_working():
@@ -102,37 +101,18 @@ def play(c, h, attempt_id, score):
     return c.post(f"/api/turns/{attempt_id}/result", json=body, headers={**h, "Idempotency-Key": str(score)})
 
 
-def test_leaderboard_counts_only_own_solo_scores_on_current_version(monkeypatch):
-    """Regression: every accepted attempt in a no-room match was credited to the match owner, so a
-    friend's local-battle score ranked under the owner's name; old clip versions were mixed in too."""
-    from api import play as play_module
-    c, h = TestClient(app), {"Authorization": f"Bearer {token('test|lb')}"}
-    m = c.post("/api/matches", json={"clip_id": "synthetic-demo", "players": ["me", "friend"]}, headers=h).json()
-    play(c, h, m["attempt_id"], 40)
-    second = next(a["id"] for a in c.get(f"/api/matches/{m['match_id']}", headers=h).json()["attempts"] if a["slot"] == 1)
-    play(c, h, second, 95)  # the friend's score
-    solo = c.post("/api/matches", json={"clip_id": "synthetic-demo"}, headers=h).json()
-    play(c, h, solo["attempt_id"], 50)
-
-    totals = [r["total"] for r in c.get("/api/leaderboard?clip_id=synthetic-demo").json()]
-    assert 95 not in totals and 50 in totals
-
-    bumped = play_module.CATALOG["synthetic-demo"].model_copy(update={"version": 2})
-    monkeypatch.setitem(play_module.CATALOG, "synthetic-demo", bumped)
-    assert 50 not in [r["total"] for r in c.get("/api/leaderboard?clip_id=synthetic-demo").json()]
-
-
 def test_claim_carries_the_guest_name_to_the_account():
     """Regression: accounts were created as 'Player' and claim never copied the guest's chosen name,
-    so every leaderboard row read 'Player'."""
+    so every saved account read 'Player'."""
     c = TestClient(app)
     c.post("/api/guests", json={"display_name": "claimme"})
     m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
     play(c, {}, m["attempt_id"], 61)
     h = {"Authorization": f"Bearer {token('test|named')}"}
     c.post("/api/auth/claim", headers=h)
-    board = c.get("/api/leaderboard?clip_id=synthetic-demo").json()
-    assert {"display_name": "claimme", "total": 61.0} in board
+    with get_engine().begin() as conn:
+        name = conn.execute(text("select display_name from guest_session where auth0_sub='test|named'")).scalar_one()
+    assert name == "claimme"
 
 
 def test_online_room_as_bearer_account_with_websocket_and_retry():

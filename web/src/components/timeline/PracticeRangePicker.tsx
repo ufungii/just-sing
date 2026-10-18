@@ -95,7 +95,7 @@ function Picker({ clipId, range: savedRange, onChange, disabled }: { clipId: str
         {onChange && <PixelButton size="sm" tone="paper" disabled={disabled || !range} onClick={() => commit(null)}>WHOLE SONG</PixelButton>}
         <PixelButton size="sm" tone="paper" className="range-picker__editor" onClick={() => { stop(); setWorkspace(true); }}>ADVANCED EDITOR</PixelButton>
       </div>
-      {range && <p className="solo-hint">Only whole phrases inside this section count. Practice sections stay off the leaderboard.</p>}
+      {range && <p className="solo-hint">Only whole phrases inside this section count.</p>}
       {error && <Notice tone="error">{error}</Notice>}
       {workspace && <CropWorkspace song={song} range={range} readOnly={!onChange || disabled}
         onClose={() => { stop(); setWorkspace(false); }} onApply={onChange && !disabled ? commit : undefined}

@@ -99,7 +99,7 @@ export interface Score {
   pronunciation?: number | null;
   phrases: PhraseScore[];
   coach_blurb: string | null;
-  guided?: boolean; // guide vocals were audible (client-reported); such runs skip the leaderboard
+  guided?: boolean; // guide vocals were audible (client-reported)
 }
 
 export interface WordFeedback {

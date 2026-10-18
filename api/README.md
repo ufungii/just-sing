@@ -150,7 +150,7 @@ The script leaves `smoke-*` guests in the database; they expire with the 7-day c
 | GET | `/api/matches/{id}` | Match, players, attempts, scores, `winner_slot` |
 | POST | `/api/matches/{id}/retry` | Replace a lost or abandoned turn with a fresh attempt |
 | POST | `/api/matches/{id}/rematch` | New local/solo match with the same players (online: use the room) |
-| GET | `/api/history`, `/api/leaderboard?clip_id=` | One row per match: `total` is your own score (null in a local battle; see `players`). Leaderboard: best solo totals of logged-in players on the current clip version |
+| GET | `/api/history` | One row per match: `total` is your own score (null in a local battle; see `players`) |
 | POST | `/api/turns/{attempt_id}/coach` | Coaching blurb for a finished turn: `{status: ok\|unavailable, coach_blurb}`. Generated once, then cached. |
 | POST | `/api/practice` | Multipart: `clip_id`, `phrase_id`, `audio` (WAV/MP3/WebM/Ogg, max 5 MB and 15 s) |
 | POST | `/api/lyric-check/line` | The live path: one lyric line while the song plays. Multipart: `clip_id`, `line_index`, `offset_s` (time in the slice of clip time 0), `audio` (max 1 MB and 30 s). Same answer shape; grades only that line. Waits up to 8 s for the shared model, then 429 `pronunciation_busy`. About 1.4 s per line on CPU. |
@@ -195,11 +195,11 @@ Rules worth knowing:
   normalized to first-phrase start .. last-phrase end, fixed for the attempt (repeat begin with another range -> 409
   `attempt_already_started`), and the result must contain exactly those phrase IDs; totals are weighted over them only.
   Responses (`Score`, `GET /api/matches/{id}`, `/api/history` rows) carry `range: {start,end} | null` (null = full clip).
-  Practice runs are excluded from the leaderboard. No migration: while started the range sits in `phrase_results` as
+  No migration: while started the range sits in `phrase_results` as
   `{"range":...}`; once accepted it is derived from the scored phrase IDs.
 - **Guide vocals:** `POST /api/turns/{id}/result` takes an optional `guide_used: bool` (the guide vocals were audible at
   any time during the turn). It is client-reported, so not cheat-proof. `Score`, the `GET /api/matches/{id}` attempts and
-  `/api/history` rows carry `guided: bool` (false for old rows), and guided runs are excluded from the leaderboard. No
+  `/api/history` rows carry `guided: bool` (false for old rows). No
   migration: the flag is stored on each saved phrase dict inside `phrase_results`. Winners in battle/online are unchanged.
 - Sending the **same** `Idempotency-Key` again returns the same result and changes nothing, so retry freely after a
   lost response. A **different** key on a finished attempt gets `already_submitted`.
@@ -231,7 +231,7 @@ explicit slots `0|1`, and existing phrase IDs. Timings and lyrics come from the 
 
 `GET /api/matches/{id}` returns `duet: {sections, range, start_at}` with derived section times and `server_time`.
 `Score` and history carry `duet: true`; their `range` is the shared practice range, **not** the bounds of a player's
-assigned subset. Full-song duets have `range: null`. Multiplayer stays off the solo leaderboard.
+assigned subset. Full-song duets have `range: null`.
 
 Online host `/api/rooms/{id}/range` edits clear both lobby ready flags, persist across reconnects/rematches, and
 retain the authored slot of each phrase. Reject a range without scoreable assigned phrases for either player
@@ -260,7 +260,7 @@ second are refused. After reconnecting, trust the fresh durable snapshot.
 | File | Role |
 |---|---|
 | `main.py` | App, health/ready, catalog and audio routes, error handlers |
-| `play.py` | Guests, Auth0 identity, matches, turns, history, leaderboard, claim |
+| `play.py` | Guests, Auth0 identity, matches, turns, history, claim |
 | `rooms.py` | Rooms, WebSocket hub, snapshots |
 | `duets.py`, `duet_play.py` | Authored/fallback ownership, loaded barrier, shared schedule and stop |
 | `practice.py` | Spoken-practice upload and the pluggable scorer |

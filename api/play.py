@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, Request, Response
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import and_, case, func, or_, select, text, update
+from sqlalchemy import and_, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -601,24 +601,3 @@ def claim_guest(request: Request, account=Depends(current_guest), s: Session = D
         moved = True
     s.commit()
     return {"id": account.id, "claimed_guest_history": moved}
-
-
-@router.get("/leaderboard")
-def leaderboard(clip_id: str, s: Session = Depends(get_db)):
-    """Best accepted total per logged-in player on the clip's current version. Only solo runs count:
-    in a local battle the second singer is not the account owner. Guests are not ranked."""
-    song = CATALOG.get(clip_id)
-    if not song:
-        return []
-    rows = s.execute(
-        select(GuestSession.display_name, func.max(TurnAttempt.total).label("best"))
-        .join(Match, Match.guest_id == GuestSession.id).join(TurnAttempt, TurnAttempt.match_id == Match.id)
-        .where(Match.clip_id == clip_id, Match.clip_version == song.version, Match.mode == "solo",
-               TurnAttempt.state == "accepted", GuestSession.auth0_sub.is_not(None),
-               # runs with the guide vocals audible are kept off the board (client-reported flag)
-               func.coalesce(TurnAttempt.phrase_results[0]["guided"].astext, "false") != "true",
-               # practice-section runs score a subset of phrases: not comparable, so full-clip results only
-               case((func.jsonb_typeof(TurnAttempt.phrase_results) == "array",
-                     func.jsonb_array_length(TurnAttempt.phrase_results)), else_=0) == len(song.phrases))
-        .group_by(GuestSession.id).order_by(func.max(TurnAttempt.total).desc()).limit(20)).all()
-    return [{"display_name": n, "total": t} for n, t in rows]

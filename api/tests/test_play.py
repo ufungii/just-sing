@@ -269,25 +269,6 @@ def test_full_clip_has_null_range_and_battle_rejects_range(guests, monkeypatch):
     assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_range"
 
 
-def test_practice_runs_stay_off_the_leaderboard(guests, monkeypatch):
-    four_phrase_clip(monkeypatch)
-    from api import play as play_module
-    c = new_guest(guests)
-    with get_engine().begin() as conn:  # leaderboard only ranks logged-in accounts
-        conn.execute(text("update guest_session set auth0_sub=:s where id=:g"),
-                     {"s": f"test|{guests[-1]}", "g": guests[-1]})
-    def lb():
-        return [r for r in c.get("/api/leaderboard", params={"clip_id": "synthetic-demo"}).json() if r["display_name"] == "tester"]
-    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
-    c.post(f"/api/turns/{m['attempt_id']}/begin", json={"range": {"start": 0, "end": 10}})
-    assert c.post(f"/api/turns/{m['attempt_id']}/result", json=ph("q0", "q1"), headers={"Idempotency-Key": "p"}).status_code == 200
-    assert lb() == []
-    m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
-    c.post(f"/api/turns/{m['attempt_id']}/begin", json={})
-    c.post(f"/api/turns/{m['attempt_id']}/result", json=ph("q0", "q1", "q2", "q3", pitch=60), headers={"Idempotency-Key": "q"})
-    assert lb() == [{"display_name": "tester", "total": 60.0}]
-
-
 def test_old_rows_read_range_null(guests):
     c = new_guest(guests)
     m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
@@ -296,12 +277,8 @@ def test_old_rows_read_range_null(guests):
     assert c.get(f"/api/matches/{m['match_id']}").json()["attempts"][0]["score"]["range"] is None
 
 
-def test_guided_runs_are_flagged_and_stay_off_the_leaderboard(guests):
+def test_guided_runs_are_flagged(guests):
     c = new_guest(guests)
-    with get_engine().begin() as conn:  # leaderboard only ranks logged-in accounts
-        conn.execute(text("update guest_session set auth0_sub=:s where id=:g"),
-                     {"s": f"test|{guests[-1]}", "g": guests[-1]})
-    lb = lambda: [r for r in c.get("/api/leaderboard", params={"clip_id": "synthetic-demo"}).json() if r["display_name"] == "tester"]
 
     def run(key, guided):
         m = c.post("/api/matches", json={"clip_id": "synthetic-demo"}).json()
@@ -311,9 +288,9 @@ def test_guided_runs_are_flagged_and_stay_off_the_leaderboard(guests):
         return m, r.json()
 
     m, score = run("g", True)
-    assert score["guided"] is True and lb() == []
+    assert score["guided"] is True
     assert c.get(f"/api/matches/{m['match_id']}").json()["attempts"][0]["score"]["guided"] is True
     assert c.get("/api/history").json()[0]["guided"] is True
     _, score = run("u", False)  # guide_used omitted = false
-    assert score["guided"] is False and len(lb()) == 1
+    assert score["guided"] is False
     assert c.get("/api/history").json()[0]["guided"] is False

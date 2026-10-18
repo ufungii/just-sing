@@ -171,7 +171,7 @@ class Score(BaseModel):
     timing: float = Score100
     phrases: list[PhraseScore]
     coach_blurb: str | None = None  # filled by Gemini later
-    guided: bool = False  # guide vocals were audible during the turn (client-reported); such runs skip the leaderboard
+    guided: bool = False  # guide vocals were audible during the turn (client-reported)
     range: TimeRange | None = None  # practice section (first phrase start .. last phrase end); null = full clip
     duet: bool = False
     lyrics: TurnLyrics | None = None
