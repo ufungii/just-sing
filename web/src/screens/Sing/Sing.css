@@ -127,15 +127,6 @@
   animation: sing-judge 1.4s steps(10) forwards;
 }
 .sing-judge .sing-pop { font-size: 60px; }
-.sing-judge__score {
-  margin-top: 18px;
-  padding: 4px 12px;
-  border: var(--border-thin) solid var(--ink);
-  background: var(--paper);
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 22px;
-}
 @keyframes sing-judge {
   0% { transform: translate(-50%, 0) rotate(var(--jr, 0deg)) scale(0.4); opacity: 0; }
   12% { transform: translate(-50%, -8px) rotate(var(--jr, 0deg)) scale(1.15); opacity: 1; }
