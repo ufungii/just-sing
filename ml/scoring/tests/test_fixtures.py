@@ -42,3 +42,33 @@ def test_onset_fixtures_match_engine():
     for case in data["cases"]:
         got = [round(float(t), 3) for t in onset_times(to_track(case["input"]["hz"]), case["input"]["hop_seconds"])]
         assert got == case["expected_onsets"], case["name"]
+
+
+def test_pronunciation_fixtures_match_engine():
+    from ml.scoring.score import apply_pronunciation, pronunciation_score
+
+    data = _load("pronunciation_cases.json")
+    for case in data["cases"]:
+        i = case["input"]
+        pron = pronunciation_score({int(k): v for k, v in i["line_statuses"].items()},
+                                   {int(k): v for k, v in i["line_weights"].items()})
+        got = apply_pronunciation({"total": i["total"], "pitch": i["pitch"], "timing": i["timing"] or 0.0,
+                                   "phrases": [{"timing": i["timing"]}]}, pron)
+        assert got["pronunciation"] == case["expected"]["pronunciation"], case["name"]
+        assert got["total"] == case["expected"]["total"], case["name"]
+
+
+def test_humming_cannot_beat_an_honest_singer():
+    from ml.scoring.score import apply_pronunciation
+
+    hum = apply_pronunciation({"total": 100, "pitch": 100, "timing": 100}, 0.0)["total"]
+    honest = apply_pronunciation({"total": 70, "pitch": 65, "timing": 80}, 90.0)["total"]
+    assert hum < honest
+
+
+def test_pronunciation_input_is_validated():
+    from ml.scoring.score import apply_pronunciation
+
+    for bad in (-1, 120, float("nan")):
+        with pytest.raises(ValueError):
+            apply_pronunciation({"total": 80, "pitch": 80, "timing": 80}, bad)

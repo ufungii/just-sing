@@ -18,7 +18,7 @@ from typing import Mapping, Sequence
 import numpy as np
 
 from . import pitch as pitch_mod
-from .config import SCORING_VERSION, PitchConfig, ScoreConfig, TimingConfig
+from .config import SCORING_VERSION, PitchConfig, PronunciationConfig, ScoreConfig, TimingConfig
 from .timing import onset_times, timing_score
 
 
@@ -67,6 +67,48 @@ def aggregate(entries: Sequence[dict], weights: Sequence[float]) -> dict:
         "pitch": round(weighted("pitch"), 1),
         "timing": round(weighted("timing"), 1),
     }
+
+
+def line_weights(phrases: Sequence[Mapping], weights: Sequence[float]) -> dict[int, float]:
+    """Scoreable frames per lyric line: the sum of its phrases' weights (phrases carry `line_index`)."""
+    out: dict[int, float] = {}
+    for phrase, w in zip(phrases, weights):
+        out[phrase["line_index"]] = out.get(phrase["line_index"], 0.0) + w
+    return out
+
+
+def pronunciation_score(
+    statuses: Mapping[int, str], weights: Mapping[int, float], cfg: PronunciationConfig | None = None
+) -> float | None:
+    """0-100 lyric score from the lyric check's per-line statuses, weighted by each line's scoreable frames.
+
+    Returns None when nothing was checked (no line with a known status and weight > 0): the caller then
+    keeps the pitch/timing total, because an unavailable check is never a low score."""
+    credit = dict((cfg or PronunciationConfig()).status_credit)
+    pairs = [(credit[st], weights.get(i, 0.0)) for i, st in statuses.items() if st in credit]
+    total_w = sum(w for _, w in pairs if w > 0)
+    if not total_w:
+        return None
+    return round(sum(c * w for c, w in pairs if w > 0) / total_w, 1)
+
+
+def apply_pronunciation(score: dict, pronunciation: float | None, cfg: PronunciationConfig | None = None) -> dict:
+    """Return `score` with `pronunciation` and the final total. `score` is an aggregate()/finalize_turn() dict.
+
+    With a pronunciation value: total = (wp*pitch + wt*timing + wr*pronunciation) * guard, where
+    guard = floor + (1 - floor) * pronunciation / 100. Without one (None) the pitch/timing total is kept.
+    If no phrase had a scoreable onset (every phrase timing is None) pitch stands in for timing, as the
+    per-phrase blend already does. Raises ValueError on a non-finite or out-of-range pronunciation."""
+    cfg = cfg or PronunciationConfig()
+    pronunciation = _checked(pronunciation, "pronunciation", 0, 100, nullable=True)
+    if pronunciation is None:
+        return {**score, "pronunciation": None}
+    phrases = score.get("phrases")
+    has_timing = phrases is None or any(p.get("timing") is not None for p in phrases)
+    timing = score["timing"] if has_timing else score["pitch"]
+    blend = cfg.pitch_weight * score["pitch"] + cfg.timing_weight * timing + cfg.pronunciation_weight * pronunciation
+    guard = cfg.floor + (1 - cfg.floor) * pronunciation / 100
+    return {**score, "pronunciation": pronunciation, "total": round(blend * guard, 1)}
 
 
 def phrase_weights(
@@ -140,7 +182,7 @@ def finalize_turn(
         for pid in expected_phrase_ids
     ]
     return {"scoring_version": SCORING_VERSION, "register": register,
-            **aggregate(entries, weights), "phrases": entries}
+            **aggregate(entries, weights), "pronunciation": None, "phrases": entries}
 
 
 def score_turn(
@@ -186,4 +228,4 @@ def score_turn(
         weights.append(p.scoreable_frames)
 
     return {"scoring_version": SCORING_VERSION, "register": register,
-            **aggregate(entries, weights), "phrases": entries}
+            **aggregate(entries, weights), "pronunciation": None, "phrases": entries}

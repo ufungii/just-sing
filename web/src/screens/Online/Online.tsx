@@ -13,6 +13,7 @@ import { useNav } from '../../routes';
 import type { RoomRef } from '../../routes';
 import { Notice, Panel, PixelButton, ScreenShell, Segmented } from '../../ui';
 import { MatchBoard } from '../Battle/BattleTurn';
+import { CoachPanel } from '../Results/CoachPanel';
 import { useManifest } from '../Results/useManifest';
 import { MicCheck } from '../Solo/MicCheck';
 import { ClipList, REGISTERS, useClips } from '../Solo/SoloSetup';
@@ -256,11 +257,14 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
     );
 
   // ---- finished ----
+  const myAttempt = match.attempts.find((a) => a.slot === room.slot && a.state === 'accepted');
   if (snap.state === 'finished')
     return (
       <ScreenShell title="ROOM RESULTS" kao="ヾ(＾∇＾)" onBack={leave} backLabel="LEAVE">
         {notices}
         <MatchBoard match={match} song={song} />
+        {/* Each player's own tip only: the attempt of this browser's slot (1v1 turns, not duets). */}
+        {!match.duet && myAttempt && <CoachPanel attemptId={myAttempt.id} />}
         <div className="results-actions">
           {isHost ? (
             <PixelButton tone="hot" size="lg" disabled={busy} onClick={() => act(() => rematchRoom(room.id))}>
