@@ -34,9 +34,13 @@ function describeApplied(track: MediaStreamTrack): string {
 
 /**
  * Opens the mic with raw-capture constraints, shows a live level, and passes once it hears a
- * voice. The tracks and AudioContext are released as soon as the check ends or the screen closes.
+ * voice. Successful capture can be handed to an online room; otherwise all resources are released.
  */
-export function MicCheck({ onPassedChange }: { onPassedChange: (passed: boolean) => void }) {
+export function MicCheck({ onPassedChange, onStreamReady }: {
+  onPassedChange: (passed: boolean) => void;
+  /** Transfer successful capture/context ownership to the online room instead of releasing it. */
+  onStreamReady?: (stream: MediaStream, ctx: AudioContext) => void;
+}) {
   const [status, setStatus] = useState<MicStatus>({ kind: 'idle' });
   const [level, setLevel] = useState(0);
   const stopRef = useRef<() => void>(() => {});
@@ -54,10 +58,13 @@ export function MicCheck({ onPassedChange }: { onPassedChange: (passed: boolean)
       return;
     }
     setStatus({ kind: 'asking' });
+    let cancelled = false;
+    stopRef.current = () => { cancelled = true; };
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia(CONSTRAINTS);
     } catch (e) {
+      if (cancelled) return;
       const name = e instanceof DOMException ? e.name : '';
       if (name === 'NotAllowedError' || name === 'SecurityError') setStatus({ kind: 'denied' });
       else if (name === 'NotFoundError' || name === 'OverconstrainedError') setStatus({ kind: 'no-device' });
@@ -66,24 +73,30 @@ export function MicCheck({ onPassedChange }: { onPassedChange: (passed: boolean)
       return;
     }
 
+    if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
     const track = stream.getAudioTracks()[0];
-    const ctx = new AudioContext();
+    const ctx = new AudioContext({ latencyHint: 'interactive' });
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 2048;
-    ctx.createMediaStreamSource(stream).connect(analyser);
+    const source = ctx.createMediaStreamSource(stream);
+    source.connect(analyser);
     const buf = new Float32Array(analyser.fftSize);
 
     let frame = 0;
     let stopped = false;
     let heard = 0;
     let last = performance.now();
+    let transferred = false;
     const stop = () => {
       if (stopped) return;
       stopped = true;
       cancelAnimationFrame(frame);
       clearTimeout(timeout);
-      stream.getTracks().forEach((t) => t.stop());
-      void ctx.close();
+      source.disconnect(); analyser.disconnect();
+      if (!transferred) {
+        stream.getTracks().forEach((t) => t.stop());
+        void ctx.close();
+      }
       setLevel(0);
     };
     stopRef.current = stop;
@@ -98,18 +111,21 @@ export function MicCheck({ onPassedChange }: { onPassedChange: (passed: boolean)
       let sum = 0;
       for (const v of buf) sum += v * v;
       const rms = Math.sqrt(sum / buf.length);
+      if (track.readyState !== 'live') { stop(); setStatus({ kind: 'no-device' }); return; }
       // Log-ish meter so a normal voice fills most of the bar.
       setLevel(Math.min(1, Math.max(0, (20 * Math.log10(rms + 1e-9) + 54) / 48)));
       if (rms > HEARD_RMS) heard += (now - last) / 1000;
       last = now;
       if (heard >= HEARD_SECONDS) {
         const applied = describeApplied(track);
+        if (onStreamReady) { transferred = true; onStreamReady(stream, ctx); }
         stop();
         setStatus({ kind: 'passed', applied });
         return;
       }
       frame = requestAnimationFrame(tick);
     };
+    void ctx.resume();
     frame = requestAnimationFrame(tick);
   }
 

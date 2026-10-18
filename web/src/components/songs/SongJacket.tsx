@@ -88,7 +88,6 @@ export function SongJacket({ entry }: { entry: SongEntry | null }) {
       </div>
 
       <div className="song-jacket__info">
-        <span className="song-jacket__chip song-jacket__chip--now">{entry ? 'NOW SELECTED' : 'NOTHING PICKED'}</span>
         <h2 className="song-jacket__title" data-text={entry?.title ?? 'Pick a song'}>
           {entry?.title ?? 'Pick a song'}
         </h2>

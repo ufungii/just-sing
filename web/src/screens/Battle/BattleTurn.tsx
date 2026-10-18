@@ -5,6 +5,7 @@ import { useNav, type BattleCtx, type SingResult, type SingSetup } from '../../r
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
 import { PhraseChips, ScoreSummary } from '../Results/PhraseChips';
 import { useManifest } from '../Results/useManifest';
+import { buildTargetTrack, phraseWeights, pronunciationScore } from '../../scoring';
 
 /** The battle screen after a turn: the hand-off after player 1, the final results after player 2. */
 export function BattleTurn({ result }: { result: SingResult }) {
@@ -174,8 +175,17 @@ export function MatchBoard({ match, song }: { match: MatchView; song: ReturnType
         const feedback = score?.lyrics;
         const lines = feedback?.status === 'ok' ? new Map(feedback.lines.map((l) => [l.line_index, l.status])) : undefined;
         const graded = [...(lines?.values() ?? [])].filter((s) => s === 'match' || s === 'unclear');
+        let pronunciation: number | null = null;
+        if (song && score && lines) {
+          const ids = new Set(score.phrases.map((p) => p.phrase_id));
+          const phrases = song.phrases.filter((p) => ids.has(p.id));
+          const weights = phraseWeights(phrases, buildTargetTrack(song, score.register));
+          const byLine = new Map<number, number>();
+          for (const p of phrases) byLine.set(p.line_index, (byLine.get(p.line_index) ?? 0) + (weights.get(p.id) ?? 0));
+          pronunciation = pronunciationScore(lines, byLine);
+        }
         const lyrics = feedback?.status === 'pending' ? 'checking' as const : lines
-          ? { matched: graded.filter((s) => s === 'match').length, graded: graded.length } : 'unavailable' as const;
+          ? { matched: graded.filter((s) => s === 'match').length, graded: graded.length, score: pronunciation } : 'unavailable' as const;
         return (
           <Panel key={p.slot} tone={p.slot === 0 ? 'pink' : 'sky'} label={`P${p.slot + 1} · ${p.display_name.toUpperCase()}`}>
             {score ? (

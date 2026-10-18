@@ -187,6 +187,7 @@ class MatchIn(BaseModel):
     clip_id: str
     players: list[str] | None = Field(None, min_length=2, max_length=2)  # two names = local battle
     duet: bool = False  # legacy clients can retain sequential full-clip turns
+    range: TimeRange | None = None  # local duet only: the practice section both singers share
 
     @field_validator('players')
     @classmethod
@@ -279,6 +280,9 @@ def _new_match(s: Session, guest: GuestSession, clip_id: str, names: list[str],
     s.flush()
     attempt = TurnAttempt(match_id=match.id, slot=0)  # later slots get theirs when the turn before is saved
     if duet:
+        # Snap to whole phrases (a full-clip selection becomes None), as for online rooms.
+        if practice_range is not None:
+            practice_range = _range_of(song, [p.id for p in _included(song, practice_range)])
         config = _duet_config(song, practice_range)
         match.state = 'preparing'
         attempt.phrase_results = {'duet': config, 'loaded': False}
@@ -293,7 +297,10 @@ def _new_match(s: Session, guest: GuestSession, clip_id: str, names: list[str],
 def create_match(body: MatchIn, guest=Depends(current_guest), s: Session = Depends(get_db)):
     if body.duet and not body.players:
         raise ApiError(422, 'invalid_duet', 'A duet needs two players.')
-    out = _new_match(s, guest, body.clip_id, body.players or [guest.display_name], duet=body.duet)
+    if body.range is not None and not body.duet:
+        raise ApiError(422, 'invalid_range', 'A practice range at match creation is only for local duets.')
+    out = _new_match(s, guest, body.clip_id, body.players or [guest.display_name], duet=body.duet,
+                     practice_range=body.range)
     s.commit()
     return out
 

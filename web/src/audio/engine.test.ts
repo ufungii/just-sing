@@ -10,11 +10,11 @@ import { scheduleCountIn } from './sources';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
-it.each([{ range: null, scheduledAt: undefined }, { range: { start: 15, end: 21 }, scheduledAt: undefined }, { range: { start: 15, end: 21 }, scheduledAt: 30 }])('schedules matching audio offsets and preserves the clip clock for %j', async ({ range, scheduledAt }) => {
+it.each([{ range: null, scheduledAt: undefined }, { range: { start: 15, end: 21 }, scheduledAt: undefined }, { range: { start: 15, end: 21 }, scheduledAt: 30 }].flatMap((scenario) => [false, true].map((shared) => ({ ...scenario, shared }))))('schedules matching audio offsets and preserves the clip clock for %j', async ({ range, scheduledAt, shared }) => {
   const sources: { start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> }[] = [];
   const ctx = {
     currentTime: 10, sampleRate: 48000, destination: {}, resume: vi.fn(), close: vi.fn(),
-    createGain: () => ({ gain: { value: 0 }, connect: vi.fn() }),
+    createGain: () => ({ gain: { value: 0 }, connect: vi.fn(), disconnect: vi.fn() }),
     createBufferSource: () => {
       const source = { buffer: null, connect: vi.fn(), disconnect: vi.fn(), start: vi.fn(), stop: vi.fn() };
       sources.push(source); return source;
@@ -23,7 +23,7 @@ it.each([{ range: null, scheduledAt: undefined }, { range: { start: 15, end: 21 
   vi.stubGlobal('AudioContext', vi.fn(function () { return ctx; }));
   const from = range?.start ?? 0;
   const end = range?.end ?? 30;
-  const engine = await SingEngine.create('test', 30, 0.07, range);
+  const engine = await SingEngine.create('test', 30, 0.07, range, shared ? ctx as unknown as AudioContext : undefined);
   const trackerStart = vi.spyOn(engine.tracker, 'start');
   const at = scheduledAt ?? 13.15;
   await engine.start(scheduledAt);
@@ -37,4 +37,5 @@ it.each([{ range: null, scheduledAt: undefined }, { range: { start: 15, end: 21 
   await engine.start();
   for (const source of sources) expect(source.start).toHaveBeenCalledTimes(1);
   engine.close();
+  expect(ctx.close).toHaveBeenCalledTimes(shared ? 0 : 1);
 });
