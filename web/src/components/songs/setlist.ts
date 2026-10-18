@@ -70,8 +70,8 @@ function showTestClips(): boolean {
 }
 
 /**
- * Merge the setlist with the catalog: prepared setlist songs first, then any other catalog clips
- * (songs not on the setlist, then test fixtures if enabled), then the setlist songs still coming soon.
+ * Merge the setlist with the catalog: every playable song (setlist or not) A-Z by title, then test fixtures
+ * if enabled, then the setlist songs still coming soon, each group A-Z.
  */
 export function buildEntries(all: ClipSummary[]): SongEntry[] {
   const clips = showTestClips() ? all : all.filter((c) => !c.synthetic);
@@ -92,5 +92,10 @@ export function buildEntries(all: ClipSummary[]): SongEntry[] {
       clip: c,
       kind: c.synthetic ? 'test' : 'song',
     }));
-  return [...planned.filter((e) => e.clip), ...extras.filter((e) => e.kind === 'song'), ...extras.filter((e) => e.kind === 'test'), ...planned.filter((e) => !e.clip)];
+  const alphabetical = (list: SongEntry[]) => [...list].sort((x, y) => x.title.localeCompare(y.title, undefined, { sensitivity: 'base', ignorePunctuation: true }));
+  return [
+    ...alphabetical([...planned.filter((e) => e.clip), ...extras.filter((e) => e.kind === 'song')]),
+    ...alphabetical(extras.filter((e) => e.kind === 'test')),
+    ...alphabetical(planned.filter((e) => !e.clip)),
+  ];
 }
