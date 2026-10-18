@@ -1,6 +1,6 @@
 # ♪ Just Sing! ♪
 
-**A K-pop karaoke game that actually listens to you.** (ﾉ≧▽≦)ﾉ
+**A (mostly K-pop) karaoke game that actually listens to you.** (ﾉ≧▽≦)ﾉ
 
 Pick a song, sing along with the instrumental, and watch your voice draw a live line over the
 melody while the lyrics scroll by in Hangul, romanization and English. Every phrase gets a
@@ -18,7 +18,7 @@ Built in 36 hours at **SwampHacks XII** by a team of four, none of us fluent in 
 
 | Mode | What happens |
 |---|---|
-| **SING** ♪(^▽^)♪ | Pick a clip and a register (original, an octave down, or an octave up), then sing. Your pitch traces over the target notes, and each phrase is rated live, in the browser, with no waiting on a server. As you go, each lyric line you just sang lights up mint if the words came through, or gets a wavy underline if they didn't. Solo, or **1P vs 2P** on one laptop (player 2's lines in blue), with the same scoring rules for both. |
+| **SING** ♪(^▽^)♪ | Pick a clip and a register (original, an octave down, or an octave up), then sing. Your pitch traces over the target notes, and each phrase is rated live, in the browser, with no waiting on a server. Each lyric line you sang is marked mint if the words came through, or gets a wavy underline if they didn't (as you sing on a fast server, a bit after on ours). Solo, or **1P vs 2P** on one laptop (player 2's lines in blue), with the same scoring rules for both. |
 | **ONLINE** (＾▽＾)ﾉ ⇄ ヽ(＾▽＾) | Make a room, send the code to a friend, and sing against each other from two computers. |
 | **SAY IT RIGHT** (・ω・) | Read one lyric line out loud at speaking pace, then see which words came through and which ones to practise. Separate from singing; it never touches your score. |
 
@@ -65,9 +65,11 @@ reviewer, so training or fine-tuning would have produced numbers nobody could ch
   singing (we measured it), so we don't transcribe. Each sung line is compared with *the original
   singer's recording of the same line*, using speech-model features (wav2vec2) aligned by DTW.
   It also has to sound clearly more like the original than a wordless hum of the player's own
-  melody does, so getting the tune right is not enough to pass. It runs **line by line while you
-  sing**: each line goes to the server as soon as it's sung (about 1.4 s per line on a CPU), so the
-  lyrics light up during the song and the results are ready a second or two after it ends.
+  melody does, so getting the tune right is not enough to pass. The game sends **each line to the
+  server as soon as it's sung**, so in principle the lyrics light up during the song. In practice
+  that only keeps up on a fast machine: on our small CPU-only server a line takes longer to check
+  than the song takes to sing it (see the evaluation below), so marks arrive late and the results
+  screen can fall back to checking the whole take after the song.
 - **Your score vs your pronunciation:** the total is **pitch and timing only**. Pronunciation is
   reported right next to it: a LYRICS bar (0–100) with a plain verdict (**CLEAR / MIXED /
   UNCLEAR**), a mark on every lyric line, and a **SAY IT ▶** button on unclear lines that opens
@@ -141,8 +143,15 @@ the song, which hears less audio around each line:
 |---|---|
 | Real take: lines marked "match" | 45/54 (83%) and 7/9 |
 | The real hum | 1 of 6 lines |
-| Time per line on a CPU, end to end | median 1.4 s, slowest 2.5 s (lines end every ~3.9 s) |
-| Results ready | 1–2 s after the song ends (whole-song check afterwards: about a minute) |
+| Time per line, on a developer laptop (CPU only) | median 1.4 s, slowest 2.5 s |
+| **Time per line, on our production server** (8 lines, measured over the internet) | **median 7.7 s, slowest 13.8 s** |
+| How often a new line ends in the song | about every 3.9 s |
+
+The accuracy holds up on the server (the lines we sent through it came back correct). The speed
+doesn't: at ~7.7 s per line against a new line every ~3.9 s, checks queue up and fall further
+behind as the song goes on, so the "lights up as you sing" part is not reliable on that machine.
+We found two cheap speed-ups (stop the model after the one layer we use, and track pitch on a
+coarser grid for the hum), but did not ship them.
 
 Draft lyric timings off by up to 1 s barely matter (96% → 93–96%).
 
@@ -221,8 +230,10 @@ a real take loses ~7 points. At our recommended setting (clarity 0.65, RMS gate 
   shared test cases), but we left it switched off. It rests on one or two singers, and an honest
   take with one uncertain line could lose a big chunk of its total.
 - **Check each line during the song, not the whole take afterwards.** Same comparison, but the
-  results are ready right when the song ends instead of a minute later. The price is a few lines
-  (89% → 83% matched), because a short slice gives the model less to listen to.
+  goal was results ready right when the song ends instead of a minute later. It works on a fast
+  CPU (~1.4 s per line) but not on our small production server (~7.7 s per line), so for the
+  demo expect the marks to lag. The price of short slices is a few lines (89% → 83% matched),
+  because they give the model less to listen to.
 
 ## ✦ What failed or surprised us (；へ；)
 
