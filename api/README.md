@@ -20,7 +20,7 @@ cp .env.example .env          # then fill in real values; .env is gitignored
 alembic -c api/alembic.ini upgrade head   # create/upgrade tables
 python -m api.seed                        # insert clip metadata (safe to repeat)
 uvicorn api.main:app --reload             # run from the repo root
-pytest api                                # tests; the DB tests need DATABASE_URL
+pytest api                                # tests; DB tests skip unless TEST_DATABASE_URL names a disposable database (name must contain 'test'; run `alembic upgrade head` on it first). They delete rows, so .env's DATABASE_URL is deliberately ignored
 ```
 
 Interactive docs: `http://localhost:8000/docs`. Without `DATABASE_URL`, the catalog endpoints still work and
