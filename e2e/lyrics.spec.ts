@@ -15,7 +15,7 @@ test('local multiplayer uploads both singers and displays two independent lyrics
     await addPlayer(page, 'PLAYER 2', 'E2E-Rival-lyrics-local');
     await mic(page);
     const created = page.waitForResponse((r) => r.url().endsWith('/api/matches') && r.request().method() === 'POST' && r.status() === 200);
-    await page.getByRole('button', { name: 'FIGHT ♪', exact: true }).click();
+    await page.getByRole('button', { name: 'JUST SING!', exact: true }).click();
     const mid = (await (await created).json()).match_id;
     const uploads: number[] = [];
     page.on('response', (r) => { if (/\/turns\/[^/]+\/lyric-check$/.test(r.url())) uploads.push(r.status()); });
@@ -28,8 +28,8 @@ test('local multiplayer uploads both singers and displays two independent lyrics
     expect(saved.attempts.every((a: any) => a.score.lyrics && a.score.lyrics.status !== 'pending')).toBe(true);
     if (process.env.E2E_REQUIRE_LYRICS === '1') {
       expect(saved.attempts.map((a: any) => a.score.lyrics.status)).toEqual(['ok', 'ok']);
-      await expect(page.getByText('4/6', { exact: true })).toBeVisible();
-      await expect(page.getByText('1/3', { exact: true })).toBeVisible();
+      await expect(page.getByText(/4 of 6 sung lines sounded like the original/)).toBeVisible();
+      await expect(page.getByText(/1 of 3 sung lines sounded like the original/)).toBeVisible();
     }
     await page.screenshot({ path: 'e2e/artifacts/multiplayer-lyrics-local.png', fullPage: true });
     expect(errors).toEqual([]);
@@ -54,8 +54,8 @@ test('online multiplayer uploads each own recording and both clients receive bot
       await expect(page.getByRole('meter', { name: 'LYRICS', exact: true })).toHaveCount(2);
       await expect(page.getByText('Checking this singer’s lyrics…', { exact: true })).toHaveCount(0, { timeout: 15_000 });
       if (process.env.E2E_REQUIRE_LYRICS === '1') {
-        await expect(page.getByText('4/6', { exact: true })).toBeVisible();
-        await expect(page.getByText('1/3', { exact: true })).toBeVisible();
+        await expect(page.getByText(/4 of 6 sung lines sounded like the original/)).toBeVisible();
+        await expect(page.getByText(/1 of 3 sung lines sounded like the original/)).toBeVisible();
       }
     }
     expect(uploads.map((responses) => responses.filter((s) => s === 200).length)).toEqual([1, 1]);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import type { ClipSummary } from '../../lib/types';
 import { Notice, PixelButton } from '../../ui';
@@ -16,8 +16,8 @@ export function useSongEntries(clips: Clips): SongEntry[] {
 }
 
 /**
- * Arcade-style song wheel: slanted keycap banners, the chosen one popped out with a bouncing
- * pointer. Songs that aren't prepared yet stay on the wheel as "coming soon" and can't be picked.
+ * Arcade-style song wheel: slanted neutral keycap banners, the chosen one pink and popped out with
+ * a bouncing pointer, held in the middle of the wheel while the rest fade out above and below. Songs that aren't prepared yet stay on the wheel as "coming soon" and can't be picked.
  * Up/Down arrows move between playable songs, and the chosen one plays a short preview.
  */
 export function SongWheel({
@@ -39,10 +39,24 @@ export function SongWheel({
   const chosenClip = selIndex < 0 ? null : entries[selIndex].clip;
   useSongPreview(chosenClip?.id ?? null, chosenClip?.duration ?? null);
 
-  // Keep the chosen banner in view inside the scrolling wheel.
+  // Which ends of the list have more songs past them, so only those edges fade.
+  const [more, setMore] = useState({ above: false, below: false });
+  const measure = useCallback(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const above = list.scrollTop > 2;
+    const below = list.scrollTop + list.clientHeight < list.scrollHeight - 2;
+    setMore((m) => (m.above === above && m.below === below ? m : { above, below }));
+  }, []);
+
+  // Keep the chosen banner in the middle of the wheel where the list allows it (the first and last
+  // songs stop at the ends: there is no scrolling past them). Scrolls only the list, never the page.
   useEffect(() => {
-    listRef.current?.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' });
-  }, [selected]);
+    const list = listRef.current;
+    const item = list?.querySelector<HTMLElement>('.is-selected')?.closest('li');
+    if (list && item) list.scrollTo({ top: item.offsetTop - (list.clientHeight - item.offsetHeight) / 2, behavior: 'smooth' });
+    measure();
+  }, [selected, clips.kind, measure]);
 
   if (clips.kind === 'loading') return <Notice>Loading songs…</Notice>;
   if (clips.kind === 'error')
@@ -70,7 +84,13 @@ export function SongWheel({
 
   return (
     <div className="song-wheel">
-      <ul className="song-wheel__list" ref={listRef} role="list">
+      <p className="song-wheel__count">TRACKLIST · {entries.length} {entries.length === 1 ? 'SONG' : 'SONGS'}</p>
+      <ul
+        className={`song-wheel__list${more.above ? ' has-more-above' : ''}${more.below ? ' has-more-below' : ''}`}
+        ref={listRef}
+        role="list"
+        onScroll={measure}
+      >
         {entries.map((e, i) => {
           const on = e.clip !== null && e.clip.id === selected;
           // Banners further from the chosen one sit further right, so the list reads as a wheel.
@@ -81,7 +101,7 @@ export function SongWheel({
               <button
                 type="button"
                 data-clip={e.clip?.id}
-                className={`song-banner song-banner--${e.kind === 'soon' ? 'soon' : e.tone}${on ? ' is-selected' : ''}`}
+                className={`song-banner song-banner--${e.kind === 'soon' ? 'soon' : on ? 'pink' : 'neutral'}${on ? ' is-selected' : ''}`}
                 disabled={!e.clip}
                 aria-pressed={e.clip ? on : undefined}
                 aria-label={e.clip ? undefined : `${e.title} by ${e.artist}, coming soon`}
@@ -107,10 +127,6 @@ export function SongWheel({
           );
         })}
       </ul>
-      <p className="song-wheel__hint">
-        <span className="song-kao" aria-hidden="true">▲▼</span> CHOOSE · CLICK TO PICK ·{' '}
-        {playable.length} OF {entries.length} READY
-      </p>
     </div>
   );
 }

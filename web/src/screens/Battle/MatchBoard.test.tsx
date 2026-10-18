@@ -15,8 +15,10 @@ it('renders separate lyric bars per singer without changing either total or winn
     { status: 'ok', lines: [{ line_index: 1, status: 'match' }] },
   )} />);
   expect(html.match(/aria-label="LYRICS"/g)).toHaveLength(2);
-  expect(html).toContain('1/2');
-  expect(html).toContain('1/1');
+  expect(html).toContain('1 of 2 sung lines');
+  expect(html).toContain('1 of 1 sung lines');
+  expect(html).toContain('Pronunciation: MIXED');
+  expect(html).toContain('Pronunciation: CLEAR');
   expect(html).toContain('Total score 80 out of 100');
   expect(html).toContain('Total score 60 out of 100');
   expect(html).toContain('Alice WINS!');

@@ -143,7 +143,7 @@ test('solo middle section: snapped handles, preview, offset audio, saved subset 
     await page.screenshot({ path: 'e2e/artifacts/range-solo-setup.png', mask: [page.locator('.clip-bar__lyric')] });
     await addPlayer(page, 'PLAYER', NAME);
     await mic(page);
-    await page.getByRole('button', { name: 'START ♪', exact: true }).click();
+    await page.getByRole('button', { name: 'JUST SING!', exact: true }).click();
     const saved = await sing(page, range);
     expect(saved.phrases.map((p: any) => p.phrase_id)).toEqual([song.phrases[1].id]);
     await expect(page.getByText('saved to your history')).toBeVisible();
