@@ -8,6 +8,7 @@ import json
 import os
 import secrets
 import time
+from threading import RLock
 import uuid
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
@@ -43,6 +44,7 @@ JOINS_PER_MINUTE = 10
 PASSWORD_MIN, PASSWORD_MAX = 3, 16
 WRONG_PASSWORDS_PER_MINUTE = 5
 LIST_LIMIT = 50
+ROOM_GRACE_S = 45.0  # a lobby room nobody is connected to for this long is closed (see close_stale_rooms)
 
 
 # ---- realtime hub: sockets and presence only, never durable state ----------------------------
@@ -56,6 +58,8 @@ class Hub:
         self.sockets: dict[uuid.UUID, dict[int, tuple[WebSocket, int]]] = defaultdict(dict)  # room -> id(ws) -> (ws, slot); WebSocket is unhashable
         self.active_slot: dict[uuid.UUID, int | None] = {}  # who may relay progress right now
         self.voice_match: dict[uuid.UUID, str | None] = {}
+        self.presence_lock = RLock()  # short in-memory operations only; never held across DB work or awaits
+        self.empty_since: dict[uuid.UUID, float] = {}  # lobby room -> monotonic time it was first seen with no socket
         self.loop: asyncio.AbstractEventLoop | None = None
 
     def track_turn(self, room_id, snap: dict):
@@ -71,11 +75,42 @@ class Hub:
         else:
             self.voice_match.pop(room_id, None)
 
+    def connections(self, room_id):
+        with self.presence_lock:
+            return list(self.sockets.get(room_id, {}).values())
+
     def present(self, room_id) -> set[int]:
-        return {slot for _, slot in self.sockets[room_id].values()}
+        return {slot for _, slot in self.connections(room_id)}
+
+    def connected_rooms(self) -> set[uuid.UUID]:
+        with self.presence_lock:
+            return {room_id for room_id, sockets in self.sockets.items() if sockets}
+
+    def connect(self, room_id, ws, slot):
+        # The caller holds the Room row lock, also used by the stale-room sweep.
+        with self.presence_lock:
+            self.sockets[room_id][id(ws)] = (ws, slot)
+            self.empty_since.pop(room_id, None)
+
+    def disconnect(self, room_id, ws):
+        with self.presence_lock:
+            sockets = self.sockets.get(room_id)
+            if sockets is None or id(ws) not in sockets:
+                return
+            sockets.pop(id(ws))
+            if not sockets:
+                self.sockets.pop(room_id, None)
+                self.empty_since[room_id] = time.monotonic()
+
+    def mark_empty(self, room_id, now):
+        with self.presence_lock:
+            if self.sockets.get(room_id):
+                self.empty_since.pop(room_id, None)
+                return None
+            return self.empty_since.setdefault(room_id, now)
 
     async def broadcast(self, room_id, event: dict, exclude: WebSocket | None = None):
-        for ws, _ in list(self.sockets[room_id].values()):
+        for ws, _ in self.connections(room_id):
             if ws is not exclude:
                 try:
                     await ws.send_json(event)
@@ -259,6 +294,7 @@ def create_room(body: CreateIn, guest=Depends(current_guest), s: Session = Depen
         out = play._new_match(s, guest, song.id, [guest.display_name], room_id=room.id, duet=True)
         s.get(Match, out['match_id']).state = 'lobby'
     s.commit()
+    hub.mark_empty(room.id, time.monotonic())  # creation starts the grace period before the first sweep
     return {**snapshot(s, room), "you": 0}  # "you": the caller's seat (the shared snapshot cannot say)
 
 
@@ -341,7 +377,8 @@ def list_rooms(visibility: str | None = None, q: str | None = None, guest=Depend
     `visibility` = public | private narrows the list; `q` matches the host's name (case-insensitive)."""
     stmt = (select(Room, RoomMember.display_name, RoomMember.room_id)
             .join(RoomMember, (RoomMember.room_id == Room.id) & (RoomMember.slot == 0))
-            .where(Room.state == "lobby", Room.expires_at > datetime.now(timezone.utc))
+            .where(Room.state == "lobby", Room.expires_at > datetime.now(timezone.utc),
+                   Room.id.in_(hub.connected_rooms()))
             .order_by(Room.created_at.desc()).limit(LIST_LIMIT))
     if visibility in ("public", "private"):
         stmt = stmt.where(Room.visibility == visibility)
@@ -351,7 +388,8 @@ def list_rooms(visibility: str | None = None, q: str | None = None, guest=Depend
     counts = dict(s.execute(select(RoomMember.room_id, func.count()).where(RoomMember.room_id.in_([r.id for r, *_ in rows]))
                             .group_by(RoomMember.room_id)).all()) if rows else {}
     items = [{"id": r.id, "visibility": r.visibility, "host_name": host, "clip_id": r.clip_id, "players": counts.get(r.id, 1),
-              "created_at": r.created_at, "mine": False} for r, host, _ in rows if counts.get(r.id, 1) < 2]
+              "created_at": r.created_at, "mine": False} for r, host, _ in rows
+             if counts.get(r.id, 1) < 2 and hub.present(r.id)]  # nobody connected: abandoned, hide it before the sweeper closes it
     # Rooms you already sit in come first, even when full or started, so a dropped player can find the way back
     # now that codes are not shown. Joining one of these again just returns your seat.
     seen = {i["id"] for i in items}
@@ -363,6 +401,44 @@ def list_rooms(visibility: str | None = None, q: str | None = None, guest=Depend
                 "created_at": r.created_at, "mine": True}
         items = [mine] + [i for i in items if i["id"] != r.id] if r.id in seen else [mine] + items
     return items
+
+
+def close_stale_rooms(grace: float = ROOM_GRACE_S, now: float | None = None) -> int:
+    """Close empty lobbies after a full grace period; playing rooms are never swept.
+
+    New rooms start their clock at creation, disconnects restart it, and rooms first
+    seen after a server restart receive a full grace period. Socket admission uses
+    the same Room row lock, so a reconnect cannot race the final empty check/commit.
+    The hub remains process-local: deployment requires a single Uvicorn worker.
+    """
+    now = time.monotonic() if now is None else now
+    closed = 0
+    with Session(get_engine()) as s:
+        lobby = s.scalars(select(Room.id).where(Room.state == "lobby")).all()
+        with hub.presence_lock:
+            for gone in set(hub.empty_since) - set(lobby):
+                hub.empty_since.pop(gone, None)
+        for room_id in lobby:
+            since = hub.mark_empty(room_id, now)
+            if since is None or now - since < grace:
+                continue
+            room = s.get(Room, room_id, with_for_update=True)
+            # Recheck under the durable lock: start/join/admission may have won it.
+            since = hub.mark_empty(room_id, now)
+            if room is None or room.state != "lobby" or since is None or now - since < grace:
+                s.rollback()
+                continue
+            last = _latest_match(s, room)
+            if last and last.state != "finished":
+                last.state = "aborted"
+            room.state = "aborted"
+            _bump(room)
+            s.commit()
+            publish(s, room)
+            with hub.presence_lock:
+                hub.empty_since.pop(room_id, None)
+            closed += 1
+    return closed
 
 
 @router.get("/api/rooms/{room_id}")
@@ -532,8 +608,8 @@ def _origin_ok(ws: WebSocket) -> bool:
     return origin in allowed or origin.split("://", 1)[-1] == ws.headers.get("host")
 
 
-def _ws_slot(token: str | None, bearer: str | None, room_id: uuid.UUID) -> int | None:
-    """Return the caller's seat in the room, or None. Runs in a thread (blocking DB)."""
+def _ws_slot(token: str | None, bearer: str | None, room_id: uuid.UUID, ws: WebSocket) -> int | None:
+    """Authenticate and register presence under the Room lock shared with the sweep."""
     with Session(get_engine()) as s:
         guest = None
         if bearer:
@@ -544,8 +620,16 @@ def _ws_slot(token: str | None, bearer: str | None, room_id: uuid.UUID) -> int |
         if guest is None and token:
             guest = s.scalar(select(GuestSession).where(GuestSession.token_hash == play._hash(token),
                                                         GuestSession.expires_at > datetime.now(timezone.utc)))
-        return guest and s.scalar(select(RoomMember.slot).where(RoomMember.room_id == room_id,
-                                                               RoomMember.guest_id == guest.id))
+        if guest is None:
+            return None
+        room = s.get(Room, room_id, with_for_update=True)
+        if room is None or room.state == "aborted":
+            return None
+        slot = s.scalar(select(RoomMember.slot).where(RoomMember.room_id == room_id,
+                                                      RoomMember.guest_id == guest.id))
+        if slot is not None:
+            hub.connect(room_id, ws, slot)
+        return slot
 
 
 def _snapshot_event(room_id: uuid.UUID) -> dict | None:
@@ -566,15 +650,28 @@ async def room_socket(ws: WebSocket, room_id: uuid.UUID):
     # query string would end up in server access logs.
     protos = [p.strip() for p in ws.headers.get("sec-websocket-protocol", "").split(",")]
     bearer = protos[1] if len(protos) == 2 and protos[0] == "bearer" else None
-    slot = await asyncio.to_thread(_ws_slot, ws.cookies.get("guest_token"), bearer, room_id)
+    admission = asyncio.create_task(asyncio.to_thread(_ws_slot, ws.cookies.get("guest_token"), bearer, room_id, ws))
+    try:
+        slot = await asyncio.shield(admission)
+    except asyncio.CancelledError:
+        # Cancelling to_thread cannot stop its DB transaction. If it admits the
+        # socket after the request has gone away, release that presence as well.
+        def discard_admission(task):
+            if not task.cancelled():
+                task.exception()  # consume a DB failure after the request was cancelled
+            hub.disconnect(room_id, ws)
+        admission.add_done_callback(discard_admission)
+        raise
     if slot is None:
         return await ws.close(code=4403)  # not logged in, or not in this room
 
-    await ws.accept(subprotocol="bearer" if bearer else None)
-    hub.sockets[room_id][id(ws)] = (ws, slot)
-    await hub.broadcast(room_id, await asyncio.to_thread(_snapshot_event, room_id))  # presence changed
     recent: deque = deque()
     try:
+        await ws.accept(subprotocol="bearer" if bearer else None)
+        event = await asyncio.to_thread(_snapshot_event, room_id)
+        if event is None:
+            return await ws.close(code=4404)
+        await hub.broadcast(room_id, event)  # presence changed
         while True:
             try:
                 frame = await asyncio.wait_for(ws.receive(), HEARTBEAT_TIMEOUT)
@@ -618,7 +715,7 @@ async def room_socket(ws: WebSocket, room_id: uuid.UUID):
                     continue
                 # Only the opposite seat receives SDP/ICE; another tab of the sender never does.
                 event = _event('voice_signal', slot=slot, data=data)
-                for target, seat in list(hub.sockets[room_id].values()):
+                for target, seat in hub.connections(room_id):
                     if seat != slot:
                         try:
                             await target.send_json(event)
@@ -635,7 +732,7 @@ async def room_socket(ws: WebSocket, room_id: uuid.UUID):
     except WebSocketDisconnect:
         pass
     finally:
-        hub.sockets[room_id].pop(id(ws), None)
+        hub.disconnect(room_id, ws)
         event = await asyncio.to_thread(_snapshot_event, room_id)
         if event:
             await hub.broadcast(room_id, event)

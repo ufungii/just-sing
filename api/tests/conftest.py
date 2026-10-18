@@ -43,4 +43,6 @@ def _fresh_rate_limits():
     play._hits.clear()
     rooms._join_log.clear()
     rooms._wrong_password_log.clear()
+    rooms.hub.sockets.clear()  # presence and the stale-room clocks are in-memory too
+    rooms.hub.empty_since.clear()
     yield
