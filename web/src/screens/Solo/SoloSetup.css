@@ -67,6 +67,7 @@
 /* The wheel is exactly as tall as the jacket beside it (cover, title, artist, length), so no blank
    band is left under the jacket: size containment keeps the list from setting the row's height,
    and the list scrolls inside whatever height the jacket gives it. */
+.solo-stage__waiting { align-self: center; margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 26px; }
 .solo-stage__row > .song-wheel { contain: size; min-height: 320px; }
 .solo-stage__row > .song-wheel .song-wheel__list { flex: 1 1 0; min-height: 0; max-height: none; }
 

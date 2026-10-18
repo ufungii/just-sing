@@ -348,12 +348,14 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
       <ScreenShell title="ROOM" kao="(＾▽＾)ﾉ" onBack={leave} backLabel="LEAVE">
         {notices}
         <div className="solo-grid solo-grid--stack">
-          <Panel tone="pink" label={isHost ? 'PICK A SONG' : 'SONG (THE HOST PICKS)'} className="solo-stage">
+          <Panel label={isHost ? 'PICK A SONG' : 'SONG (THE HOST PICKS)'} className="solo-stage">
             <div className="solo-stage__row">
               <SongJacket entry={entries.find((e) => e.clip?.id === snap.clip_id) ?? null} />
-              {isHost && (
+              {isHost ? (
                 <SongWheel clips={clips} selected={snap.clip_id} onRetry={loadClips}
                   onSelect={(id) => id !== snap.clip_id && act(() => setRoomClip(room.id, id).then(pushSnapshot))} />
+              ) : (
+                <p className="solo-stage__waiting" role="status">Host is choosing a song...</p>
               )}
             </div>
             <PracticeRangePicker clipId={snap.clip_id} range={snap.range} disabled={busy}
