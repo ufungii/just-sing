@@ -333,24 +333,28 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
         <span className="sr-only" aria-live="polite">
           {cueOn ? `Next: ${names(handoff!.slot)} sings in a few seconds.` : ''}
         </span>
-        {phase === 'loading' && <div className="sing-overlay">LOADING AUDIO AND MIC…</div>}
-        {phase === 'ready' && <div className="sing-overlay"><PixelButton tone="hot" size="lg" onClick={() => void prepare()}>READY TO SING</PixelButton></div>}
-        {phase === 'waiting' && <div className="sing-overlay">Waiting for both microphones and audio…</div>}
-        {phase === 'playing' && now < rangeStart - 3 && <div className="sing-overlay">Starting together…</div>}
+        {phase === 'loading' && <div className="sing-overlay"><p className="sing-overlay__text">LOADING AUDIO AND MIC…</p></div>}
+        {phase === 'ready' && <div className="sing-overlay"><p className="sing-overlay__text">Wired headphones on? Sing along with the notes!</p><PixelButton tone="hot" size="lg" onClick={() => void prepare()} autoFocus>READY TO SING</PixelButton></div>}
+        {phase === 'waiting' && <div className="sing-overlay"><p className="sing-overlay__text">Waiting for both microphones and audio…</p></div>}
+        {phase === 'playing' && now < rangeStart - 3 && <div className="sing-overlay"><p className="sing-overlay__text">Starting together…</p></div>}
         {phase === 'playing' && now >= rangeStart - 3 && now < rangeStart && <Countdown value={String(Math.ceil(rangeStart - now))} />}
+        {phase === 'playing' && now >= rangeStart && now < rangeStart + 0.8 && <Countdown value="SING!" />}
         {phase === 'playing' && judge && <Judgement key={judge.phrase_id} rating={judge.rating} />}
-        <div className="sing-progress"><div className="sing-progress__fill" style={{ width: `${Math.max(0, Math.min(1, (now - rangeStart) / (rangeEnd - rangeStart))) * 100}%` }} /></div>
+        <div className="sing-progress" aria-hidden="true"><div className="sing-progress__fill" style={{ width: `${Math.max(0, Math.min(1, (now - rangeStart) / (rangeEnd - rangeStart))) * 100}%` }} /></div>
       </div>
       {(phase === 'saving' || phase === 'saved') && <Notice>{phase === 'saving' ? 'Saving assigned phrases…' : error ? 'The song is over. Retry saving your existing result.' : 'Your score is saved. Waiting for the other result…'}</Notice>}
       {phase === 'saved' && error && <PixelButton onClick={() => void save()}>RETRY SAVE</PixelButton>}
       {phase === 'error' && <PixelButton onClick={() => void restart()}>{setup.online ? 'STOP DUET FOR RESTART' : 'RESTART TOGETHER'}</PixelButton>}
-      <Panel>
-        <div className="duet-audio-controls">
-        <MicInputControl />
+      <Panel className="sing-lyrics-panel">
+        {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman={showRoman} showTrans={showTrans}
+          singerAt={(time) => sections[sectionAt(sections, time)]?.slot ?? 0} />}
+      </Panel>
+      <div className="sing-lyrics-head">
         <div className="ui-seg" role="group" aria-label="Lyric helpers">
           <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showRoman} onClick={() => setShowRoman((v) => !v)}>ROMANIZATION</PixelButton>
           <PixelButton size="sm" tone="paper" className="sing-toggle" aria-pressed={showTrans} onClick={() => setShowTrans((v) => !v)}>ENGLISH</PixelButton>
         </div>
+        <MicInputControl />
         {engine.current?.vocals && <GuideControl on={guide} volume={guideVolume} onToggle={() => setGuide((v) => !v)} onVolume={setGuideVolume} />}
         {setup.online &&
           <div className="ui-guide" title="Hear the other singer live during their sections. Headphones required.">
@@ -365,19 +369,22 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedV
             </PixelButton>
           </div>
         }
+        <div className="sing-meter" title="Mic level" aria-label="Mic level">
+          <span className="sing-meter__label">MIC</span>
+          <span className="sing-meter__bar">
+            <span style={{ width: `${Math.min(1, (engine.current?.tracker.level ?? 0) / 0.2) * 100}%` }} />
+          </span>
         </div>
-        {setup.online && <>
-          <p className="duet-voice-status" role="status" data-testid="voice-status" data-state={voiceStatus.state}>
-            {voiceStatus.state === 'connected' ? 'Live voice connected.' : voiceStatus.state === 'unavailable'
-              ? 'Live voice unavailable. Public STUN only; no TURN relay is configured, so strict networks can block voice. Singing and scoring still work.'
-              : voiceStatus.state === 'waiting' ? 'Live voice waits for both players.' : 'Connecting live voice…'}
-            {voiceStatus.rttMs !== undefined && ` Network round trip ${Math.round(voiceStatus.rttMs)} ms.`}
-            {voiceStatus.bufferMs !== undefined && ` Receive buffer ${Math.round(voiceStatus.bufferMs)} ms (not total voice delay).`}
-          </p>
-        </>}
-        {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman={showRoman} showTrans={showTrans}
-          singerAt={(time) => sections[sectionAt(sections, time)]?.slot ?? 0} />}
-      </Panel>
+      </div>
+      {setup.online && <>
+        <p className="duet-voice-status" role="status" data-testid="voice-status" data-state={voiceStatus.state}>
+          {voiceStatus.state === 'connected' ? 'Live voice connected.' : voiceStatus.state === 'unavailable'
+            ? 'Live voice unavailable. Public STUN only; no TURN relay is configured, so strict networks can block voice. Singing and scoring still work.'
+            : voiceStatus.state === 'waiting' ? 'Live voice waits for both players.' : 'Connecting live voice…'}
+          {voiceStatus.rttMs !== undefined && ` Network round trip ${Math.round(voiceStatus.rttMs)} ms.`}
+          {voiceStatus.bufferMs !== undefined && ` Receive buffer ${Math.round(voiceStatus.bufferMs)} ms (not total voice delay).`}
+        </p>
+      </>}
     </ScreenShell>
   );
 }
