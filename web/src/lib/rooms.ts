@@ -94,7 +94,7 @@ const listeners = new Set<() => void>();
 const voiceListeners = new Set<(slot: number, data: VoiceSignal) => void>();
 
 /** Ephemeral signaling only. SDP/ICE must never be persisted with match results. */
-export type VoiceSignal = { match_id: string; session: string; peer?: string } & (
+export type VoiceSignal = { match_id: string | null; session: string; peer?: string } & (
   { kind: 'ready' } | { kind: 'offer' | 'answer'; sdp: string } |
   { kind: 'ice'; candidate: RTCIceCandidateInit }
 );

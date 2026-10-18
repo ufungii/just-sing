@@ -26,8 +26,9 @@ const HANDOFF_CUE = 4;
 const EMPTY: (number | null)[] = [];
 
 /** A single audio/capture session. Sections change ownership; audio never restarts at a handoff. */
-export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
+export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted, sharedVoice, checkedMic, onVoiceFinished }: {
   setup: DuetSetup; onLeave: () => void; voiceMuted?: boolean; onVoiceMuted?: (muted: boolean) => void;
+  sharedVoice?: DuetVoice; checkedMic?: MediaStream; onVoiceFinished?: () => void;
 }) {
   const nav = useNav();
   const [song, setSong] = useState<Song | null>(null);
@@ -92,17 +93,23 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
         if (!live) return;
         if (!m.duet) throw new Error('This match has no duet sections. Start a new match.');
         setSong(s); setMatch(m); setNow(m.duet.range?.start ?? 0);
-        localEngine = await SingEngine.create(setup.clipId, s.duration, setup.calibrationOffset, m.duet.range);
+        localEngine = await SingEngine.create(setup.clipId, s.duration, setup.calibrationOffset, m.duet.range, sharedVoice?.context);
         if (!live) return localEngine.close();
-        const stream = await openMic();
+        const stream = checkedMic?.getAudioTracks().some((t) => t.readyState === 'live') ? checkedMic.clone() : await openMic();
         if (!live) { stopStream(stream); return localEngine.close(); }
         localEngine.attachMic(stream, false); // duet scoring needs pitch only; no session recording
         engine.current = localEngine;
         setPhase('ready');
-      } catch (e) { if (live) { setError(message(e)); setPhase('error'); } }
+      } catch (e) { localEngine?.close(); if (live) { setError(message(e)); setPhase('error'); } }
     })();
     return () => { live = false; voice.current?.close(); localEngine?.close(); engine.current = null; };
   }, [setup.matchId, setup.clipId, setup.calibrationOffset]);
+
+  useEffect(() => {
+    if (['error', 'saving', 'saved'].includes(phase)) {
+      voice.current?.close(); engine.current?.close(); onVoiceFinished?.();
+    }
+  }, [phase, onVoiceFinished]);
 
   const voiceActive = mySlot !== undefined && ['ready', 'waiting', 'playing'].includes(phase);
   useEffect(() => {
@@ -110,8 +117,10 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
     if (!voiceActive || !audio?.micStream || !setup.online) return;
     let peer: DuetVoice;
     try {
-      peer = new DuetVoice(audio.ctx, audio.micStream, audio.enableVoiceMix(),
+      peer = sharedVoice ?? new DuetVoice(audio.ctx, audio.micStream, audio.enableVoiceMix(),
         setup.online.roomId, setup.matchId, setup.online.slot, setVoiceStatus);
+      if (sharedVoice) peer.setOutput(audio.enableVoiceMix());
+      peer.setReporter(setVoiceStatus);
       voice.current = peer;
     } catch { setVoiceStatus({ state: 'unavailable' }); return; }
     return () => { peer.close(); if (voice.current === peer) voice.current = null; };
@@ -234,13 +243,13 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
     return time === undefined || !Number.isFinite(time) ? rangeStart - 3 : time;
   }, [rangeStart]);
   async function restart() {
-    voice.current?.close(); engine.current?.close();
+    voice.current?.close(); engine.current?.close(); onVoiceFinished?.();
     await stopDuet(setup.matchId).catch(() => {});
     if (setup.online) return; // The room shows the explicit host restart action.
     try { const m = await rematch(setup.matchId); nav.go({ name: 'duet', setup: { ...setup, matchId: m.match_id } }); }
     catch (e) { setError(message(e)); }
   }
-  async function leave() { voice.current?.close(); engine.current?.close(); if (match?.state !== 'finished') await stopDuet(setup.matchId).catch(() => {}); onLeave(); }
+  async function leave() { voice.current?.close(); engine.current?.close(); onVoiceFinished?.(); if (match?.state !== 'finished') await stopDuet(setup.matchId).catch(() => {}); onLeave(); }
 
   if (match?.state === 'finished' && song) return (
     <ScreenShell title="DUET RESULTS" kao="ヾ(＾∇＾)" onBack={onLeave} backLabel="HOME">
@@ -314,7 +323,7 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
         {setup.online && <>
           <p className="duet-voice-status" role="status" data-testid="voice-status" data-state={voiceStatus.state}>
             {voiceStatus.state === 'connected' ? 'Live voice connected.' : voiceStatus.state === 'unavailable'
-              ? 'Live voice unavailable. Your network may need a relay; singing and scoring still work.'
+              ? 'Live voice unavailable. Public STUN only; no TURN relay is configured, so strict networks can block voice. Singing and scoring still work.'
               : voiceStatus.state === 'waiting' ? 'Live voice waits for both players.' : 'Connecting live voice…'}
             {voiceStatus.rttMs !== undefined && ` Network round trip ${Math.round(voiceStatus.rttMs)} ms.`}
             {voiceStatus.bufferMs !== undefined && ` Receive buffer ${Math.round(voiceStatus.bufferMs)} ms (not total voice delay).`}

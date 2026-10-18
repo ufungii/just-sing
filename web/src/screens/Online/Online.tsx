@@ -1,5 +1,6 @@
 import { nameEasterEgg } from '../EasterEgg/name';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { DuetVoice, type VoiceStatus } from '../../audio/duetVoice';
 import { ApiError, asGuest, retryTurn } from '../../lib/api';
 import { getPlayer, usePlayers } from '../../lib/players';
 import { PlayerPicker } from '../../components/players/PlayerPicker';
@@ -206,6 +207,42 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [gone, setGone] = useState<string | null>(null);
   const [voiceMuted, setVoiceMuted] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>({ state: 'waiting' });
+  const [voiceCapture, setVoiceCapture] = useState<{ peer: DuetVoice; stream: MediaStream } | null>(null);
+  const captureRef = useRef<typeof voiceCapture>(null);
+  const releaseVoice = useCallback(() => {
+    const capture = captureRef.current;
+    captureRef.current = null;
+    if (capture) {
+      capture.peer.close();
+      capture.stream.getTracks().forEach((track) => track.stop());
+      void capture.peer.context.close();
+    }
+    setVoiceCapture(null);
+  }, []);
+  const micPassed = useCallback((passed: boolean) => {
+    setMicOk(passed);
+    if (!passed) releaseVoice();
+  }, [releaseVoice]);
+  const micReady = useCallback((stream: MediaStream, ctx: AudioContext) => {
+    releaseVoice();
+    try {
+      const peer = new DuetVoice(ctx, stream, ctx.destination, room.id, null, room.slot, setVoiceStatus, voiceMuted);
+      const capture = { peer, stream };
+      captureRef.current = capture;
+      setVoiceCapture(capture);
+      // Device removal/revocation must silence sharing and require a fresh check.
+      stream.getAudioTracks().forEach((track) => track.addEventListener('ended', () => {
+        if (captureRef.current === capture) { setMicOk(false); releaseVoice(); }
+      }, { once: true }));
+    } catch {
+      stream.getTracks().forEach((track) => track.stop());
+      void ctx.close();
+      setVoiceStatus({ state: 'unavailable' });
+    }
+  }, [releaseVoice, room.id, room.slot, voiceMuted]);
+  useEffect(() => { voiceCapture?.peer.setMuted(voiceMuted); }, [voiceMuted, voiceCapture]);
+  useEffect(() => () => releaseVoice(), [releaseVoice]);
 
   // Connect once, and seed with a plain GET so the screen never waits on the socket.
   useEffect(() => {
@@ -219,6 +256,10 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
 
   const snap = live.snapshot;
   const isHost = room.slot === 0;
+  useEffect(() => {
+    if (gone || live.conn === 'refused' || snap && snap.state !== 'lobby' && !(snap.state === 'playing' && snap.match?.duet &&
+      ['preparing', 'active'].includes(snap.match.state))) releaseVoice();
+  }, [snap?.state, snap?.match?.state, gone, live.conn, releaseVoice]);
   // The host leaving the lobby closes the room for everyone.
   const leave = () => {
     if (isHost && snap?.state === 'lobby') abortRoom(room.id).catch(() => {});
@@ -331,12 +372,18 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
               <Segmented label="Voice range" options={REGISTERS} value={register} onChange={setRegister} />
             </Panel>
             <Panel tone="sky" label="MIC CHECK">
-              <p className="solo-hint">Headphones required. During the duet, your voice is shared live with the other player in your sections. It is not recorded. Muting sharing keeps your local scoring active.</p>
-              <PixelButton size="sm" aria-label="Mute my mic to opponent" aria-pressed={voiceMuted}
-                tone={voiceMuted ? 'paper' : 'hot'} onClick={() => setVoiceMuted((v) => !v)}>
-                {voiceMuted ? 'MY VOICE MUTED' : 'SHARING MY VOICE'}
+              <p className="solo-hint">Headphones required to prevent echo. After the mic check, both players can talk here. During the song, sharing opens only in your sections; count-in is silent. Voice is not recorded. Muting sharing keeps local scoring active.</p>
+              <PixelButton size="sm" aria-label="Mute my mic to opponent" aria-pressed={!micOk || voiceMuted}
+                tone={!micOk || voiceMuted ? 'paper' : 'hot'} disabled={!micOk} onClick={() => setVoiceMuted((v) => !v)}>
+                {!micOk || voiceMuted ? 'MY VOICE MUTED' : 'SHARING MY VOICE'}
               </PixelButton>
-              <MicCheck onPassedChange={setMicOk} />
+              <p role="status" data-testid="lobby-voice-status" data-state={voiceStatus.state}>
+                {!micOk ? 'Your voice is muted until you pass the mic check.' : voiceStatus.state === 'connected'
+                  ? 'Lobby voice connected.' : voiceStatus.state === 'unavailable'
+                    ? 'Voice connection failed. Public STUN only; no TURN relay is configured, so strict networks can block voice.'
+                    : voiceStatus.state === 'waiting' ? 'Voice waits for both players to connect and pass the mic check.' : 'Connecting lobby voice…'}
+              </p>
+              <MicCheck onPassedChange={micPassed} onStreamReady={micReady} />
             </Panel>
           </div>
           <div className="solo-go">
@@ -395,7 +442,7 @@ function RoomView({ room, notice }: { room: RoomRef; notice?: string }) {
     );
     return <Duet key={match.id} setup={{ matchId: match.id, clipId: snap.clip_id, registers: [register, register],
       calibrationOffset: offset, online: { roomId: room.id, slot: room.slot } }} onLeave={leave}
-      voiceMuted={voiceMuted} onVoiceMuted={setVoiceMuted} />;
+      voiceMuted={voiceMuted} onVoiceMuted={setVoiceMuted} sharedVoice={voiceCapture?.peer} checkedMic={voiceCapture?.stream} onVoiceFinished={releaseVoice} />;
   }
 
   // ---- playing: my turn, or waiting for the other singer ----
