@@ -27,7 +27,7 @@ export const SETLIST: PlannedSong[] = [
   { title: 'Russian Roulette', artist: 'Red Velvet' },
   { title: 'Soda Pop', artist: 'Saja Boys' },
   { title: 'Surf', artist: 'NCT WISH' },
-  { title: 'What is Love', artist: 'TWICE' },
+  { title: 'What is Love?', artist: 'TWICE' },
   { title: 'Zombie', artist: 'DAY6' },
 ];
 
