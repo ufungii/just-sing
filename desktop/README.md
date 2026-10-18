@@ -35,32 +35,45 @@ If the URL can't be reached, the window shows a small offline page with a
 Retry button instead of a blank screen. While running from source,
 `Ctrl/Cmd+R` reloads the app and `Ctrl/Cmd+Shift+I` opens DevTools.
 
-## Linux AppImage (x86-64)
+## Install a release (players)
 
-From `desktop/`, install dependencies and build:
+Download the file for your OS from the repo's **Releases** tab. The app opens
+`https://just-sing.ink` (the shared server), so it needs internet and a microphone.
+
+| OS | File | Run |
+|---|---|---|
+| Windows | `Just-Sing-<version>-win-x64.exe` | Run the installer. SmartScreen may warn ("unknown publisher"): **More info → Run anyway**. |
+| macOS | `Just-Sing-<version>-mac-<arch>.dmg` | Drag to Applications. First launch: right-click the app → **Open** (the build is unsigned). |
+| Linux | `Just-Sing-<version>-linux-x86_64.AppImage` | `chmod +x` the file, then run it. Without FUSE, add `--appimage-extract-and-run`. |
+
+The first time you sing, allow the microphone when asked. The builds are
+**unsigned** (no paid certificates for a hackathon), hence the OS warnings.
+
+## Build and publish (maintainers)
+
+Local build for your own OS, from `desktop/`. The server URL is baked in at
+build time; without `JUST_SING_URL` the packaged app defaults to
+`http://localhost:8000`:
 
 ```bash
 npm ci
-JUST_SING_URL=https://your-server.example npm run build:appimage
-chmod +x dist/Just-Sing-0.1.0-x86_64.AppImage
-./dist/Just-Sing-0.1.0-x86_64.AppImage
+JUST_SING_URL=https://just-sing.ink npm run dist   # installer lands in gitignored desktop/dist/
 ```
 
-The build remembers that server URL, so double-clicking the AppImage opens it.
-Without a build-time URL, the packaged app defaults to `http://localhost:8000`.
-The API and built frontend must already be running on the chosen server; the
-AppImage contains only the desktop shell, not Python, song assets, or credentials.
-The output stays in gitignored `desktop/dist/`.
-
-To use a different server without rebuilding:
+Windows and macOS installers can only be built on those systems, so releases
+are built by `.github/workflows/release.yml`. Push a version tag and it builds
+all three OSes and attaches the files to a GitHub Release:
 
 ```bash
-JUST_SING_URL=https://another-server.example ./dist/Just-Sing-0.1.0-x86_64.AppImage
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
-A Quick Tunnel hostname changes when the tunnel restarts; rebuild with the new
-URL or use this environment override. If your Linux distribution cannot mount
-AppImages through FUSE, run with `--appimage-extract-and-run`.
+To use a different server without rebuilding, set the variable at launch, e.g.
+`JUST_SING_URL=https://another-server.example ./Just-Sing-0.1.0-linux-x86_64.AppImage`.
+A Quick Tunnel hostname changes whenever the tunnel restarts, so use this
+override (or rebuild) for tunnel demos. The app contains only the desktop
+shell: no Python, song assets or credentials.
 
 ## What the web app sees
 

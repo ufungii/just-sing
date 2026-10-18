@@ -244,6 +244,7 @@ cd web && npm install && npm run dev
 
 # desktop app (optional; loads the server's URL)
 cd desktop && npm install && npm start
+# or download an installer from the GitHub Releases tab (see desktop/README.md)
 ```
 
 Spoken practice and the lyric check need the speech environment

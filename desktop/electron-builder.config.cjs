@@ -8,9 +8,8 @@ module.exports = {
   extraMetadata: {
     justSingUrl: process.env.JUST_SING_URL || 'http://localhost:8000',
   },
-  linux: {
-    target: ['AppImage'],
-    category: 'Game',
-    artifactName: 'Just-Sing-${version}-${arch}.${ext}',
-  },
+  artifactName: 'Just-Sing-${version}-${os}-${arch}.${ext}',
+  linux: { target: ['AppImage'], category: 'Game' },
+  win: { target: ['nsis'] },
+  mac: { target: ['dmg'], category: 'public.app-category.music' }, // unsigned: see desktop/README.md
 };

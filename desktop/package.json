@@ -7,6 +7,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "dist": "electron-builder --config electron-builder.config.cjs",
     "build:appimage": "electron-builder --config electron-builder.config.cjs --linux AppImage --x64"
   },
   "devDependencies": {
