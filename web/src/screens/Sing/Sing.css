@@ -1,15 +1,5 @@
 /* Singing screen: the lane dominates, lyrics sit underneath, judgements pop over the lane. */
 
-.sing-title {
-  margin: -8px 0 0;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 18px;
-}
-.sing-title span {
-  color: var(--ink-rose);
-}
-
 /* ---------- HUD chips ---------- */
 
 .sing-hud {

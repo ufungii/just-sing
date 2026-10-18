@@ -19,12 +19,16 @@ interface ScreenShellProps {
   /** Defaults to going home. */
   onBack?: () => void;
   backLabel?: string;
+  /** Shown between the back button and the title, e.g. the album cover on the singing screen. */
+  lead?: ReactNode;
+  /** A line under the title, left-aligned with it (e.g. the song title and artist). */
+  subtitle?: ReactNode;
   /** Extra controls at the right of the header. */
   right?: ReactNode;
   children: ReactNode;
 }
 
-export function ScreenShell({ title, kao, onBack, backLabel = 'BACK', right, children }: ScreenShellProps) {
+export function ScreenShell({ title, kao, onBack, backLabel = 'BACK', lead, subtitle, right, children }: ScreenShellProps) {
   const nav = useNav();
   return (
     <main className="ui-screen">
@@ -35,12 +39,18 @@ export function ScreenShell({ title, kao, onBack, backLabel = 'BACK', right, chi
           <PixelButton tone="paper" size="sm" onClick={onBack ?? nav.home}>
             ◀ {backLabel}
           </PixelButton>
-          <PixelTitle text={title} />
-          {kao && (
-            <span className="ui-kao" style={{ fontSize: 22, color: 'var(--hot)' }} aria-hidden="true">
-              {kao}
-            </span>
-          )}
+          {lead}
+          <div className="ui-header__titles">
+            <div className="ui-header__title-row">
+              <PixelTitle text={title} />
+              {kao && (
+                <span className="ui-kao" style={{ fontSize: 22, color: 'var(--hot)' }} aria-hidden="true">
+                  {kao}
+                </span>
+              )}
+            </div>
+            {subtitle && <p className="ui-header__subtitle">{subtitle}</p>}
+          </div>
           {right && <div className="ui-header__right">{right}</div>}
         </header>
         {children}

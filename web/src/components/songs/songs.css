@@ -299,3 +299,17 @@
   object-fit: cover;
 }
 .song-banner__thumb:has(.song-banner__cover) { overflow: hidden; }
+
+/* Header cover on the singing screens: sits between QUIT and the SING! title. */
+.song-thumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  overflow: hidden;
+  border: var(--border-thin) solid var(--ink);
+  background: var(--paper);
+  box-shadow: 5px 6px 0 var(--ink);
+}
+.song-thumb__img { width: 100%; height: 100%; object-fit: cover; }
