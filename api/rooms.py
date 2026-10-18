@@ -33,6 +33,7 @@ router = APIRouter()
 ROOM_TTL = timedelta(hours=2)
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O/1/I
 MAX_MESSAGE_BYTES = 2048
+MAX_VOICE_MESSAGE_BYTES = 16384  # SDP can exceed the small progress-message budget
 MAX_MESSAGES_PER_SECOND = 30
 HEARTBEAT_TIMEOUT = 45  # seconds of silence before a socket is dropped
 JOINS_PER_MINUTE = 10
@@ -48,12 +49,15 @@ class Hub:
     def __init__(self):
         self.sockets: dict[uuid.UUID, dict[int, tuple[WebSocket, int]]] = defaultdict(dict)  # room -> id(ws) -> (ws, slot); WebSocket is unhashable
         self.active_slot: dict[uuid.UUID, int | None] = {}  # who may relay progress right now
+        self.voice_match: dict[uuid.UUID, str | None] = {}
         self.loop: asyncio.AbstractEventLoop | None = None
 
     def track_turn(self, room_id, snap: dict):
         """Remember whose turn it is, so progress from anyone else is refused without a DB read."""
         match = snap["match"]
         self.active_slot[room_id] = (-1 if match.get('duet') else match['active_slot']) if match and match['state'] == 'active' else None
+        self.voice_match[room_id] = str(match['id']) if (snap['state'] == 'playing' and match and
+            match.get('duet') and match['state'] in ('preparing', 'active')) else None
 
     def present(self, room_id) -> set[int]:
         return {slot for _, slot in self.sockets[room_id].values()}
@@ -73,6 +77,33 @@ class Hub:
 
 
 hub = Hub()
+
+
+def _valid_voice_signal(data: object) -> bool:
+    """Bound and whitelist signaling. No client-supplied destination or sender identity."""
+    if not isinstance(data, dict):
+        return False
+    for key in ('match_id', 'session'):
+        if not isinstance(data.get(key), str) or not 1 <= len(data[key]) <= 64:
+            return False
+    kind = data.get('kind')
+    common = {'match_id', 'session', 'kind'}
+    if kind == 'ready':
+        return set(data) == common
+    if not isinstance(data.get('peer'), str) or not 1 <= len(data['peer']) <= 64:
+        return False
+    common.add('peer')
+    if kind in ('offer', 'answer'):
+        return set(data) == common | {'sdp'} and isinstance(data.get('sdp'), str) and 0 < len(data['sdp']) <= 14000
+    if kind == 'ice':
+        c = data.get('candidate')
+        return (set(data) == common | {'candidate'} and isinstance(c, dict) and
+                set(c) <= {'candidate', 'sdpMid', 'sdpMLineIndex', 'usernameFragment'} and
+                isinstance(c.get('candidate'), str) and len(c['candidate']) <= 2048 and
+                (c.get('sdpMid') is None or isinstance(c['sdpMid'], str) and len(c['sdpMid']) <= 256) and
+                (c.get('sdpMLineIndex') is None or type(c['sdpMLineIndex']) is int and 0 <= c['sdpMLineIndex'] <= 32) and
+                (c.get('usernameFragment') is None or isinstance(c['usernameFragment'], str) and len(c['usernameFragment']) <= 256))
+    return False
 
 
 # ---- snapshots -------------------------------------------------------------------------------
@@ -159,6 +190,7 @@ def _draft(s: Session, room: Room, guest: GuestSession) -> Match:
 
 @router.post("/api/rooms")
 def create_room(body: RoomIn, guest=Depends(current_guest), s: Session = Depends(get_db)):
+    play.require_player_name(guest.display_name)
     song = play.require_clip(s, body.clip_id)
     for _ in range(5):  # a code collision is rare; retry
         room = Room(code="".join(secrets.choice(CODE_ALPHABET) for _ in range(5)), host_guest_id=guest.id,
@@ -184,6 +216,7 @@ _join_log: dict[uuid.UUID, deque] = defaultdict(deque)
 
 @router.post("/api/rooms/join")
 def join_room(body: JoinIn, guest=Depends(current_guest), s: Session = Depends(get_db)):
+    play.require_player_name(guest.display_name)
     now = time.monotonic()  # ponytail: in-memory limiter, fine for one worker
     joins = _join_log[guest.id]
     while joins and now - joins[0] > 60:
@@ -437,17 +470,39 @@ async def room_socket(ws: WebSocket, room_id: uuid.UUID):
             while recent and now - recent[0] > 1:
                 recent.popleft()
             recent.append(now)
-            if len(raw.encode()) > MAX_MESSAGE_BYTES or len(recent) > MAX_MESSAGES_PER_SECOND:
+            if len(raw.encode()) > MAX_VOICE_MESSAGE_BYTES or len(recent) > MAX_MESSAGES_PER_SECOND:
                 await ws.send_json(_event("error", code="rate_limited", message="Message too large or too frequent."))
                 continue
             try:
                 msg = json.loads(raw)
                 kind = msg["type"]
             except (ValueError, KeyError, TypeError):
-                await ws.send_json(_event("error", code="bad_message", message="Send JSON with a type."))
+                if len(raw.encode()) > MAX_MESSAGE_BYTES:
+                    await ws.send_json(_event('error', code='rate_limited', message='Message too large.'))
+                else:
+                    await ws.send_json(_event("error", code="bad_message", message="Send JSON with a type."))
+                continue
+            if kind != 'voice_signal' and len(raw.encode()) > MAX_MESSAGE_BYTES:
+                await ws.send_json(_event('error', code='rate_limited', message='Message too large.'))
                 continue
             if kind == "heartbeat":
                 await ws.send_json(_event("heartbeat_ack"))
+            elif kind == 'voice_signal':
+                data = msg.get('data')
+                if not _valid_voice_signal(data):
+                    await ws.send_json(_event('error', code='bad_message', message='Invalid voice signaling.'))
+                    continue
+                if hub.voice_match.get(room_id) != data['match_id'] or hub.present(room_id) != {0, 1}:
+                    await ws.send_json(_event('error', code='voice_unavailable', message='Voice needs two connected duet players.'))
+                    continue
+                # Only the opposite seat receives SDP/ICE; another tab of the sender never does.
+                event = _event('voice_signal', slot=slot, data=data)
+                for target, seat in list(hub.sockets[room_id].values()):
+                    if seat != slot:
+                        try:
+                            await target.send_json(event)
+                        except Exception:
+                            log.warning('voice signaling delivery failed')
             elif kind in ("progress", "phrase_rating"):
                 if hub.active_slot.get(room_id) not in (slot, -1):  # duet clients share one timeline
                     await ws.send_json(_event("error", code="not_your_turn", message="It is not your turn."))

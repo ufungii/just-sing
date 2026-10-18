@@ -55,7 +55,27 @@ let roomId: string | null = null;
 let ws: WebSocket | null = null;
 let timers: number[] = [];
 let retry = 0;
+let generation = 0;
 const listeners = new Set<() => void>();
+const voiceListeners = new Set<(slot: number, data: VoiceSignal) => void>();
+
+/** Ephemeral signaling only. SDP/ICE must never be persisted with match results. */
+export type VoiceSignal = { match_id: string; session: string; peer?: string } & (
+  { kind: 'ready' } | { kind: 'offer' | 'answer'; sdp: string } |
+  { kind: 'ice'; candidate: RTCIceCandidateInit }
+);
+export const roomLive = () => state;
+export function subscribeRoomLive(listener: () => void) {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+export function subscribeVoice(listener: (slot: number, data: VoiceSignal) => void) {
+  voiceListeners.add(listener);
+  return () => { voiceListeners.delete(listener); };
+}
+export function sendVoice(data: VoiceSignal) {
+  if (ws?.readyState === 1) ws.send(JSON.stringify({ type: 'voice_signal', data }));
+}
 
 function set(patch: Partial<RoomLive>) {
   state = { ...state, ...patch };
@@ -65,33 +85,39 @@ function set(patch: Partial<RoomLive>) {
 async function open() {
   if (!roomId) return;
   const id = roomId;
+  const openedGeneration = generation;
   // Logged-in players authenticate with the Auth0 token as a subprotocol (a query string would reach server logs).
   const token = await bearerToken();
-  if (roomId !== id) return; // left while the token was being fetched
+  if (roomId !== id || generation !== openedGeneration) return; // left, including a rejoin to the same ID
   const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/rooms/${id}`;
   const sock = token ? new WebSocket(url, ['bearer', token]) : new WebSocket(url);
   ws = sock;
   let opened = false;
   sock.onopen = () => {
+    if (roomId !== id || ws !== sock) return;
     opened = true;
     retry = 0;
     set({ conn: 'open' });
     timers.push(window.setInterval(() => sock.readyState === 1 && sock.send('{"type":"heartbeat"}'), 15_000));
   };
   sock.onmessage = (m) => {
+    if (roomId !== id || ws !== sock) return;
     const ev = JSON.parse(m.data);
     if (ev.type === 'room_snapshot') {
-      const { type: _t, id: _i, ...snap } = ev;
+      // On snapshots `id` is the room ID (the server's fields override its event ID).
+      const { type: _t, ...snap } = ev;
+      if (snap.id !== id) return;
       if (state.snapshot && snap.state_version < state.snapshot.state_version) return; // stale
       const turnChanged = state.snapshot?.match?.active_slot !== snap.match?.active_slot || state.snapshot?.match?.id !== snap.match?.id;
       set({ snapshot: snap, ...(turnChanged ? { progress: null, badges: [] } : {}) });
     } else if (ev.type === 'turn_progress' && ev.data) set({ progress: { slot: ev.slot, t: ev.data.t, running: ev.data.running } });
     else if (ev.type === 'phrase_rating' && ev.data) set({ badges: [...state.badges, ev.data] });
+    else if (ev.type === 'voice_signal' && ev.data) voiceListeners.forEach((l) => l(ev.slot, ev.data));
   };
   sock.onclose = () => {
+    if (roomId !== id || ws !== sock) return; // an old close must not cancel the replacement's heartbeat
     timers.forEach((t) => clearInterval(t));
     timers = [];
-    if (roomId !== id || ws !== sock) return; // left on purpose
     // The server closes with 4403 when we are not in the room (any pre-accept failure): do not loop.
     if (!opened && retry >= 3) return set({ conn: 'refused' });
     set({ conn: 'reconnecting' });
@@ -110,6 +136,8 @@ export function connectRoom(id: string, initial?: RoomSnapshot) {
 }
 
 export function leaveRoom() {
+  generation++;
+  retry = 0;
   roomId = null;
   const old = ws;
   ws = null;
@@ -126,6 +154,7 @@ export function sendLive(type: 'progress' | 'phrase_rating', data: object) {
 
 /** Merge a fresher HTTP snapshot (same ordering rule as the socket). */
 export function pushSnapshot(snap: RoomSnapshot) {
+  if (snap.id !== roomId) return; // a late HTTP response from a room we left
   if (!state.snapshot || snap.state_version >= state.snapshot.state_version) set({ snapshot: { ...state.snapshot, ...snap } });
 }
 

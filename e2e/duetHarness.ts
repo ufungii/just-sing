@@ -37,9 +37,9 @@ export async function duetPlayer(browser: Browser, baseURL: string, wallClockSke
   return { page, errors };
 }
 
-export async function manifest(page: Page) {
-  const response = await page.request.get(`/api/clips/${DUET_CLIP}/manifest`);
-  expect(response.status(), 'local russian-roulette assets are required').toBe(200);
+export async function manifest(page: Page, clipId = DUET_CLIP) {
+  const response = await page.request.get(`/api/clips/${clipId}/manifest`);
+  expect(response.status(), `clip ${clipId} must be installed`).toBe(200);
   return response.json();
 }
 export async function mic(page: Page) {
@@ -83,9 +83,9 @@ export async function addPlayer(page: Page, seat: string, name: string) {
   await expect(page.getByRole('combobox', { name: seat, exact: true })).toContainText(name);
 }
 
-export async function openOnlineDuet(host: Page, guest: Page) {
+export async function openOnlineDuet(host: Page, guest: Page, clipId = DUET_CLIP) {
   await host.goto('/');
-  const song = await manifest(host);
+  const song = await manifest(host, clipId);
   await host.getByText('ONLINE', { exact: true }).first().click();
   await addPlayer(host, 'PLAYER', 'E2E-Bot-duet-online');
   await host.getByRole('button').filter({ has: host.getByText(song.title, { exact: true }) }).click();

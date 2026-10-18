@@ -1,0 +1,11 @@
+{
+  "clip_id": "example-song",
+  "status": "ok",
+  "lyric_match_version": "0.1.0",
+  "lines": [
+    { "line_index": 0, "status": "match" },
+    { "line_index": 1, "status": "unclear" },
+    { "line_index": 2, "status": "not_sung" },
+    { "line_index": 3, "status": "not_covered" }
+  ]
+}

@@ -179,6 +179,20 @@ class Practice(BaseModel):
     words: list[WordFeedback]
 
 
+class LyricLine(BaseModel):
+    line_index: int = Field(ge=0)  # index into the manifest's lines
+    status: Literal["match", "unclear", "not_sung", "not_covered"]
+
+
+class LyricCheck(BaseModel):
+    """Did the sung lines carry the right words? Line level, display only, never part of the score.
+    `unavailable` (no checker or no fingerprints for this clip) is not a result."""
+    clip_id: str
+    status: Literal["ok", "unavailable", "error"]
+    lyric_match_version: str | None = None
+    lines: list[LyricLine] = []
+
+
 class ErrorBody(BaseModel):
     code: str
     message: str

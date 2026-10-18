@@ -16,9 +16,10 @@ import type { PhraseScore, Register, Song } from '../../lib/types';
 import { useNav, type SingSetup } from '../../routes';
 import { aggregate, buildTargetTrack, displayNotes, phraseSettlesAt, phraseTotal, phraseWeights, registerRatio, scorePhrase, SCORING_CONFIG } from '../../scoring';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
+import { GuideControl } from '../../ui/GuideControl';
 import { Countdown, Judgement } from './Judgement';
 import { Lyrics } from './Lyrics';
-import { PitchLane } from './PitchLane';
+import { PitchLane, useLaneHeight } from './PitchLane';
 import './Sing.css';
 
 type Phase =
@@ -58,6 +59,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
   const [saveWarning, setSaveWarning] = useState<string | null>(null);
   const [showRoman, setShowRoman] = useState(true);
   const [showTrans, setShowTrans] = useState(true);
+  const laneHeight = useLaneHeight();
   const [guide, setGuide] = useState(loadGuide);
   const [hasGuide, setHasGuide] = useState(false);
 
@@ -148,6 +150,8 @@ export function Sing({ setup }: { setup: SingSetup }) {
     if (finishedRef.current || !song || !target) return;
     finishedRef.current = true;
     rateUpTo(() => true);
+    // Solo turns keep the voice for the lyric check on the results screen (uploaded once, never stored).
+    const take = !setup.battle && !setup.online ? engineRef.current?.recorder.toWav() ?? null : null;
     engineRef.current?.close();
     engineRef.current = null;
     setPhase({ k: 'saving' });
@@ -169,7 +173,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
         }
       }
     }
-    const result = { setup, phrases, local, saved, saveError: saved ? null : saveErrorRef.current };
+    const result = { setup, phrases, local, saved, saveError: saved ? null : saveErrorRef.current, take };
     if (setup.online) {
       const room = { id: setup.online.roomId, slot: setup.online.slot, prefs: { register: setup.register, offset: setup.calibrationOffset } };
       return nav.go({ name: 'online', room, notice: saved ? undefined : (saveErrorRef.current ?? 'Your score was not saved.') });
@@ -296,7 +300,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
 
       <div className="sing-stage">
         {song && target ? (
-          <PitchLane song={song} notes={notes} target={target} getTime={getTime} userHz={engineRef.current?.tracker.hz ?? NO_FRAMES} ratings={ratings} />
+          <PitchLane height={laneHeight} song={song} notes={notes} target={target} getTime={getTime} userHz={engineRef.current?.tracker.hz ?? NO_FRAMES} ratings={ratings} />
         ) : (
           <div className="sing-lane sing-lane--empty" />
         )}
@@ -313,7 +317,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
         {phase.k === 'saving' && <div className="sing-overlay"><p className="sing-overlay__text">TALLYING UP...</p></div>}
         {playing && now < rangeStart && <Countdown value={String(Math.ceil(rangeStart - now))} />}
         {playing && now >= rangeStart && now < rangeStart + 0.8 && <Countdown value="SING!" />}
-        {judge && (playing || phase.k === 'saving') && <Judgement key={judge.phrase_id} rating={judge.rating} score={phraseTotal(judge)} />}
+        {judge && (playing || phase.k === 'saving') && <Judgement key={judge.phrase_id} rating={judge.rating} />}
 
         <div className="sing-progress" aria-hidden="true">
           <div className="sing-progress__fill" style={{ width: `${song ? Math.max(0, Math.min(1, (now - rangeStart) / (rangeEnd - rangeStart))) * 100 : 0}%` }} />
@@ -331,20 +335,7 @@ export function Sing({ setup }: { setup: SingSetup }) {
             </PixelButton>
           </div>
           {hasGuide && (
-            <div className="sing-guide" title="Hear the original vocals while you sing (use headphones)">
-              <PixelButton size="sm" tone="paper" aria-pressed={guide.on} onClick={() => setGuide((g) => ({ ...g, on: !g.on }))}>
-                GUIDE VOCALS
-              </PixelButton>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={Math.round(guide.vol * 100)}
-                disabled={!guide.on}
-                aria-label="Guide vocal volume"
-                onChange={(e) => setGuide({ on: true, vol: Number(e.target.value) / 100 })}
-              />
-            </div>
+            <GuideControl on={guide.on} volume={guide.vol} onToggle={() => setGuide((g) => ({ ...g, on: !g.on }))} onVolume={(vol) => setGuide({ on: true, vol })} />
           )}
           <div className="sing-meter" title="Mic level" aria-label="Mic level">
             <span className="sing-meter__label">MIC</span>

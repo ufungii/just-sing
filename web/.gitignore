@@ -5,3 +5,5 @@ dist/
 .env.local
 # Local-only audio (menu music etc.): the repo is public and must never contain audio. See src/lib/menuMusic.ts.
 public/audio/
+# Local-only album art: copyrighted, so it stays off the public repo. Missing covers fall back to pixel jackets.
+public/covers/

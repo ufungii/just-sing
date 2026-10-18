@@ -53,11 +53,17 @@ scheduled playback timestamps within 150 ms, and deliberately offset one browser
 A reload after the shared start is refused without replaying one player; an explicit host restart creates a new unscheduled barrier. Screenshots mask the lyric display. These checks do not establish real microphone accuracy or physical-device
 synchronization; test those with two computers/headphones. `E2E_CLIP` does not override these duet/range specs.
 
+## Live duet voice
+
+`npx playwright test voice.spec.ts` uses the built-in synthetic duet and two real Chromium clients with generated microphone tones. No song assets or take WAVs are needed. It checks decoded peer audio, silent preparation/count-in, section handoffs, mute without stopping local scoring, listening volume, socket recovery, reload/missed-start handling, shared restart and quit/peer teardown. Use a disposable database/schema so server startup and test cleanup never reach existing gameplay rows. See [live voice transport and physical-device checks](../docs/live-duet-voice.md).
+
+These browser checks establish functional audio transport on one computer. They do not establish listening quality, Internet NAT traversal or total mic-to-ear latency. TURN remains unconfigured.
+
 ## Player-name Easter egg regression
 
 These UI-only checks cover the Players dialog (add/rename by blur or Enter),
-selection of an already-saved Zibran profile, returning home, and ordinary longer
-names. They mock API requests and use isolated browser storage; no database or mic
+selection of an already-saved Zibran profile, the configured joke names, an
+obfuscated slur, returning home, and ordinary longer names. They mock API requests and use isolated browser storage; no database or mic
 is needed. Run from `e2e/`:
 
 ```sh

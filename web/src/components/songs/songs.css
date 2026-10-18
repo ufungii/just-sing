@@ -274,3 +274,28 @@
   .song-jacket__disc { width: 200px; height: 200px; left: 100px; }
   .song-jacket__title { font-size: 32px; }
 }
+
+/* ---------- album covers (local-only files; pixel art when missing) ---------- */
+
+/* The cover fills the jacket square; the label stays pinned on top of it. */
+.song-jacket__cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.song-jacket__art .song-jacket__art-label {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  box-shadow: 3px 4px 0 var(--ink);
+}
+.song-banner__cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.song-banner__thumb:has(.song-banner__cover) { overflow: hidden; }

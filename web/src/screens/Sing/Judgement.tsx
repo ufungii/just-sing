@@ -1,4 +1,5 @@
 /** Big layered pixel words: the per-phrase judgement pop and the 3-2-1 countdown. */
+import { useState } from 'react';
 import type { Rating } from '../../lib/types';
 
 const LABEL: Record<Rating, string> = { perfect: 'PERFECT!', great: 'GREAT', okay: 'OKAY', bad: 'BAD', miss: 'MISS' };
@@ -16,11 +17,16 @@ export function LayeredText({ text, className }: { text: string; className: stri
 }
 
 /** Pops once per rated phrase; `key` it by phrase id so the animation restarts. */
-export function Judgement({ rating, score }: { rating: Rating; score: number }) {
+export function Judgement({ rating }: { rating: Rating }) {
+  // Random spot in the right part of the lane, well clear of the now line (24% across) so it can't hide the timing.
+  const [spot] = useState(() => ({
+    '--jx': `${56 + Math.random() * 28}%`,
+    '--jy': `${14 + Math.random() * 56}%`,
+    '--jr': `${(Math.random() * 16 - 8).toFixed(1)}deg`,
+  } as React.CSSProperties));
   return (
-    <div className="sing-judge" role="status">
+    <div className="sing-judge" role="status" style={spot}>
       <LayeredText text={LABEL[rating]} className={`sing-pop sing-pop--${rating}`} />
-      {rating !== 'miss' && <div className="sing-judge__score">{score.toFixed(0)}</div>}
     </div>
   );
 }

@@ -13,7 +13,7 @@
   position: relative;
   min-height: 100vh;
   overflow: hidden;
-  padding: 40px 48px 0;
+  padding: 40px 48px;
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-body);
@@ -33,12 +33,17 @@
   pointer-events: none;
 }
 
+/* The hero and menu sit as one block centred in the window, so there is no empty band on top. */
 .home-inner {
   position: relative;
   max-width: 1180px;
+  min-height: calc(100vh - 80px);
   margin: 0 auto;
+  /* Clears the corner buttons (so a mascot bubble never sits under them); even top and bottom keeps it centred. */
+  padding: 40px 0;
   display: flex;
   flex-direction: column;
+  justify-content: safe center; /* never centre past the top edge in short windows */
   gap: 18px;
 }
 
@@ -88,14 +93,19 @@
   gap: 4px;
 }
 
+/* Mascot | title | mascot. Each mascot owns a column, centred on the title, room above for bubbles. */
 .home-stage {
   position: relative;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: clamp(10px, 1.6vw, 22px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: clamp(18px, 3vw, 44px);
   width: 100%;
+  padding-top: 64px;
 }
+.home-stage__side { display: flex; align-items: center; }
+.home-stage__side--left { justify-content: flex-end; }
+.home-stage__side--right { justify-content: flex-start; }
 
 .home-logo {
   display: flex;
@@ -118,24 +128,37 @@
 .home-logo__layer--rose { top: 0.048em; color: var(--logo-rose); }
 .home-logo__layer--face { top: 0; color: var(--hot); }
 
-/* MicChan / BoomboxKun bring their own bubble, animation and bottom margin. */
+/* MicChan / BoomboxKun bring their own bubble and animation. */
 .home-mascot { flex-shrink: 0; }
 
-.home-banner {
+/* "노래해요! K-POP KARAOKE" as plain, bouncy text: not a box, since it is not a button. */
+.home-pop {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 4px;
-  padding: 10px 22px;
-  background: var(--paper);
-  border: var(--border-thin) solid var(--ink);
-  box-shadow:
-    inset 4px 4px 0 #fff,
-    inset -4px -5px 0 var(--banner-shade),
-    6px 7px 0 var(--ink);
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 6px 0 0;
 }
-.home-banner__ko { font-family: var(--font-ko); font-size: 26px; color: var(--hot); }
-.home-banner__en { font-family: var(--font-display); font-weight: 700; font-size: 18px; }
+@keyframes home-pop-bounce {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-5px) rotate(2deg); }
+}
+.home-pop__ko {
+  display: inline-block;
+  font-family: var(--font-ko);
+  font-size: 34px;
+  color: var(--hot);
+  text-shadow: 3px 3px 0 var(--paper), 5px 5px 0 var(--logo-rose);
+  animation: home-pop-bounce 1.6s steps(4) infinite;
+}
+.home-pop__en {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+}
 
 .home-tagline {
   margin: 10px 0 0;
@@ -147,7 +170,7 @@
 
 .home-menu {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 28px;
   margin-top: 26px;
 }
@@ -219,25 +242,12 @@
 .home-key__sub { font-weight: 500; font-size: 16px; }
 .home-key__kao { margin-top: auto; font-family: var(--font-kao); font-size: 16px; }
 
-/* ---------- footer ---------- */
-
-.home-footer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 28px;
-  padding: 20px 0 34px;
-}
-
-.home-footer__note { font-family: var(--font-display); font-weight: 700; font-size: 14px; }
-
-/* ---------- narrower windows (~1024): 2x2 cards, tighter hero ---------- */
+/* ---------- narrower windows (~1024): short wide cards, tighter hero ---------- */
 
 @media (max-width: 1180px) {
-  .home { padding: 36px 40px 0; }
-  .home-menu { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 32px; margin-top: 30px; }
-  /* Wide 2x2 keycaps: icon in its own column so each card is short. */
+  .home { padding: 36px 40px; }
+  .home-menu { gap: 28px 24px; margin-top: 30px; }
+  /* Wide keycaps: icon in its own column so each card is short. */
   .home-key {
     display: grid;
     grid-template-columns: 56px minmax(0, 1fr);
@@ -255,8 +265,6 @@
   .home-key__title { grid-area: title; align-self: center; }
   .home-key__sub { grid-area: sub; }
   .home-key__kao { grid-area: kao; margin-top: 2px; }
-  .home-footer { padding-top: 16px; }
-  .home-footer > .home-kao { display: none; }
 }
 
 /* Shorter windows (e.g. a 1440x900 desktop window minus its title bar): tighten vertical rhythm. */
@@ -266,14 +274,18 @@
   .home-menu { margin-top: 32px; }
   .home-key { row-gap: 6px; padding-top: 14px; padding-bottom: 18px; }
   .home-tagline { margin-top: 4px; }
-  .home-footer { padding: 14px 0 24px; }
 }
 @media (max-height: 880px) and (min-width: 1181px) {
   .home-key { min-height: 176px; }
 }
 
 @media (max-width: 760px) {
-  .home { padding: 32px 28px 0; }
+  .home { padding: 32px 28px; }
+  .home-stage { grid-template-columns: minmax(0, 1fr); padding-top: 0; }
+  /* Narrow windows: scale the title to the width and clear the corner buttons. */
+  .home-inner { padding-top: 76px; }
+  .home-logo { font-size: 10.5vw; }
+  .home-stage__side { display: none; }
   .home-menu { grid-template-columns: minmax(0, 1fr); }
   .home-mascot { display: none; }
 }
@@ -331,4 +343,27 @@
 @media (max-width: 1180px) {
   .home-corner { top: 30px; right: 34px; gap: 10px; }
   .home-corner__btn { width: 62px; height: 62px; }
+}
+
+/* Short windows (laptop browsers, small desktop windows): tighter rhythm, the corner still clear. */
+@media (max-height: 800px) {
+  .home { padding-top: 24px; padding-bottom: 24px; }
+  .home-inner { min-height: calc(100vh - 48px); padding: 64px 0 0; gap: 10px; }
+  .home-stage { padding-top: 52px; }
+  .home-logo { font-size: clamp(56px, 6.4vw, 92px); }
+  .home-pop { margin-top: 0; }
+  .home-menu { margin-top: 20px; }
+}
+
+/* The desktop app's smallest window (1024x700): squeeze a little more so nothing scrolls. */
+@media (max-height: 720px) {
+  .home { padding-bottom: 8px; }
+  .home-inner { min-height: calc(100vh - 32px); }
+  .home-inner { padding-top: 72px; gap: 8px; }
+  .home-stage { padding-top: 46px; }
+  .home-stage .px-mascot-body { transform: scale(0.85); }
+  .home-logo { font-size: clamp(52px, 6vw, 84px); }
+  .home-tagline { font-size: 17px; }
+  .home-menu { margin-top: 12px; gap: 20px 28px; }
+  .home-key { padding-top: 10px; padding-bottom: 12px; }
 }

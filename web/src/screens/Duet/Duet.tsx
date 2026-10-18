@@ -1,25 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SingEngine } from '../../audio/engine';
+import { DuetVoice, type VoiceStatus } from '../../audio/duetVoice';
 import { openMic, stopStream } from '../../audio/sources';
 import { ApiError, duetReady, getManifest, getMatch, rematch, serverTime, stopDuet, submitResult } from '../../lib/api';
 import type { MatchView, PhraseScore, Song } from '../../lib/types';
 import { useNav, type DuetSetup } from '../../routes';
 import { aggregate, buildTargetTrack, displayNotes, phraseSettlesAt, phraseWeights, registerRatio, scorePhrase, SCORING_CONFIG } from '../../scoring';
 import { Notice, Panel, PixelButton, ScreenShell } from '../../ui';
+import { GuideControl } from '../../ui/GuideControl';
+import { PixelIcon } from '../../ui/PixelIcon';
 import { rangeLabel } from '../../components/timeline/range';
 import { MatchBoard } from '../Battle/BattleTurn';
 import { Lyrics } from '../Sing/Lyrics';
-import { PitchLane } from '../Sing/PitchLane';
+import { PitchLane, useLaneHeight } from '../Sing/PitchLane';
 import { Countdown, Judgement } from '../Sing/Judgement';
 import { bestClock, sectionAt, serverNow, type ClockSample } from './timeline';
 import '../Sing/Sing.css';
 
 type Phase = 'loading' | 'ready' | 'waiting' | 'playing' | 'saving' | 'saved' | 'error';
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
+/** Seconds before a handoff that the NEXT-player chip slides in (matches the 4 s the lane shows ahead). */
+const HANDOFF_CUE = 4;
 const EMPTY: (number | null)[] = [];
 
 /** A single audio/capture session. Sections change ownership; audio never restarts at a handoff. */
-export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void }) {
+export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
+  setup: DuetSetup; onLeave: () => void; voiceMuted?: boolean; onVoiceMuted?: (muted: boolean) => void;
+}) {
   const nav = useNav();
   const [song, setSong] = useState<Song | null>(null);
   const [match, setMatch] = useState<MatchView | null>(null);
@@ -28,9 +35,13 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
   const [now, setNow] = useState(0);
   const [ratings, setRatings] = useState(new Map<string, PhraseScore>());
   const [judge, setJudge] = useState<PhraseScore | null>(null);
+  const laneHeight = useLaneHeight();
   const [guide, setGuide] = useState(false);
   const [guideVolume, setGuideVolume] = useState(0.6);
   const engine = useRef<SingEngine | null>(null);
+  const voice = useRef<DuetVoice | null>(null);
+  const [voiceVolume, setVoiceVolume] = useState(0.6);
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>({ state: 'waiting' });
   const clock = useRef<ClockSample | null>(null);
   const scheduled = useRef(false);
   const finished = useRef(false);
@@ -52,9 +63,12 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
   const activeSlot = current?.slot ?? 0;
   const displaySlot = mySlot ?? activeSlot;
   const displayTarget = targets[displaySlot];
+  // The next section that hands the mic to the other singer, and how long until then.
+  const handoff = sections.slice(sectionIndex + 1).find((s) => s.slot !== activeSlot);
+  const handoffIn = handoff ? handoff.start - now : Infinity;
   const names = (slot: number) => `P${slot + 1} ${match?.players.find((p) => p.slot === slot)?.display_name ?? 'Player'}`;
   const notes = useMemo(() => song ? displayNotes(song).flatMap((note) => song.phrases.filter((p) => owner.has(p.id) && note.start < p.end && note.end > p.start)
-    .map((p) => ({ start: Math.max(note.start, p.start), end: Math.min(note.end, p.end), hz: note.hz * registerRatio(setup.registers[mySlot ?? owner.get(p.id)!]) }))) : [],
+    .map((p) => ({ start: Math.max(note.start, p.start), end: Math.min(note.end, p.end), hz: note.hz * registerRatio(setup.registers[mySlot ?? owner.get(p.id)!]), slot: owner.get(p.id) }))) : [],
   [song, owner, mySlot, setup.registers[0], setup.registers[1]]);
 
   useEffect(() => {
@@ -70,13 +84,28 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
         if (!live) return localEngine.close();
         const stream = await openMic();
         if (!live) { stopStream(stream); return localEngine.close(); }
-        localEngine.attachMic(stream);
+        localEngine.attachMic(stream, false); // duet scoring needs pitch only; no session recording
         engine.current = localEngine;
         setPhase('ready');
       } catch (e) { if (live) { setError(message(e)); setPhase('error'); } }
     })();
-    return () => { live = false; localEngine?.close(); engine.current = null; };
+    return () => { live = false; voice.current?.close(); localEngine?.close(); engine.current = null; };
   }, [setup.matchId, setup.clipId, setup.calibrationOffset]);
+
+  const voiceActive = mySlot !== undefined && ['ready', 'waiting', 'playing'].includes(phase);
+  useEffect(() => {
+    const audio = engine.current;
+    if (!voiceActive || !audio?.micStream || !setup.online) return;
+    let peer: DuetVoice;
+    try {
+      peer = new DuetVoice(audio.ctx, audio.micStream, audio.enableVoiceMix(),
+        setup.online.roomId, setup.matchId, setup.online.slot, setVoiceStatus);
+      voice.current = peer;
+    } catch { setVoiceStatus({ state: 'unavailable' }); return; }
+    return () => { peer.close(); if (voice.current === peer) voice.current = null; };
+  }, [voiceActive, setup.online?.roomId, setup.matchId, mySlot]);
+  useEffect(() => { voice.current?.setMuted(voiceMuted); }, [voiceMuted, voiceActive]);
+  useEffect(() => { voice.current?.setVolume(voiceVolume); }, [voiceVolume, voiceActive]);
 
   useEffect(() => {
     let live = true;
@@ -124,7 +153,10 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
       setError('You missed the shared start. Stop this duet and restart the whole song together.');
       setPhase('error'); return;
     }
-    void audio.start(audio.ctx.currentTime + delay).then(() => setPhase('playing'), (e) => { setError(message(e)); setPhase('error'); });
+    void audio.start(audio.ctx.currentTime + delay).then((origin) => {
+      voice.current?.schedule(origin, plan.sections);
+      setPhase('playing');
+    }, (e) => { setError(message(e)); setPhase('error'); });
   }, [phase, plan?.start_at]);
 
   useEffect(() => {
@@ -159,7 +191,7 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
     if (finished.current || !song || !match) return;
     finished.current = true;
     rate(() => true);
-    engine.current?.close();
+    voice.current?.close(); engine.current?.close();
     const slots = mySlot === undefined ? [0, 1] : [mySlot];
     pendingSave.current = slots.map((slot) => ({ id: match.attempts.find((a) => a.slot === slot)!.id,
       key: crypto.randomUUID(), phrases: owned.filter((p) => owner.get(p.id) === slot).map((p) => rated.current.get(p.id)!) }));
@@ -190,13 +222,13 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
     return time === undefined || !Number.isFinite(time) ? rangeStart - 3 : time;
   }, [rangeStart]);
   async function restart() {
-    engine.current?.close();
+    voice.current?.close(); engine.current?.close();
     await stopDuet(setup.matchId).catch(() => {});
     if (setup.online) return; // The room shows the explicit host restart action.
     try { const m = await rematch(setup.matchId); nav.go({ name: 'duet', setup: { ...setup, matchId: m.match_id } }); }
     catch (e) { setError(message(e)); }
   }
-  async function leave() { engine.current?.close(); if (match?.state !== 'finished') await stopDuet(setup.matchId).catch(() => {}); onLeave(); }
+  async function leave() { voice.current?.close(); engine.current?.close(); if (match?.state !== 'finished') await stopDuet(setup.matchId).catch(() => {}); onLeave(); }
 
   if (match?.state === 'finished' && song) return (
     <ScreenShell title="DUET RESULTS" kao="ヾ(＾∇＾)" onBack={onLeave} backLabel="HOME">
@@ -209,35 +241,71 @@ export function Duet({ setup, onLeave }: { setup: DuetSetup; onLeave: () => void
       {song && <p className="sing-title">{song.title} <span>· {song.artist}</span></p>}
       {plan?.range && <p className="solo-hint">Practice section · {rangeLabel(plan.range)}</p>}
       {error && <Notice tone="error">{error}</Notice>}
-      <Panel tone={activeSlot === 0 ? 'pink' : 'sky'} label="SINGER">
-        <p data-testid="duet-current" data-slot={activeSlot} style={{ fontSize: 30, margin: 0 }} aria-live="polite">
-          {names(activeSlot)} {mySlot === undefined || mySlot === activeSlot ? '· SING' : '· LISTEN'}
-        </p>
-        <p data-testid="duet-next">{next ? `Next: ${names(next.slot)} at ${next.start.toFixed(1)} s` : 'Final section'}</p>
-        <p className="solo-hint">One song. Follow the singer cue; the music keeps playing through each switch.</p>
-        <div className="sing-hud" style={{ flexWrap: 'wrap', marginTop: 16 }}>
+      <div className={`duet-bar duet-bar--p${activeSlot + 1}`} title="One song. Follow the singer cue; the music keeps playing through each switch.">
+        <div className="duet-bar__who">
+          <p data-testid="duet-current" data-slot={activeSlot} aria-live="polite">
+            {names(activeSlot)} {mySlot === undefined || mySlot === activeSlot ? '· SING' : '· LISTEN'}
+          </p>
+          <p data-testid="duet-next">{next ? `Next: ${names(next.slot)} at ${next.start.toFixed(1)} s` : 'Final section'}</p>
+        </div>
+        <div className="sing-hud">
         {[0, 1].map((slot) => {
           const phrases = owned.filter((p) => owner.get(p.id) === slot);
           const scores = phrases.flatMap((p) => ratings.has(p.id) ? [ratings.get(p.id)!] : []);
           return <span key={slot} className="sing-chip" data-testid={`duet-score-${slot}`}>{names(slot)} · {scores.length ? aggregate(scores, phraseWeights(phrases, targets[slot])).total.toFixed(1) : '—'} · {scores.length}/{sections.filter((s) => s.slot === slot).flatMap((s) => s.phrase_ids).length} phrases </span>;
         })}
         </div>
-      </Panel>
+      </div>
       <div className="sing-stage">
-        {song && displayTarget ? <PitchLane song={song} notes={notes} target={displayTarget} getTime={getTime} userHz={engine.current?.tracker.hz ?? EMPTY} ratings={ratings} /> : <div className="sing-lane sing-lane--empty" />}
+        {song && displayTarget ? <PitchLane height={laneHeight} song={song} notes={notes} sections={sections} target={displayTarget} getTime={getTime} userHz={engine.current?.tracker.hz ?? EMPTY} ratings={ratings} /> : <div className="sing-lane sing-lane--empty" />}
+        {phase === 'playing' && handoff && handoffIn > 0 && handoffIn <= HANDOFF_CUE && (
+          <div className={`duet-cue duet-cue--p${handoff.slot + 1}`} data-testid="duet-handoff" aria-hidden="true">
+            <PixelIcon name="speaker" size={22} />
+            <span>NEXT: PLAYER {handoff.slot + 1}</span>
+            <b>{Math.ceil(handoffIn)}</b>
+          </div>
+        )}
+        {/* one polite announcement per handoff (the visible countdown is aria-hidden so it does not chatter) */}
+        <span className="sr-only" aria-live="polite">
+          {phase === 'playing' && handoff && handoffIn > 0 && handoffIn <= HANDOFF_CUE ? `Next: ${names(handoff.slot)} sings in a few seconds.` : ''}
+        </span>
         {phase === 'loading' && <div className="sing-overlay">LOADING AUDIO AND MIC…</div>}
         {phase === 'ready' && <div className="sing-overlay"><PixelButton tone="hot" size="lg" onClick={() => void prepare()}>READY TO SING</PixelButton></div>}
         {phase === 'waiting' && <div className="sing-overlay">Waiting for both microphones and audio…</div>}
         {phase === 'playing' && now < rangeStart - 3 && <div className="sing-overlay">Starting together…</div>}
         {phase === 'playing' && now >= rangeStart - 3 && now < rangeStart && <Countdown value={String(Math.ceil(rangeStart - now))} />}
-        {phase === 'playing' && judge && <Judgement key={judge.phrase_id} rating={judge.rating} score={judge.score} />}
+        {phase === 'playing' && judge && <Judgement key={judge.phrase_id} rating={judge.rating} />}
         <div className="sing-progress"><div className="sing-progress__fill" style={{ width: `${Math.max(0, Math.min(1, (now - rangeStart) / (rangeEnd - rangeStart))) * 100}%` }} /></div>
       </div>
       {(phase === 'saving' || phase === 'saved') && <Notice>{phase === 'saving' ? 'Saving assigned phrases…' : error ? 'The song is over. Retry saving your existing result.' : 'Your score is saved. Waiting for the other result…'}</Notice>}
       {phase === 'saved' && error && <PixelButton onClick={() => void save()}>RETRY SAVE</PixelButton>}
       {phase === 'error' && <PixelButton onClick={() => void restart()}>{setup.online ? 'STOP DUET FOR RESTART' : 'RESTART TOGETHER'}</PixelButton>}
       <Panel>
-        {engine.current?.vocals && <><PixelButton aria-pressed={guide} onClick={() => setGuide((v) => !v)}>GUIDE VOCALS</PixelButton><input type="range" aria-label="Guide vocal volume" min={0} max={100} value={guideVolume * 100} onChange={(e) => setGuideVolume(Number(e.target.value) / 100)} /></>}
+        <div className="duet-audio-controls">
+        {engine.current?.vocals && <GuideControl on={guide} volume={guideVolume} onToggle={() => setGuide((v) => !v)} onVolume={setGuideVolume} />}
+        {setup.online &&
+          <div className="ui-guide" title="Hear the other singer live during their sections. Headphones required.">
+            <span className="ui-guide__label">OTHER SINGER</span>
+            <input type="range" className="ui-slider" min={0} max={100} value={Math.round(voiceVolume * 100)}
+              aria-label="Other singer volume" style={{ '--fill': `${voiceVolume * 100}%` } as React.CSSProperties}
+              onChange={(e) => setVoiceVolume(Number(e.target.value) / 100)} />
+            <PixelButton size="sm" tone={voiceMuted ? 'paper' : 'hot'} aria-pressed={voiceMuted}
+              onClick={() => onVoiceMuted?.(!voiceMuted)} aria-label="Mute my mic to opponent">
+              <PixelIcon name={voiceMuted ? 'speakerOff' : 'speaker'} size={20} />
+              {voiceMuted ? 'MY VOICE MUTED' : 'SHARING MY VOICE'}
+            </PixelButton>
+          </div>
+        }
+        </div>
+        {setup.online && <>
+          <p className="duet-voice-status" role="status" data-testid="voice-status" data-state={voiceStatus.state}>
+            {voiceStatus.state === 'connected' ? 'Live voice connected.' : voiceStatus.state === 'unavailable'
+              ? 'Live voice unavailable. Your network may need a relay; singing and scoring still work.'
+              : voiceStatus.state === 'waiting' ? 'Live voice waits for both players.' : 'Connecting live voice…'}
+            {voiceStatus.rttMs !== undefined && ` Network round trip ${Math.round(voiceStatus.rttMs)} ms.`}
+            {voiceStatus.bufferMs !== undefined && ` Receive buffer ${Math.round(voiceStatus.bufferMs)} ms (not total voice delay).`}
+          </p>
+        </>}
         {song && <Lyrics lines={song.lines.filter((line) => line.end > rangeStart && line.start < rangeEnd)} t={now} showRoman showTrans />}
       </Panel>
     </ScreenShell>
