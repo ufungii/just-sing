@@ -8,10 +8,11 @@
 import { describe, expect, it } from 'vitest';
 import onsetFixtures from '../../../contracts/fixtures/onset_cases.json';
 import scoreFixtures from '../../../contracts/fixtures/score_cases.json';
+import pronunciationFixtures from '../../../contracts/fixtures/pronunciation_cases.json';
 import type { TargetTrack } from './reference';
 import { SCORING_CONFIG } from './config';
 import { roundHalfEven } from './units';
-import { aggregate, applyLatency, isVoiced, onsetTimes, scorePhraseSpan } from './score';
+import { aggregate, applyLatency, isVoiced, onsetTimes, pronunciationScore, round, scorePhraseSpan, totalWithPronunciation } from './score';
 
 type Hz = (number | null)[];
 
@@ -63,4 +64,33 @@ describe('scores match score_cases.json', () => {
       });
     });
   }
+});
+
+describe('pronunciation totals match pronunciation_cases.json', () => {
+  for (const c of pronunciationFixtures.cases) {
+    it(c.name, () => {
+      const i = c.input;
+      const statuses = new Map(Object.entries(i.line_statuses).map(([k, v]) => [Number(k), v as string]));
+      const weights = new Map(Object.entries(i.line_weights).map(([k, v]) => [Number(k), v as number]));
+      const pron = pronunciationScore(statuses, weights);
+      expect(pron).toBe(c.expected.pronunciation);
+      // Same operation order as Python, so the total must match exactly (no tolerance).
+      expect(totalWithPronunciation({ ...i, timing: i.timing ?? 0 }, pron, { hasTiming: i.timing !== null })).toBe(c.expected.total);
+    });
+  }
+});
+
+describe('rounding matches Python round(x, 1)', () => {
+  it.each([[0.15, 0.1], [0.65, 0.7], [6.8500000000000005, 6.9], [21.95, 21.9], [0.25, 0.2], [0.35, 0.3], [2.5, 2.5]])('%s', (x, want) => {
+    expect(round(x, 1)).toBe(want);
+  });
+});
+describe('pronunciationScore edge cases', () => {
+  it('skips NaN weights and unknown or inherited status names', () => {
+    expect(pronunciationScore(new Map([[1, 'match']]), new Map([[0, NaN], [1, 50]]))).toBe(100);
+    expect(pronunciationScore(new Map([[0, 'constructor'], [1, 'match']]), new Map([[0, 50], [1, 50]]))).toBe(100);
+  });
+  it('rejects an out-of-range value', () => {
+    expect(() => totalWithPronunciation({ total: 80, pitch: 80, timing: 80 }, 120)).toThrow(RangeError);
+  });
 });

@@ -2,7 +2,7 @@
 
 The browser must rate phrases live with exactly the same math as the Python reference in `ml/scoring/`. This page is the language-neutral spec; `contracts/fixtures/` holds the test cases both implementations must pass. If this page and the Python code ever disagree, the code plus fixtures win: tell ML B.
 
-Scoring version: `0.3.0` (`SCORING_VERSION` in `ml/scoring/config.py`). Any change that can change a score bumps it and regenerates the fixtures.
+Scoring version: `0.4.0` (`SCORING_VERSION` in `ml/scoring/config.py`). Any change that can change a score bumps it and regenerates the fixtures.
 
 ## 1. Inputs and conventions
 
@@ -123,6 +123,12 @@ pitch  = sum(w * pitch_rounded)  / sum(w)    over phrases with w > 0
 timing = sum(w * timing_rounded) / sum(w)    over phrases with w > 0 and timing not null
 ```
 Each is 0 if its weight sum is 0. Round to 1 decimal. Totals use the **rounded** phrase values, so the total always agrees with the badges the player saw.
+
+## 8b. Lyric check in the turn total (0.4.0)
+
+`pronunciation_score(statuses, line_weights)`: the lyric check gives each fingerprinted line a status. Credit is `match` 100, `unclear` 0, `not_sung` 0 (humming is graded `unclear`, so it earns nothing); `not_covered` and unknown statuses are left out. Line weight = sum of its phrases' scoreable frames (`line_weights`). The value is the weighted mean, rounded to 1 decimal, or `null` if nothing was checked.
+
+`apply_pronunciation(score, p)`: with `p` not null, `total = round((0.7*pitch + 0.1*timing + 0.2*p) * (0.5 + 0.5*p/100), 1)` using the aggregate pitch and timing from section 8 (pitch stands in for timing when no phrase has an onset). With `p` null the section 8 total is kept (the check was unavailable; never a low score). Phrase scores and ratings are unchanged. All values live in `PronunciationConfig`; they are unvalidated starting defaults and the lyric check has not been measured on sung audio or reviewed by a fluent speaker. Fixtures: `contracts/fixtures/pronunciation_cases.json`.
 
 ## 9. Testing against the fixtures
 

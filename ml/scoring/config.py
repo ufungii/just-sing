@@ -7,7 +7,7 @@ saved results are never silently reinterpreted.
 """
 from dataclasses import dataclass
 
-SCORING_VERSION = "0.3.0"
+SCORING_VERSION = "0.4.0"
 
 
 @dataclass(frozen=True)
@@ -54,6 +54,27 @@ class ScoreConfig:
     # Below this share of scoreable frames sung, a phrase is a Miss. Miss is
     # reserved for insufficient coverage, never for a mic failure.
     min_coverage: float = 0.25
+
+
+@dataclass(frozen=True)
+class PronunciationConfig:
+    """How the lyric check (sung words vs the original singer's, per line) enters the turn total.
+
+    Starting defaults, not validated: nobody fluent in Korean has reviewed them, and the lyric check
+    was never measured on sung audio. Phrase scores and ratings are unaffected; only the turn total changes.
+    """
+    pitch_weight: float = 0.7
+    timing_weight: float = 0.1
+    pronunciation_weight: float = 0.2
+    # Humming guard: the blended total is multiplied by floor + (1 - floor) * pronunciation / 100,
+    # so a hummer who nails pitch and timing (blend ~80) ends near 80 * floor, while perfect lyrics
+    # leave the guard at 1.0. Without it the 20% weight alone would let humming win.
+    floor: float = 0.5
+    # Per-line credit for each lyric-check status. "not_covered" lines are left out of the mean.
+    # "unclear" gets no credit on purpose: humming is graded unclear (a hum sounds like its own hum),
+    # not not_sung, so partial credit there would pay for humming. Real singing was "match" on 89-96%
+    # of lines in ml/pronunciation/LYRIC_MATCH.md (one singer), so the cost to honest singers is small.
+    status_credit: tuple[tuple[str, float], ...] = (("match", 100.0), ("unclear", 0.0), ("not_sung", 0.0))
 
 
 @dataclass(frozen=True)
