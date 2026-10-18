@@ -1,0 +1,110 @@
+/*
+ * Player-facing section bar: the whole song in one strip that fits its panel. Soft blocks are the
+ * sung phrases, the hot-pink highlight is the chosen section, and the two pixel grips drag its ends.
+ */
+
+.clip-bar {
+  --bar-h: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 12px; /* room for the grips and time labels at the very ends */
+  user-select: none;
+}
+
+/* Times above each grip. They follow the grips; the end label sits right of its grip. */
+.clip-bar__labels { position: relative; height: 22px; }
+.clip-bar__label {
+  position: absolute;
+  bottom: 0;
+  padding: 1px 6px;
+  border: 3px solid var(--ink);
+  background: var(--paper);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  white-space: nowrap;
+  transform: translateX(-100%);
+}
+.clip-bar__label--end { transform: none; }
+.clip-bar__label.clip-bar__label--in { transform: none; }
+.clip-bar__label--end.clip-bar__label--in { transform: translateX(-100%); }
+
+.clip-bar__track {
+  position: relative;
+  height: var(--bar-h);
+  border: var(--border-thin) solid var(--ink);
+  background: var(--lav-light);
+  box-shadow: 5px 6px 0 var(--ink);
+  cursor: pointer;
+  touch-action: none;
+}
+.clip-bar--readonly .clip-bar__track { cursor: default; }
+
+.clip-bar__phrase {
+  position: absolute;
+  top: 11px;
+  bottom: 11px;
+  background: var(--ink-rose);
+  opacity: 0.3;
+  pointer-events: none;
+}
+.clip-bar__phrase.is-in { background: var(--paper); opacity: 1; box-shadow: 0 2px 0 var(--hot-dark); }
+
+.clip-bar__sel {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  border: 3px solid var(--ink);
+  background: var(--hot);
+  cursor: grab;
+}
+.clip-bar.is-dragging .clip-bar__sel { cursor: grabbing; }
+.clip-bar--readonly .clip-bar__sel { cursor: default; }
+
+.clip-bar__playhead {
+  position: absolute;
+  top: -8px;
+  bottom: -8px;
+  width: 4px;
+  margin-left: -2px;
+  background: var(--butter);
+  box-shadow: 0 0 0 2px var(--ink);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Pixel grips: tall plum keycaps centred on each end of the highlight. */
+.clip-bar__handle {
+  position: absolute;
+  top: -12px;
+  bottom: -12px;
+  width: 22px;
+  margin-left: -11px;
+  z-index: 1;
+  border: 3px solid var(--ink);
+  background:
+    linear-gradient(90deg, transparent 4px, var(--ink) 4px 6px, transparent 6px 10px, var(--ink) 10px 12px, transparent 12px) center / 16px 18px no-repeat,
+    var(--butter);
+  box-shadow: inset 2px 2px 0 #fff0a8, inset -2px -3px 0 #c9a400;
+  cursor: ew-resize;
+}
+.clip-bar__handle:focus-visible { outline: 4px dashed var(--ink); outline-offset: 3px; }
+.clip-bar--readonly .clip-bar__handle { background: var(--lav-light); box-shadow: none; cursor: default; }
+
+
+.clip-bar__summary {
+  margin: 8px 0 0;
+  overflow: hidden;
+  font-size: 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.clip-bar__summary strong { font-family: var(--font-display); }
+.clip-bar__lyric { font-family: var(--font-ko), var(--font-body); color: var(--hot-dark); }
+
+/* Picker chrome around the bar (PracticeRangePicker). */
+.range-picker { display: flex; flex-direction: column; gap: 14px; margin-top: 18px; }
+.range-picker__title { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 14px; }
+.range-picker__title span { font-family: var(--font-body); font-weight: 500; font-size: 15px; }
+.range-picker__editor { margin-left: auto; }
