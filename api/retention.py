@@ -1,5 +1,6 @@
 """Delete expired guest sessions and everything they own. Logged-in accounts (auth0_sub set)
-and unexpired guests are never touched."""
+and unexpired guests are never touched, nor is an expired guest who hosted a room a logged-in
+account joined (the account's online history lives in the host's match rows)."""
 import asyncio
 import logging
 import os
@@ -18,8 +19,13 @@ log = logging.getLogger(__name__)
 def cleanup_expired() -> int:
     """One transaction, so a crash never leaves half-deleted history. Returns guests removed."""
     with Session(get_engine()) as s:
+        # ponytail: such a host's guest row is kept forever; archive or re-home its matches if that ever matters
+        account_hosts = (select(Room.host_guest_id).join(RoomMember, RoomMember.room_id == Room.id)
+                         .join(GuestSession, GuestSession.id == RoomMember.guest_id)
+                         .where(GuestSession.auth0_sub.is_not(None)))
         ids = select(GuestSession.id).where(GuestSession.expires_at < datetime.now(timezone.utc),
-                                            GuestSession.auth0_sub.is_(None))
+                                            GuestSession.auth0_sub.is_(None),
+                                            GuestSession.id.not_in(account_hosts))
         matches = select(Match.id).where(Match.guest_id.in_(ids))
         s.execute(delete(TurnAttempt).where(TurnAttempt.match_id.in_(matches)))
         s.execute(delete(MatchPlayer).where(MatchPlayer.match_id.in_(matches)))
