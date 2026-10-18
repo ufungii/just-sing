@@ -11,6 +11,7 @@ import { GuideControl } from '../../ui/GuideControl';
 import { PixelIcon } from '../../ui/PixelIcon';
 import { rangeLabel } from '../../components/timeline/range';
 import { MatchBoard } from '../Battle/BattleTurn';
+import { uploadTurnLyrics } from '../Results/uploadTurnLyrics';
 import { Lyrics } from '../Sing/Lyrics';
 import { PitchLane, useLaneHeight } from '../Sing/PitchLane';
 import { Countdown, Judgement } from '../Sing/Judgement';
@@ -54,6 +55,7 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
   const saving = useRef(false);
   const guideUsed = useRef(false);
   const pendingSave = useRef<{ id: string; key: string; phrases: PhraseScore[] }[]>([]);
+  const take = useRef<{ wav: Blob; offsetS: number } | null>(null);
   const mySlot = setup.online?.slot;
   const plan = match?.duet;
   const sections = plan?.sections ?? [];
@@ -96,7 +98,7 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
         if (!live) return localEngine.close();
         const stream = await openMic();
         if (!live) { stopStream(stream); return localEngine.close(); }
-        localEngine.attachMic(stream, false); // duet scoring needs pitch only; no session recording
+        localEngine.attachMic(stream);
         engine.current = localEngine;
         setPhase('ready');
       } catch (e) { if (live) { setError(message(e)); setPhase('error'); } }
@@ -193,7 +195,11 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
     if (saving.current) return;
     saving.current = true; setPhase('saving'); setError(null);
     try {
-      await Promise.all(pendingSave.current.map((entry) => submitResult(entry.id, entry.phrases, entry.key, guideUsed.current)));
+      const entries = pendingSave.current;
+      await Promise.all(entries.map(async (entry) => {
+        await submitResult(entry.id, entry.phrases, entry.key, guideUsed.current, !!take.current);
+        if (take.current) void uploadTurnLyrics(entry.id, take.current);
+      }));
       setMatch(await getMatch(setup.matchId)); setPhase('saved');
     } catch (e) { setError(`Score save failed: ${message(e)}. You can retry this save without replaying the song.`); setPhase('saved'); }
     finally { saving.current = false; }
@@ -203,6 +209,7 @@ export function Duet({ setup, onLeave, voiceMuted = false, onVoiceMuted }: {
     if (finished.current || !song || !match) return;
     finished.current = true;
     rate(() => true);
+    take.current = engine.current?.recorder.toWav() ?? null;
     voice.current?.close(); engine.current?.close();
     const slots = mySlot === undefined ? [0, 1] : [mySlot];
     pendingSave.current = slots.map((slot) => ({ id: match.attempts.find((a) => a.slot === slot)!.id,

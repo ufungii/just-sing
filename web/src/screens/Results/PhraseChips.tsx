@@ -64,7 +64,7 @@ export interface LyricTally {
  * (matched / graded lines), or "—" when the check could not run. Display only: the total shown is
  * whatever the caller passes in; it is never derived here.
  */
-export function ScoreSummary({ total, pitch, timing, guided, range, lyrics }: { total: number; pitch: number; timing: number; guided?: boolean; range?: TimeRange | null; lyrics?: LyricTally | 'unavailable' | null }) {
+export function ScoreSummary({ total, pitch, timing, guided, range, lyrics }: { total: number; pitch: number; timing: number; guided?: boolean; range?: TimeRange | null; lyrics?: LyricTally | 'unavailable' | 'checking' | null }) {
   return (
     <div className="results-summary">
       {range && <p className="solo-hint">Practice section · {rangeLabel(range)} · kept off the leaderboard.</p>}
@@ -79,9 +79,13 @@ export function ScoreSummary({ total, pitch, timing, guided, range, lyrics }: { 
             <p className="results-bar__note">Lyrics not checked this time.</p>
           </>
         )}
-        {lyrics && lyrics !== 'unavailable' && lyrics.graded > 0 && (
+        {lyrics === 'checking' && <>
+          <ScoreBar label="LYRICS" value={0} tone="lav" shown="…" />
+          <p className="results-bar__note" role="status">Checking this singer’s lyrics…</p>
+        </>}
+        {lyrics && typeof lyrics === 'object' && (
           <>
-            <ScoreBar label="LYRICS" value={(100 * lyrics.matched) / lyrics.graded} tone="lav" shown={`${lyrics.matched}/${lyrics.graded}`} />
+            <ScoreBar label="LYRICS" value={lyrics.graded ? (100 * lyrics.matched) / lyrics.graded : 0} tone="lav" shown={lyrics.graded ? `${lyrics.matched}/${lyrics.graded}` : '—'} />
             <p className="results-bar__note">Automated lyric check, not validated by a fluent speaker.</p>
           </>
         )}

@@ -148,6 +148,18 @@ class TimeRange(BaseModel):
     end: float
 
 
+class LyricLine(BaseModel):
+    line_index: int = Field(ge=0)
+    status: Literal["match", "unclear", "not_sung", "not_covered"]
+
+
+class TurnLyrics(BaseModel):
+    """Saved display-only lyric feedback; it never changes totals or the winner."""
+    status: Literal["pending", "ok", "unavailable", "error"]
+    lyric_match_version: str | None = None
+    lines: list[LyricLine] = []
+
+
 class Score(BaseModel):
     mode: Literal["solo", "battle"]
     clip_id: str
@@ -162,6 +174,7 @@ class Score(BaseModel):
     guided: bool = False  # guide vocals were audible during the turn (client-reported); such runs skip the leaderboard
     range: TimeRange | None = None  # practice section (first phrase start .. last phrase end); null = full clip
     duet: bool = False
+    lyrics: TurnLyrics | None = None
 
 
 class WordFeedback(BaseModel):
@@ -177,11 +190,6 @@ class Practice(BaseModel):
     status: Literal["ok", "unavailable", "error"]
     overall: float | None = None  # 0-100, automated and not validated by a fluent reviewer; null unless status ok
     words: list[WordFeedback]
-
-
-class LyricLine(BaseModel):
-    line_index: int = Field(ge=0)  # index into the manifest's lines
-    status: Literal["match", "unclear", "not_sung", "not_covered"]
 
 
 class LyricCheck(BaseModel):

@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test';
 const PORT = Number(process.env.E2E_PORT ?? 8765);
 export default defineConfig({
   testDir: '.',
-  testMatch: ['sing.spec.ts', 'battle.spec.ts', 'online.spec.ts', 'range.spec.ts', 'voice.spec.ts'],
+  testMatch: ['sing.spec.ts', 'battle.spec.ts', 'online.spec.ts', 'range.spec.ts', 'voice.spec.ts', 'lyrics.spec.ts'],
   timeout: 120_000,
   workers: 1, // one fake mic file per browser; takes run one after another
   reporter: 'list',

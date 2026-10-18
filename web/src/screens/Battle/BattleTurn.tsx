@@ -141,25 +141,47 @@ function BattleResults({ result, battle }: { result: SingResult; battle: BattleC
 
 /** Winner headline plus both players' saved scores, read from the server's match (the client only displays it). Shared with online rooms. */
 export function MatchBoard({ match, song }: { match: MatchView; song: ReturnType<typeof useManifest> }) {
+  const [updated, setUpdated] = useState(match);
+  useEffect(() => { setUpdated(match); }, [match]);
+  const view = updated.id === match.id ? updated : match;
+  const checking = view.attempts.some((a) => a.score?.lyrics?.status === 'pending');
+  useEffect(() => {
+    if (!checking) return;
+    let live = true;
+    let busy = false;
+    const timer = setInterval(async () => {
+      if (busy) return;
+      busy = true;
+      try { const next = await getMatch(match.id); if (live) setUpdated(next); }
+      catch { /* A later poll recovers; the server expires missing uploads after three minutes. */ }
+      finally { busy = false; }
+    }, 2000);
+    return () => { live = false; clearInterval(timer); };
+  }, [match.id, checking]);
   const headline =
-    match.state !== 'finished'
+    view.state !== 'finished'
       ? 'Waiting for the final score…'
-      : match.winner_slot === null
+      : view.winner_slot === null
         ? 'TIE!'
-        : `${match.players.find((p) => p.slot === match.winner_slot)?.display_name ?? '?'} WINS!`;
+        : `${view.players.find((p) => p.slot === view.winner_slot)?.display_name ?? '?'} WINS!`;
   return (
     <>
       <Panel tone="mint" label="WINNER">
         <p className="battle-headline" style={{ fontSize: 40, margin: 0 }} aria-live="polite">{headline}</p>
       </Panel>
-      {match.players.map((p) => {
-        const score = match.attempts.find((a) => a.slot === p.slot && a.state === 'accepted')?.score;
+      {view.players.map((p) => {
+        const score = view.attempts.find((a) => a.slot === p.slot && a.state === 'accepted')?.score;
+        const feedback = score?.lyrics;
+        const lines = feedback?.status === 'ok' ? new Map(feedback.lines.map((l) => [l.line_index, l.status])) : undefined;
+        const graded = [...(lines?.values() ?? [])].filter((s) => s === 'match' || s === 'unclear');
+        const lyrics = feedback?.status === 'pending' ? 'checking' as const : lines
+          ? { matched: graded.filter((s) => s === 'match').length, graded: graded.length } : 'unavailable' as const;
         return (
           <Panel key={p.slot} tone={p.slot === 0 ? 'pink' : 'sky'} label={`P${p.slot + 1} · ${p.display_name.toUpperCase()}`}>
             {score ? (
               <>
-                <ScoreSummary total={score.total} pitch={score.pitch} timing={score.timing} guided={score.guided} range={score.range} />
-                <PhraseChips phrases={score.phrases} song={song} />
+                <ScoreSummary total={score.total} pitch={score.pitch} timing={score.timing} guided={score.guided} range={score.range} lyrics={lyrics} />
+                <PhraseChips phrases={score.phrases} song={song} lyrics={lines} />
               </>
             ) : (
               <Notice tone="warn">No saved score for this player.</Notice>
